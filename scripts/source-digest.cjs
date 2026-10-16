@@ -1,0 +1,2 @@
+const fs=require('fs'),path=require('path'),crypto=require('crypto');const root=path.resolve(__dirname,'..');
+module.exports=()=>{const hash=crypto.createHash('sha256');function walk(dir){for(const n of fs.readdirSync(dir).sort()){const f=path.join(dir,n);if(fs.statSync(f).isDirectory())walk(f);else if(/\.(mjs|cjs|ps1|json|yaml|yml)$/.test(n)){hash.update(path.relative(root,f).replaceAll('\\','/'));hash.update(fs.readFileSync(f));}}}for(const n of ['packages','bundles','scripts','tests','characters'])walk(path.join(root,n));return hash.digest('hex');};

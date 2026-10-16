@@ -1,0 +1,3 @@
+const fs=require('fs'),path=require('path'),{spawnSync}=require('child_process');const root=path.resolve(__dirname,'..');
+const result=spawnSync(process.execPath,['--test',...fs.readdirSync(root+'/tests').filter(n=>n.endsWith('.test.mjs')).map(n=>root+'/tests/'+n)],{encoding:'utf8'});
+process.stdout.write(result.stdout??'');process.stderr.write(result.stderr??'');fs.mkdirSync(root+'/artifacts',{recursive:true});fs.writeFileSync(root+'/artifacts/test-results.json',JSON.stringify({ok:result.status===0,at:new Date().toISOString(),sourceDigest:require('./source-digest.cjs')()},null,2));process.exitCode=result.status??1;

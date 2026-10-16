@@ -1,5 +1,6 @@
 const fs=require('fs'),path=require('path'),crypto=require('crypto');
 const root=path.resolve(__dirname,'..'),install=require('./installation.cjs').install;
+const release=JSON.parse(fs.readFileSync(root+'/package.json','utf8')).version;
 const req=require('module').createRequire(install+'/data/profiles/desktop/package.json'),yaml=req('js-yaml');
 class Expression {constructor(value){this.value=value;}}
 const expressionType=new yaml.Type('tag:yaml.org,2002:js',{kind:'scalar',construct:v=>new Expression(v),instanceOf:Expression,represent:v=>v.value});
@@ -23,8 +24,8 @@ async function main(){
  {id:'im-qqbot',name:'dsh-character-qq-adapter',config:{preset:'qq-character',access:{c2cMode:'allowlist',c2cAllow:[],groupMode:'disabled',groupAllow:[]}}},character];
  write('bundles/character-core/cordis.patch.yml',dump([{insert:host}]));
  write('bundles/character-extras/cordis.patch.yml','# Optional features are separately enabled below; never owns QQ or Character preset.\n'+dump([{insert:[{id:'web-search-free',name:'dsh-free-search'},{id:'bilibili',name:'dsh-plugin-bilibili'}]}]));
- for(const [folder,name]of [['character-identity','dsh-character-identity'],['character-memory-core','dsh-character-memory-core'],['character-memory-tools','dsh-character-memory-tools'],['character-qq-adapter','dsh-character-qq-adapter']])write('packages/'+folder+'/package.json',JSON.stringify({name,version:'0.1.0-test.2',private:true,type:'module',main:'index.mjs',files:['*.mjs'],engines:{node:'>=24'}},null,2)+'\n');
- for(const kind of ['core','extras'])write('bundles/character-'+kind+'/package.json',JSON.stringify({name:'dsh-character-'+kind,version:'0.1.0-test.2',private:true,type:'module',dsh:{bundle:{patch:'./cordis.patch.yml'}}},null,2)+'\n');
+ for(const [folder,name]of [['character-identity','dsh-character-identity'],['character-memory-core','dsh-character-memory-core'],['character-memory-tools','dsh-character-memory-tools'],['character-qq-adapter','dsh-character-qq-adapter']])write('packages/'+folder+'/package.json',JSON.stringify({name,version:release,private:true,type:'module',main:'index.mjs',files:['*.mjs','LICENSE*'],engines:{node:'>=24'}},null,2)+'\n');
+ for(const kind of ['core','extras'])write('bundles/character-'+kind+'/package.json',JSON.stringify({name:'dsh-character-'+kind,version:release,private:true,type:'module',dsh:{bundle:{patch:'./cordis.patch.yml'}}},null,2)+'\n');
  write('artifacts/build-manifest.json',JSON.stringify({version,workerSupported,definitionRevision:definition.revision,creatorSha256:crypto.createHash('sha256').update(creatorText).digest('hex'),creatorPluginIds:creator.config.plugins.map(p=>p.id),characterPluginIds:character.config.plugins.map(p=>p.id)},null,2));
  console.log(JSON.stringify({built:true,version,workerSupported,creatorPlugins:creator.config.plugins.length,characterPlugins:character.config.plugins.length}));
 }

@@ -1,4 +1,5 @@
 const fs=require('fs'),path=require('path');
+require('./ensure-build.cjs');
 const root=path.resolve(__dirname,'..'),install=require('./installation.cjs').install,live=install+'/data/profiles/desktop';
 const yaml=require(require.resolve('js-yaml',{paths:[live]}));
 const home=root+'/test-data/home',stage=home+'/profiles/character-test';

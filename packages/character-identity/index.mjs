@@ -1,40 +1,92 @@
 import { Identity } from './identity.mjs';
+import { scheduledEvents } from './schedule.mjs';
 import { DatabaseSync } from 'node:sqlite';
+import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 export const name='character-identity';
+const digest=s=>createHash('sha256').update(s).digest('hex');
 export function apply(ctx,config) {
-  const binding=JSON.parse(readFileSync(config.bindingFile,'utf8').replace(/^\uFEFF/,''));
-  const identity=new Identity(binding);mkdirSync(dirname(config.stateFile),{recursive:true});
-  const db=new DatabaseSync(config.stateFile);
-  db.exec(`PRAGMA journal_mode=WAL; CREATE TABLE IF NOT EXISTS routes(conversation TEXT PRIMARY KEY,session TEXT NOT NULL,generation INTEGER NOT NULL);
-    CREATE TABLE IF NOT EXISTS outbox(id TEXT PRIMARY KEY,kind TEXT NOT NULL,conversation TEXT NOT NULL,text TEXT NOT NULL,status TEXT NOT NULL,at TEXT NOT NULL);`);
-  db.prepare("UPDATE outbox SET status='unknown' WHERE status='sending'").run();
-  let runtime;
-  const service={identity,authorize:(c,a)=>identity.authorize(c,a),forSession:id=>identity.forSession(id),
-    attach(value){
-      if(runtime)throw Error('Duplicate Character QQ gateway');
-      if(value.config.appId!==binding.appId || value.config.access?.c2cMode!=='allowlist'||value.config.access.c2cAllow.length!==1||value.config.access.c2cAllow[0]!==binding.ownerId||value.config.access.groupMode!=='disabled')throw Error('Owner gateway policy mismatch');
-      runtime=value;const original=value.manager.getOrCreate.bind(value.manager);
-      value.manager.getOrCreate=async(scope,peerId,senderId,target)=>{
-        if(scope!=='c2c'||peerId!==binding.ownerId||senderId!==binding.ownerId)throw Error('Owner-only gateway');
-        const record=await original(scope,peerId,senderId,target);
-        const trusted=identity.bind({appId:binding.appId,scope,peerId,senderId,sessionId:record.sessionId});
-        db.prepare('INSERT INTO routes VALUES(?,?,1) ON CONFLICT(conversation) DO UPDATE SET generation=generation+CASE WHEN session!=excluded.session THEN 1 ELSE 0 END,session=excluded.session').run(trusted.conversationId,record.sessionId);
-        return record;
-      };
-    },
-    async notify(trusted,{eventId,kind,text}){
-      identity.authorize(trusted,'send');
-      if(!['scheduled_reminder','task_completed','task_failed','task_timeout','maintenance_result','configured_alert'].includes(kind)||!eventId||typeof text!=='string'||text.length>3000)throw Error('Invalid explicit event');
-      if(!runtime)throw Error('Gateway unavailable');
-      const prior=db.prepare('SELECT status FROM outbox WHERE id=?').get(eventId);if(prior)return prior;
-      db.prepare('INSERT INTO outbox VALUES(?,?,?,?,?,?)').run(eventId,kind,trusted.conversationId,text,'pending',new Date().toISOString());
-      db.prepare("UPDATE outbox SET status='sending' WHERE id=?").run(eventId);
-      try{await runtime.sender.sendMarkdown({scope:'c2c',targetId:binding.ownerId},text);db.prepare("UPDATE outbox SET status='sent' WHERE id=?").run(eventId);}catch{db.prepare("UPDATE outbox SET status='unknown' WHERE id=?").run(eventId);}
-      return db.prepare('SELECT status FROM outbox WHERE id=?').get(eventId);
-    },
-    cancel(eventId){return db.prepare("UPDATE outbox SET status='cancelled' WHERE id=? AND status='pending'").run(eventId).changes===1;}
-  };
-  ctx.provide('characterIdentity',service);ctx.effect(()=>()=>{runtime=undefined;db.close();});
+ const binding=JSON.parse(readFileSync(config.bindingFile,'utf8').replace(/^\uFEFF/,''));
+ const identity=new Identity(binding);mkdirSync(dirname(config.stateFile),{recursive:true});
+ const db=new DatabaseSync(config.stateFile);
+ db.exec(`PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;
+ CREATE TABLE IF NOT EXISTS routes(conversation TEXT PRIMARY KEY,session TEXT NOT NULL,generation INTEGER NOT NULL);
+ CREATE TABLE IF NOT EXISTS outbox(id TEXT PRIMARY KEY,kind TEXT NOT NULL,conversation TEXT NOT NULL,text TEXT NOT NULL,status TEXT NOT NULL,at TEXT NOT NULL);`);
+ db.prepare("UPDATE outbox SET status='unknown' WHERE status='sending'").run();
+ let runtime,detach,closed=false,pumping=false;const listeners=new Set(),bound=new Set(),inputs=new Map();
+ function validateGateway(c){if(c.appId!==binding.appId||c.preset!=='qq-character'||c.access?.c2cMode!=='allowlist'||c.access.c2cAllow?.length!==1||c.access.c2cAllow[0]!==binding.ownerId||c.access.groupMode!=='disabled')throw Error('Owner gateway policy mismatch');}
+ function bind(record){
+  const preset=record.agentPreset??ctx.get?.('agentPresets')?.composedPreset(record.agent.ctx)??record.agent.session.header?.agentPreset;
+  if(record.scope!=='c2c'||record.peerId!==binding.ownerId||record.senderId!==binding.ownerId||preset!=='qq-character')throw Error('Untrusted restored QQ record');
+  const trusted=identity.bind({appId:binding.appId,scope:'c2c',peerId:binding.ownerId,senderId:binding.ownerId,sessionId:record.sessionId});bound.add(record.sessionId);
+  db.prepare('INSERT INTO routes VALUES(?,?,1) ON CONFLICT(conversation) DO UPDATE SET generation=generation+CASE WHEN session!=excluded.session THEN 1 ELSE 0 END,session=excluded.session').run(trusted.conversationId,record.sessionId);return trusted;
+ }
+ async function pump(){
+  if(closed||!runtime||pumping)return;pumping=true;
+  try{for(const row of db.prepare("SELECT * FROM outbox WHERE status='pending' AND conversation=? ORDER BY at LIMIT 20").all('qq-'+digest(`${binding.appId}:c2c:${binding.ownerId}`))){
+   if(closed||!runtime)break;
+   if(!db.prepare("UPDATE outbox SET status='sending' WHERE id=? AND status='pending'").run(row.id).changes)continue;
+   try{await runtime.sender.sendMarkdown({scope:'c2c',targetId:binding.ownerId},row.text);if(!closed)db.prepare("UPDATE outbox SET status='sent' WHERE id=?").run(row.id);}
+   catch{if(!closed)db.prepare("UPDATE outbox SET status='unknown' WHERE id=?").run(row.id);}
+  }}finally{pumping=false;}
+ }
+ function enqueue({eventId,kind,text,conversation}){
+  if(closed)throw Error('Identity disposed');
+  if(!['scheduled_reminder','task_completed','task_failed','task_timeout','maintenance_result','configured_alert'].includes(kind)||typeof eventId!=='string'||!eventId||eventId.length>256||typeof text!=='string'||!text.trim()||text.length>3000)throw Error('Invalid explicit event');
+  const old=db.prepare('SELECT * FROM outbox WHERE id=?').get(eventId);
+  if(old&&(old.kind!==kind||old.conversation!==conversation||old.text!==text))throw Error('Notification id conflict');
+  db.prepare("INSERT OR IGNORE INTO outbox VALUES(?,?,?,?, 'pending',?)").run(eventId,kind,conversation,text,new Date().toISOString());
+ }
+ const service=Object.freeze({
+  authorize:(c,a)=>identity.authorize(c,a),forSession:id=>identity.forSession(id),validateGateway,
+  current(){if(!runtime)throw Error('Gateway unavailable');for(const record of runtime.manager.sessions?.values()??[]){try{return identity.forSession(record.sessionId);}catch{}}throw Error('No active trusted owner session');},
+  latestInput(trusted){identity.authorize(trusted,'read');return inputs.get(trusted.sessionId);},
+  onIngress(fn){listeners.add(fn);return()=>listeners.delete(fn);},
+  attach(value){
+   if(closed||runtime)throw Error('Duplicate Character QQ gateway');validateGateway(value.config);
+   runtime=value;const manager=value.manager,original=manager.getOrCreate,rebuild=manager.rebuildSession;
+   const wrap=async function(scope,peerId,senderId,target){
+    if(runtime!==value||scope!=='c2c'||peerId!==binding.ownerId||senderId!==binding.ownerId||target?.scope!=='c2c'||target.targetId!==binding.ownerId)throw Error('Owner-only gateway');
+    const record=await original.call(this,scope,peerId,senderId,target);if(runtime!==value)throw Error('Gateway detached during restore');bind(record);return record;
+   };
+   manager.getOrCreate=wrap;
+   if(rebuild)manager.rebuildSession=async function(record,options){const old=record.sessionId;const result=await rebuild.call(this,record,options);identity.revoke(old);bound.delete(old);if(runtime===value&&manager.sessions?.get(record.sessionKey)===record)bind(record);return result;};
+   try{for(const record of manager.sessions?.values()??[])bind(record);}catch(e){manager.getOrCreate=original;manager.rebuildSession=rebuild;runtime=undefined;identity.clear();bound.clear();throw e;}
+   // SDK middleware sees the actual admitted message body, not history/envelope or model output.
+   value.bot?.use(async(m,next)=>{
+    if(runtime!==value)throw Error('Gateway detached');
+    const msg=m.message;
+    if(msg.kind!=='c2c'||msg.senderId!==binding.ownerId)throw Error('Owner ingress required');
+    const record=await manager.getOrCreate('c2c',binding.ownerId,binding.ownerId,{scope:'c2c',targetId:binding.ownerId,msgId:msg.messageId});
+    const trusted=identity.forSession(record.sessionId);
+    if(typeof msg.content==='string'&&msg.content.trim()&&msg.messageId){
+     const evidence=Object.freeze({sessionId:record.sessionId,eventSeq:record.agent.session.seq,origin:'direct_user',receivedAt:Date.now(),messageId:msg.messageId,text:msg.content.slice(0,8000)});
+     inputs.set(record.sessionId,evidence);
+     for(const fn of listeners)try{fn(trusted,evidence);}catch{ctx.logger?.warn('Character ingress capture rejected');}
+    }
+    return next();
+   });
+   detach=()=>{if(runtime!==value)return;runtime=undefined;if(manager.getOrCreate===wrap)manager.getOrCreate=original;if(rebuild)manager.rebuildSession=rebuild;identity.clear();bound.clear();inputs.clear();};
+   void pump();return detach;
+  },
+  async notify(trusted,event){identity.authorize(trusted,'send');enqueue({...event,conversation:trusted.conversationId});await pump();return db.prepare('SELECT status FROM outbox WHERE id=?').get(event.eventId);},
+  async notifySystem({eventId,kind,text,target}){
+   if(!runtime||target.scope!=='c2c'||target.targetId!==binding.ownerId)throw Error('Owner notification required');
+   // Existing QQTK ledger provides stable event text (maintenance job id / task status).
+   if(typeof eventId!=='string'||!eventId.startsWith('qqtk:'))throw Error('Stable QQTK event id required');
+   const conversation='qq-'+digest(`${binding.appId}:c2c:${binding.ownerId}`);
+   enqueue({eventId,kind,text,conversation});await pump();const result=db.prepare('SELECT status FROM outbox WHERE id=?').get(eventId);if(result.status!=='sent')throw Error('Notification delivery '+result.status);return result;
+  },
+  inspect(trusted){identity.authorize(trusted,'read');return db.prepare('SELECT id,kind,status,at FROM outbox WHERE conversation=? ORDER BY at DESC LIMIT 30').all(trusted.conversationId);},
+  cancel(trusted,eventId){identity.authorize(trusted,'write');return db.prepare("UPDATE outbox SET status='cancelled' WHERE id=? AND conversation=? AND status='pending'").run(eventId,trusted.conversationId).changes===1;}
+ });
+ ctx.on?.('agent/disposed',({agent})=>{identity.revoke(agent.id);bound.delete(agent.id);inputs.delete(agent.id);});
+ ctx.on?.('session/event',(session,event)=>{
+  const messages=event.type==='user/message'?[event.data]:event.type==='agent/inbox/spliced'?event.data?.inserted??[]:[];
+  for(const message of messages){if(message?.source?.kind!=='schedule')continue;
+   try{const trusted=identity.forSession(session.header.id);for(const notification of scheduledEvents(message))void service.notify(trusted,notification).catch(()=>ctx.logger?.warn('Schedule notification deferred'));}catch{ctx.logger?.warn('Schedule notification requires a bound owner and supported host framing');}}
+ });
+ ctx.provide('characterIdentity',service);
+ ctx.effect(()=>{const timer=setInterval(()=>void pump(),5000);return()=>{clearInterval(timer);detach?.();closed=true;identity.clear();listeners.clear();db.close();};});
 }

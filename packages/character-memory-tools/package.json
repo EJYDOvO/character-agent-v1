@@ -1,11 +1,12 @@
 {
   "name": "dsh-character-memory-tools",
-  "version": "0.1.0-test.2",
+  "version": "0.1.0-test.5",
   "private": true,
   "type": "module",
   "main": "index.mjs",
   "files": [
-    "*.mjs"
+    "*.mjs",
+    "LICENSE*"
   ],
   "engines": {
     "node": ">=24"

@@ -1,1 +1,1 @@
-{"name":"dsh-character-system-local","version":"0.1.0-test.2","private":true,"type":"module","scripts":{"test":"node --test tests/*.test.mjs"},"engines":{"node":">=24"}}
+{"name":"dsh-character-system-local","version":"0.1.0-test.5","private":true,"type":"module","scripts":{"test":"node --test tests/*.test.mjs"},"engines":{"node":">=24"}}

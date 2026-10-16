@@ -1,3 +1,5 @@
+> 本文保留 test.2 的历史边界。当前 test.5 的已验证状态、部署与回滚说明以 [RELEASE-test5.md](RELEASE-test5.md) 和 [MANAGEMENT.md](MANAGEMENT.md) 为准。
+
 # 集成与恢复边界
 
 本仓库是原有 DSH + QQTK 部署上的扩展，不包含完整宿主和运维依赖。

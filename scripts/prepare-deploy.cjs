@@ -1,15 +1,21 @@
 const fs=require('fs'),path=require('path'),crypto=require('crypto'),assert=require('assert/strict');
+require('child_process').execFileSync(process.execPath,[path.join(__dirname,'ensure-build.cjs'),'--check'],{stdio:'inherit'});
 const project=path.resolve(__dirname,'..'),root=require('./installation.cjs').install,live=root+'/data/profiles/desktop',candidate=root+'/data/profiles/character-candidate';
+const version=JSON.parse(fs.readFileSync(project+'/package.json','utf8')).version;
 const yaml=require(require.resolve('js-yaml',{paths:[live]}));const hash=f=>crypto.createHash('sha256').update(fs.readFileSync(f)).digest('hex');
 assert(!fs.existsSync(candidate),'Candidate exists; inspect before replacing');fs.mkdirSync(candidate,{recursive:true});
 const manifest=JSON.parse(fs.readFileSync(live+'/package.json','utf8'));
 const rows=yaml.load(fs.readFileSync(live+'/cordis.patch.yml','utf8'));
 const qq=rows.find(x=>x.id==='im-qqbot');assert.equal(qq.config.access.c2cAllow.length,1);assert.equal(qq.config.access.groupMode,'disabled');
 const owner=JSON.parse(fs.readFileSync(root+'/data/maintenance/owner.json','utf8'));assert.equal(owner.openid,qq.config.access.c2cAllow[0]);
-const record={createdAt:new Date().toISOString(),baseline:{},artifacts:{},candidate,version:'0.1.0-test.2'};
+const record={createdAt:new Date().toISOString(),baseline:{},artifacts:{},candidate,version};
 for(const f of ['package.json','cordis.patch.yml','pnpm-lock.yaml','pnpm-workspace.yaml'])record.baseline[f]=hash(live+'/'+f);
 record.baseline.prefs=hash(root+'/data/qqbot/model-prefs.json');record.baseline.asar=hash(root+'/resources/app.asar');
-for(const f of fs.readdirSync(project+'/artifacts/packages').filter(x=>x.endsWith('-0.1.0-test.2.tgz'))){const dest=root+'/plugin-packages/'+f;assert(!fs.existsSync(dest),'Immutable artifact already exists');fs.copyFileSync(project+'/artifacts/packages/'+f,dest);const name=f.replace('-0.1.0-test.2.tgz','');manifest.dependencies[name]='file:'+dest.replaceAll('\\','/');record.artifacts[name]={source:manifest.dependencies[name],sha256:hash(dest),version:'0.1.0-test.2'};}
+record.baseline.policy=hash(root+'/maintenance/plugin-policy.json');record.sourceDigest=require('./source-digest.cjs')();
+for(const f of fs.readdirSync(project+'/artifacts/packages').filter(x=>x.endsWith('-'+version+'.tgz'))){const dest=root+'/plugin-packages/'+f;assert(!fs.existsSync(dest),'Immutable artifact already exists');fs.copyFileSync(project+'/artifacts/packages/'+f,dest);const name=f.replace('-'+version+'.tgz','');manifest.dependencies[name]='file:'+dest.replaceAll('\\','/');record.artifacts[name]={source:manifest.dependencies[name],sha256:hash(dest),version};}
+assert.equal(Object.keys(record.artifacts).length,6,'All six Character artifacts required');
+const toolkit='dsh-remote-ops-local',toolkitFile='dsh-remote-ops-local-1.0.1.tgz',toolkitDest=root+'/plugin-packages/'+toolkitFile;
+if(fs.existsSync(toolkitDest))assert.equal(hash(toolkitDest),hash(project+'/artifacts/packages/'+toolkitFile),'Immutable toolkit artifact differs');else fs.copyFileSync(project+'/artifacts/packages/'+toolkitFile,toolkitDest);manifest.dependencies[toolkit]='file:'+toolkitDest.replaceAll('\\','/');record.artifacts[toolkit]={source:manifest.dependencies[toolkit],sha256:hash(toolkitDest),version:'1.0.1'};
 manifest.dsh.profile.bundles=manifest.dsh.profile.bundles.filter(x=>!['@tencent-connect/dsh-qqbot','dsh-remote-ops-local','dsh-free-search','dsh-plugin-bilibili','dsh-character-core','dsh-character-extras'].includes(x));manifest.dsh.profile.bundles.push('dsh-character-core','dsh-character-extras');
 qq.config.preset='qq-character';delete qq.name;rows.find(x=>x.id==='task-memory').disabled=true;
 fs.writeFileSync(candidate+'/package.json',JSON.stringify(manifest,null,2));fs.writeFileSync(candidate+'/cordis.patch.yml',yaml.dump(rows,{noRefs:true,lineWidth:120}));

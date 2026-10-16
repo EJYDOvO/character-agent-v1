@@ -1,0 +1,39 @@
+diff --git a/index.js b/index.js
+index fac5a5f..d1ab11a 100644
+--- a/index.js
++++ b/index.js
+@@ -21,7 +21,7 @@ export function apply(ctx,config){
+     if(!remote.features().notifications.enabled){ledger.deliveries[key]={status:'suppressed',at:Date.now()};persist();return;}
+     // Persist before sending. A crash with status=sending is ambiguous and never auto-replayed.
+     ledger.deliveries[key]={status:'sending',at:Date.now()};persist();
+-    try{await runtime.sender.sendMarkdown({scope:'c2c',targetId:owner.openid},text);ledger.deliveries[key].status='sent';}
++    try{if(runtime.notifyEvent){await runtime.notifyEvent({eventId:'qqtk:'+key,kind:key.startsWith('job:')?'maintenance_result':key.startsWith('timeout:')?'task_timeout':key.startsWith('complete:')?'task_completed':key.startsWith('failed:')?'task_failed':'configured_alert',text});}else{await runtime.sender.sendMarkdown({scope:'c2c',targetId:owner.openid},text);}ledger.deliveries[key].status='sent';}
+     catch{ledger.deliveries[key].status='failed';}
+     persist();
+   }
+@@ -44,7 +44,12 @@ export function apply(ctx,config){
+     const id=session.header.id;
+     if(event.type==='turn/start')active.set(id,{startedAt:Date.now(),lastAt:Date.now(),turn:event.data.turn});
+     if(active.has(id))active.get(id).lastAt=Date.now();
+-    if(event.type==='turn/end')active.delete(id);
++    if(event.type==='turn/end'){
++      const tracked=active.get(id);
++      // Only long-running tracked tasks have a separate completion notification.
++      if(tracked&&Date.now()-tracked.startedAt>remote.features().remoteOps.notifyAfterSeconds*1000){const failed=!!event.data?.error||event.data?.reason?.kind!=='completed';void notify(`${failed?'failed':'complete'}:${id}:${tracked.turn}`,failed?'QQ 长任务执行失败；请查看当前会话结果。':'QQ 长任务已结束；请查看当前会话结果。');}
++      active.delete(id);
++    }
+   });
+   const service={
+     commands(manager){return [{name:'ops',scope:'c2c',description:'私人运维：help/status/tasks/stop/result/backup/stage/deploy/restart/features',authorized:c=>allowed(c)||'仅部署所有者可执行运维命令。',handler:async c=>{
+diff --git a/package.json b/package.json
+index 87b38ea..0697b95 100644
+--- a/package.json
++++ b/package.json
+@@ -1,6 +1,6 @@
+ {
+   "name": "dsh-remote-ops-local",
+-  "version": "1.0.0",
++  "version": "1.0.1",
+   "private": true,
+   "type": "module",
+   "main": "index.js",
