@@ -1,0 +1,23 @@
+const fs=require('fs'),path=require('path'),crypto=require('crypto'),assert=require('assert/strict');
+const project=path.resolve(__dirname,'..'),root=require('./installation.cjs').install,live=root+'/data/profiles/desktop',candidate=root+'/data/profiles/character-candidate';
+const yaml=require(require.resolve('js-yaml',{paths:[live]}));const hash=f=>crypto.createHash('sha256').update(fs.readFileSync(f)).digest('hex');
+assert(!fs.existsSync(candidate),'Candidate exists; inspect before replacing');fs.mkdirSync(candidate,{recursive:true});
+const manifest=JSON.parse(fs.readFileSync(live+'/package.json','utf8'));
+const rows=yaml.load(fs.readFileSync(live+'/cordis.patch.yml','utf8'));
+const qq=rows.find(x=>x.id==='im-qqbot');assert.equal(qq.config.access.c2cAllow.length,1);assert.equal(qq.config.access.groupMode,'disabled');
+const owner=JSON.parse(fs.readFileSync(root+'/data/maintenance/owner.json','utf8'));assert.equal(owner.openid,qq.config.access.c2cAllow[0]);
+const record={createdAt:new Date().toISOString(),baseline:{},artifacts:{},candidate,version:'0.1.0-test.2'};
+for(const f of ['package.json','cordis.patch.yml','pnpm-lock.yaml','pnpm-workspace.yaml'])record.baseline[f]=hash(live+'/'+f);
+record.baseline.prefs=hash(root+'/data/qqbot/model-prefs.json');record.baseline.asar=hash(root+'/resources/app.asar');
+for(const f of fs.readdirSync(project+'/artifacts/packages').filter(x=>x.endsWith('-0.1.0-test.2.tgz'))){const dest=root+'/plugin-packages/'+f;assert(!fs.existsSync(dest),'Immutable artifact already exists');fs.copyFileSync(project+'/artifacts/packages/'+f,dest);const name=f.replace('-0.1.0-test.2.tgz','');manifest.dependencies[name]='file:'+dest.replaceAll('\\','/');record.artifacts[name]={source:manifest.dependencies[name],sha256:hash(dest),version:'0.1.0-test.2'};}
+manifest.dsh.profile.bundles=manifest.dsh.profile.bundles.filter(x=>!['@tencent-connect/dsh-qqbot','dsh-remote-ops-local','dsh-free-search','dsh-plugin-bilibili','dsh-character-core','dsh-character-extras'].includes(x));manifest.dsh.profile.bundles.push('dsh-character-core','dsh-character-extras');
+qq.config.preset='qq-character';delete qq.name;rows.find(x=>x.id==='task-memory').disabled=true;
+fs.writeFileSync(candidate+'/package.json',JSON.stringify(manifest,null,2));fs.writeFileSync(candidate+'/cordis.patch.yml',yaml.dump(rows,{noRefs:true,lineWidth:120}));
+fs.writeFileSync(candidate+'/character-artifacts.json',JSON.stringify(record.artifacts,null,2));
+for(const f of ['pnpm-workspace.yaml','pnpm-lock.yaml'])fs.copyFileSync(live+'/'+f,candidate+'/'+f);
+fs.cpSync(live+'/patches',candidate+'/patches',{recursive:true});
+const privateDir=root+'/data/maintenance/character-deploy';fs.mkdirSync(privateDir,{recursive:true});
+if(fs.existsSync(privateDir+'/candidate.json'))fs.copyFileSync(privateDir+'/candidate.json',privateDir+'/history-'+Date.now()+'.json');
+fs.writeFileSync(privateDir+'/binding.json',JSON.stringify({appId:qq.config.appId,ownerId:owner.openid,characterId:'character-a',projectId:'personal'},null,2));
+fs.writeFileSync(privateDir+'/candidate.json',JSON.stringify(record,null,2));
+console.log(JSON.stringify({prepared:true,candidate,privateUsers:1,groups:'disabled',core:'dsh-character-core',extras:true,legacyMemory:'disabled, data retained'}));

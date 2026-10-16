@@ -1,0 +1,74 @@
+diff --git a/maintenance.test.cjs b/maintenance.test.cjs
+index 8c6fac9..e5fbb29 100644
+--- a/maintenance.test.cjs
++++ b/maintenance.test.cjs
+@@ -22,7 +22,9 @@ test('backup integrity detects corruption and incomplete backups before restore'
+ 
+ test('re-applying feature configuration is idempotent and keeps one browser entry',()=>{
+  const dir=fs.mkdtempSync(path.join(root,'tmp/config-feature-test-')),file=path.join(dir,'cordis.patch.yml');
++ fs.writeFileSync(path.join(dir,'package.json'),JSON.stringify({dsh:{profile:{bundles:['dsh-character-core']}}}));
+  fs.writeFileSync(file,yaml.dump([{id:'custom',config:{keep:'unchanged'}}]));
+  configureFeatures(dir);const first=fs.readFileSync(file,'utf8');configureFeatures(dir);assert.equal(fs.readFileSync(file,'utf8'),first);
+  const rows=yaml.load(first);assert.equal(rows[0].config.keep,'unchanged');assert.equal(rows.flatMap(r=>r.insert||[]).filter(r=>r.id==='mcp-browser').length,1);
++ assert.equal(rows.find(r=>r.id==='task-memory').disabled,true,'Character must not re-enable legacy memory writes');
+ });
+diff --git a/ops.cjs b/ops.cjs
+index dda08ce..2c04616 100644
+--- a/ops.cjs
++++ b/ops.cjs
+@@ -54,7 +54,8 @@ function coreVersion() {
+ }
+ function configureFeatures(dir=profile) {
+   const rows=patchRows(dir),features=JSON.parse(fs.readFileSync(path.join(__dirname,'features.json'),'utf8'));
+-  Object.assign(row(rows,'task-memory'),{disabled:!features.memory.enabled,config:{storageRoot:path.join(root,'data/storages/task-memory').replaceAll('\\','/'),injectPrompt:false,injectLimit:5,injectMaxChars:1200,injectMaxEntryChars:300,maxEntries:500}});
++  const characterEnabled=JSON.parse(fs.readFileSync(path.join(dir,'package.json'),'utf8')).dsh?.profile?.bundles?.includes('dsh-character-core');
++  Object.assign(row(rows,'task-memory'),{disabled:characterEnabled||!features.memory.enabled,config:{storageRoot:path.join(root,'data/storages/task-memory').replaceAll('\\','/'),injectPrompt:false,injectLimit:5,injectMaxChars:1200,injectMaxEntryChars:300,maxEntries:500}});
+   Object.assign(row(rows,'mcp-browser'),{name:'@deepseek-ai/dsh-mcp-client',disabled:!features.browser.enabled,config:{serverName:'browser',transport:'stdio',command:path.join(root,'resources/runtime/primary-runtime/dependencies/node/bin/node.exe'),args:[path.join(__dirname,'browser/0.0.83/node_modules/@playwright/mcp/cli.js'),'--config',path.join(__dirname,'browser/0.0.83/config.json')],cwd:path.join(root,'default-workspace'),toolCallTimeoutMs:60000,failOnStartupError:false}});
+   // A new row must use insert; overrides reference rows provided by installed bundles.
+   const browser=rows.find(x=>x.id==='mcp-browser');rows.splice(rows.indexOf(browser),1);
+@@ -96,6 +97,10 @@ async function liveStatus(withPresets = false) {
+             const pluginsEnvelope=await pluginResponse.json();assert(pluginsEnvelope.result?.ok,'Plugin inspection failed');
+             const plugins=pluginsEnvelope.result.value,manifest=JSON.parse(fs.readFileSync(path.join(profile,'package.json'),'utf8'));
+             const checks=['im-qqbot'];
++            if(manifest.dsh?.profile?.bundles?.includes('dsh-character-core')){
++              const character=value.presets.find(x=>x.id==='qq-character');assert(character&&!character.broken,'Character preset failed to activate');
++              checks.push('character-identity','character-memory-core');
++            }
+             if(manifest.dependencies['dsh-remote-ops-local'])checks.push('qq-remote-ops','task-memory','mcp-browser');
+             value.featurePlugins=plugins.filter(p=>checks.includes(p.patchId)).map(p=>({id:p.patchId,enabled:p.enabled,phase:p.fiberPhase}));
+             for(const id of checks){const p=value.featurePlugins.find(p=>p.id===id);assert(p,`Missing plugin: ${id}`);assert(!p.enabled||p.phase==='active',`Plugin failed to activate: ${id}`);}
+@@ -115,7 +120,19 @@ function verify(dir = profile) {
+   assert.equal(settings.autoInstallPeers, false, 'Profile must use the bundled core runtime');
+   const a = require('./read-asar.cjs').openArchive();
+   let runtime; try { runtime = JSON.parse(a.read('dsh/package.json')).version; } finally { a.close(); }
+-  assert.equal(qq.preset, 'cordis');
++  const characterEnabled=manifest.dsh?.profile?.bundles?.includes('dsh-character-core');
++  assert.equal(qq.preset, characterEnabled ? 'qq-character' : 'cordis');
++  if(characterEnabled){
++    assert.equal(qq.access.c2cAllow.length,1,'Character V1 requires exactly one Owner');
++    assert.equal(qq.access.groupMode,'disabled');
++    assert(!manifest.dsh.profile.bundles.includes('@tencent-connect/dsh-qqbot'),'Core owns the only QQ gateway');
++    assert(!manifest.dsh.profile.bundles.includes('dsh-remote-ops-local'),'Core owns Remote Ops');
++    const pins=JSON.parse(fs.readFileSync(path.join(dir,'character-artifacts.json'),'utf8'));
++    for(const [name,pin] of Object.entries(pins)){
++      assert.equal(manifest.dependencies[name],pin.source,'Character artifact source changed');
++      assert.equal(require('node:crypto').createHash('sha256').update(fs.readFileSync(pin.source.slice(5))).digest('hex'),pin.sha256,'Character artifact integrity failed');
++    }
++  }
+   assert.equal(qq.access.c2cMode, 'allowlist');
+   assert(qq.access.c2cAllow.length > 0);
+   assert(qq.access.c2cAllow.every(id=>typeof id==='string' && id.length>0 && id!=='*'), 'Private whitelist must name individual users');
+diff --git a/stage.cjs b/stage.cjs
+index caa6b57..d3a45b0 100644
+--- a/stage.cjs
++++ b/stage.cjs
+@@ -37,6 +37,9 @@ if (cmd === 'seal') {
+   assert.deepEqual(record.browser,Object.fromEntries(['package.json','pnpm-lock.yaml','config.json'].map(f=>[f,hash(path.join(__dirname,'browser/0.0.83',f))])),'Browser runtime changed: stage again');
+   console.log('Candidate and live baseline verified.');
+ } else {
++  if(JSON.parse(fs.readFileSync(path.join(profile,'package.json'),'utf8')).dsh?.profile?.bundles?.includes('dsh-character-core')){
++    throw Error('Character V1 is active. Legacy Stage cannot rebuild its Bundle ownership safely; use the reviewed character-agent-v1 deployment workflow. No profile changed.');
++  }
+   const archive=require('./read-asar.cjs').openArchive();
+   let runtime;try{runtime=JSON.parse(archive.read('dsh/package.json')).version;}finally{archive.close();}
+   assert.equal(runtime,policy.testedRuntime,'New core version requires compatibility review before staging');

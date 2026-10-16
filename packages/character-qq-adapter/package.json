@@ -1,0 +1,13 @@
+{
+  "name": "dsh-character-qq-adapter",
+  "version": "0.1.0-test.2",
+  "private": true,
+  "type": "module",
+  "main": "index.mjs",
+  "files": [
+    "*.mjs"
+  ],
+  "engines": {
+    "node": ">=24"
+  }
+}

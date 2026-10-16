@@ -1,0 +1,6 @@
+# Optional features are separately enabled below; never owns QQ or Character preset.
+- insert:
+    - id: web-search-free
+      name: dsh-free-search
+    - id: bilibili
+      name: dsh-plugin-bilibili

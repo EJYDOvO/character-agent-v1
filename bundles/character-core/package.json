@@ -1,0 +1,11 @@
+{
+  "name": "dsh-character-core",
+  "version": "0.1.0-test.2",
+  "private": true,
+  "type": "module",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}
