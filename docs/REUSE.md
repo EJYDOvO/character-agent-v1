@@ -1,5 +1,7 @@
 # 在其他 DSH 项目中使用
 
+当前实例已部署 **test.10** 并显式开启 Interaction，详见 [本次发布及恢复记录](RELEASE-test10.md)。下文历史验证保留原版本语境；源码默认仍不启用该可选策略。
+
 原通用化验收宿主：DSH 0.2.0-rc.2 / Node 24 / Windows。test.9 在 0.2.1-rc.2 上重新验证通用 Memory 独立身份接入及完整 Character，见 [最新记录](RELEASE-test9.md)；纯 QQ 无 Remote Ops 的独立连接组合本次未重跑。本文件不是跨版本安装保证。不要向 Profile 安装第二套 DSH 核心，保留 `autoInstallPeers: false`。所有示例路径与身份都是占位值。
 
 ## 普通 Agent + QQ
@@ -97,3 +99,7 @@ test.9 审计修复保留契约 v1、Schema 3 和现有工具参数。Host 的 `
 | Character | 构建参数 + Core；Extras 可选 | 角色、代码和运行数据库分开备份；同 Schema 回滚仅还原代码/Profile |
 
 新版本先固定包与补丁哈希、隔离安装/验证，再在空闲和维护锁下切换。test.8 已使用 Schema 3；test.9 审计修复不再升级 Schema。回滚的数据影响以 [实际恢复流程](INTEGRATION.md#回滚) 为准，不应把“同 Schema”理解为现有回滚脚本不会恢复快照。未来 Schema 变化必须单独设计数据兼容策略。
+
+## 可选通用 Interaction
+
+`packages/interaction-policy` 可独立安装到普通 DSH Preset，不需要 Character、QQTK 或 Memory。它使用原生作用域服务、Session/流式事件与 Inbox，平台通过小型 Sender 接口接入。声明必须提供服务隔离域；详见 [安装及契约](../packages/interaction-policy/README.md)。已完成隔离与本机部署检查，Web 额外气泡/状态 UI 未实现。

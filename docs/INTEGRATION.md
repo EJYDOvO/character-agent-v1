@@ -1,5 +1,7 @@
 # 集成、部署与恢复
 
+当前 test.10 的 Interaction 配套部署、实际回退和验收边界见 [发布记录](RELEASE-test10.md)。`pack.cjs` 与源码摘要支持 `DSH_QQTK_PROJECT` 指定独立维护源码；候选必须包含 Interaction 包、匹配的 Identity/QQ 补丁与 Remote Ops，不可只复制新版 Core。旧部署辅助脚本仍不是通用一键升级器。
+
 本仓库是 DSH + QQTK 上的扩展，不包含完整宿主和运维依赖。完整 Character 集成需要本机 DSH、desktop Profile 中可解析的 `js-yaml`、独立 QQTK 维护组件、Remote Ops 与版本匹配的 QQ 补丁。普通 Agent 只复用 Memory 或 QQ 时，先阅读 [REUSE.md](REUSE.md)。
 
 ## 使用脚本前

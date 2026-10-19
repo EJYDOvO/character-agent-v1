@@ -1,0 +1,83 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {Interaction,boundary,options,replyPolicy} from '../packages/interaction-policy/policy.mjs';
+import {apply} from '../packages/interaction-policy/index.mjs';
+function fixture(config={}){
+ let time=0,id=0;const timers=new Map(),sent=[],actions=[],bubbles=[];
+ const clock={now:()=>time,set(fn,ms){timers.set(++id,{fn,at:time+ms});return id;},clear:id=>timers.delete(id)};
+ const agent={status:'running',cancel:(...a)=>actions.push(['cancel',...a]),followup:m=>actions.push(['followup',m]),steer:m=>actions.push(['steer',m])};
+ const p=new Interaction(agent,{hangOnMs:30,throttleMs:10,...config},clock);
+ const transport={key:agent,async sendText(text,meta){sent.push(['text',text,meta]);},openStream(){const b={text:'',closed:false};bubbles.push(b);sent.push(['open']);return {async update(t){assert(!b.closed);b.text=t;sent.push(['update',t]);},async complete(){assert(!b.closed);b.closed=true;sent.push(['complete']);}};}};
+ p.bind(transport);
+ const event=(type,data={})=>p.event({type,data});
+ let rev=0,attempt=0;const start=()=>{event('turn/start');p.frame({type:'start',attemptId:++attempt,revision:++rev});};
+ const chunk=text=>p.frame({type:'chunk',attemptId:attempt,revision:++rev,chunk:{type:'text-delta',text}});
+ const message=text=>{event('assistant/message',{message:{content:[{type:'text',text}]}});p.frame({type:'end',attemptId:attempt,revision:++rev,outcome:{eventType:'assistant/message'}});};
+ const advance=async ms=>{time+=ms;for(const [key,t]of [...timers])if(t.at<=time){timers.delete(key);t.fn();}await p.idle();};
+ return {p,agent,transport,event,start,chunk,message,advance,sent,actions,bubbles,timers};
+}
+test('short natural chat splits streaming bubbles without truncation or duplicate settlement',async()=>{
+ const f=fixture();f.start();f.chunk('嗯，今天还不错。');await f.advance(11);f.chunk('咖啡机终于修好了。');f.message('嗯，今天还不错。咖啡机终于修好了。');f.event('turn/end',{reason:{kind:'completed'}});await f.p.idle();
+ assert.deepEqual(f.bubbles.map(b=>b.text),['嗯，今天还不错。','咖啡机终于修好了。']);assert(f.bubbles.every(b=>b.closed));assert.equal(f.sent.filter(s=>s[0]==='text').length,0);
+ assert.deepEqual(f.sent.filter(s=>['open','complete'].includes(s[0])).map(s=>s[0]),['open','complete','open','complete']);
+});
+test('all chunk partitionings preserve short Chinese text and closed quote boundary',async()=>{
+ const text='嗯，我记得这件事。「明天再说！」现在先喝咖啡。';
+ for(let size=1;size<text.length;size++){
+  const f=fixture();f.start();for(let i=0;i<text.length;i+=size){f.chunk(text.slice(i,i+size));await f.advance(10);}f.message(text);await f.p.idle();assert.equal(f.bubbles.map(b=>b.text).join(''),text);assert(f.bubbles.length<=3);await f.p.dispose();
+ }
+});
+test('structured Assistant result retains streaming and formatting after tool progress',async()=>{
+ const f=fixture();f.start();f.chunk('嗯，我先检查一下。');f.message('嗯，我先检查一下。');f.event('tool/call',{callId:'one'});f.event('tool/result',{message:{source:{callId:'one'}}});
+ const text='检查结果如下。\n```js\nconsole.log("完整代码。不要拆开。")\n```\n- 第一项\n- 第二项';
+ f.p.text(text);f.p.finish(text);await f.p.idle();assert.deepEqual(f.bubbles.map(b=>b.text),['嗯，我先检查一下。',text]);assert.equal(f.sent.filter(s=>s[0]==='text').length,0);
+});
+test('hang-on uses actual running state and elapsed clock, once per turn, transient only',async()=>{
+ const f=fixture();f.start();await f.advance(29);assert.equal(f.sent.length,0);f.event('tool/call',{callId:'one'});await f.advance(1);await f.advance(500);f.p.hangOn();await f.p.idle();
+ assert.equal(f.sent.length,1);assert.equal(f.sent[0][2].transient,true);assert.equal(f.sent[0][2].state,'tool');f.event('turn/end',{reason:{kind:'completed'}});await f.p.dispose();
+});
+test('natural response, queued race, idle and closed turns suppress redundant hang-on',async()=>{
+ for(const mode of ['natural','idle','ended']){const f=fixture();f.start();if(mode==='natural')f.chunk('嗯，');if(mode==='idle')f.agent.status='idle';if(mode==='ended')f.event('turn/end',{reason:{kind:'completed'}});await f.advance(40);assert(!f.sent.some(s=>s[2]?.kind==='status'));await f.p.dispose();}
+ const f=fixture();f.start();f.p.hangOn();f.chunk('我正在检查。');await f.p.idle();assert(!f.sent.some(s=>s[2]?.kind==='status'));await f.p.dispose();
+});
+test('explicit revision cancels text only, preserves inbox and queues native followup',async()=>{
+ const f=fixture();f.start();f.chunk('旧回复未发送');assert.equal(f.p.revise({native:true}),'restarted');await f.p.idle();assert.equal(f.sent.length,0);assert.deepEqual(f.actions,[['cancel',{kind:'user'},{keepInbox:true}],['followup',{native:true}]]);await f.p.dispose();
+});
+test('tool call fragments, active and completed tools use steer, never cancel',async()=>{
+ for(const mode of ['fragment','running','completed','unknown']){const f=fixture();f.start();if(mode==='fragment')f.p.toolSeen=true;else if(mode==='unknown')f.p.active=false;else{f.event('tool/call',{callId:'x'});if(mode==='completed')f.event('tool/result',{message:{source:{callId:'x'}}});}assert.equal(f.p.revise({native:true}),'steered');assert.equal(f.actions[0][0],'steer');assert.equal(f.actions.length,1);await f.p.dispose();}
+});
+test('cancel drops unsent output, closes visible stream and ignores stale frames',async()=>{
+ const f=fixture();f.start();f.chunk('已经可见');await f.advance(11);f.chunk('未发送的尾巴');f.event('turn/end',{reason:{kind:'aborted'}});await f.advance(100);f.chunk('迟到片段');await f.p.idle();assert.equal(f.bubbles[0].text,'已经可见');assert(f.bubbles[0].closed);await f.p.dispose();
+});
+test('duplicate/reordered revisions cannot repeat text; consecutive turns preserve final queue',async()=>{
+ const f=fixture();f.start();const frame={type:'chunk',attemptId:1,revision:10,chunk:{type:'text-delta',text:'第一轮。'}};f.p.frame(frame);f.p.frame(frame);f.p.frame({...frame,revision:9});f.message('第一轮。');f.event('turn/end',{reason:{kind:'completed'}});f.event('turn/start');f.p.text('第二轮。');f.p.finish('第二轮。');await f.p.idle();assert.deepEqual(f.bubbles.map(b=>b.text),['第一轮。','第二轮。']);await f.p.dispose();
+});
+test('stream unavailable falls back once; ambiguous update failure never duplicates statically',async()=>{
+ const f=fixture();f.transport.openStream=()=>{throw Error('unsupported');};f.start();f.chunk('保留全文');f.message('保留全文');await f.p.idle();assert.equal(f.sent.filter(s=>s[0]==='text').length,1);await f.p.dispose();
+ const g=fixture();g.transport.openStream=()=>({update:async()=>{throw Error('uncertain delivery');},complete:async()=>{}});g.start();g.chunk('不能重复');g.message('不能重复');await g.p.idle();assert.equal(g.sent.length,0);assert(g.p.errors.includes('stream-delivery-unknown'));await g.p.dispose();
+});
+test('Markdown boundaries conservative; validation and disabled mode',async()=>{
+ for(const t of ['```js\n内容。还有。\n```','[链接](https://example.com)。后文','- 列表。下一项','| 表格。内容 |'])assert.equal(boundary(t),0);
+ assert.throws(()=>options({maxBubbles:50}));assert(replyPolicy.includes('完整 Assistant'));
+ const f=fixture({enabled:false});assert.equal(f.p.bind(f.transport),false);f.start();f.chunk('禁止发送');await f.advance(500);assert.equal(f.sent.length,0);await f.p.dispose();
+});
+test('static transport segments naturally, no additional model or storage needed',async()=>{
+ const f=fixture();delete f.transport.openStream;f.start();f.chunk('嗯，先去吃饭。然后再处理。');f.message('嗯，先去吃饭。然后再处理。');await f.p.idle();assert.deepEqual(f.sent.map(s=>s[1]),['嗯，先去吃饭。','然后再处理。']);await f.p.dispose();
+});
+test('pending approval/question suppresses hang-on and explicit stop suppresses tool-drain status',async()=>{
+ const f=fixture();f.transport.waitingForUser=()=>true;f.start();await f.advance(100);assert.equal(f.sent.length,0);f.transport.waitingForUser=()=>false;f.p.stopOutput();await f.advance(100);assert.equal(f.sent.length,0);await f.p.dispose();
+});
+test('slow sender cannot reorder bubbles; cancel discards queued segments',async()=>{
+ const f=fixture();let unblock;const wait=new Promise(r=>unblock=r),order=[];
+ f.transport.openStream=()=>({async update(text){order.push(text);await wait;},async complete(){order.push('closed');}});
+ f.start();f.chunk('第一段完整内容。第二段完整内容。');f.message('第一段完整内容。第二段完整内容。');await Promise.resolve();f.p.stopOutput();unblock();await f.p.idle();assert.deepEqual(order,['第一段完整内容。','closed']);await f.p.dispose();
+});
+test('canonical final supplies a missing stream suffix and output target remains bound to its message',async()=>{
+ const f=fixture();f.start();f.chunk('已有前缀');const other=[];f.p.bind({key:f.agent,sendText:async t=>other.push(t)});f.message('已有前缀，还有尾巴');await f.p.idle();assert.equal(f.bubbles.map(b=>b.text).join(''),'已有前缀，还有尾巴');assert.equal(other.length,0);await f.p.dispose();
+});
+test('plugin lifecycle does not consume serial Agent creation and revokes disposed handles',async()=>{
+ const listeners=new Map(),clean=[],agent={session:{header:{id:'fake'}},status:'idle'};let service;
+ apply({provide:(_n,v)=>service=v,systemPrompt:{context(){}},on:(n,f)=>listeners.set(n,f),effect:f=>clean.push(f())});
+ assert.equal(listeners.get('agent/created')({agent}),undefined);assert(service.get(agent));assert.throws(()=>service.get({session:agent.session}));
+ await listeners.get('agent/disposed')({agent});assert.throws(()=>service.get(agent));for(const fn of clean)await fn();
+});

@@ -7,5 +7,8 @@ module.exports=()=>{
  const install=require('./installation.cjs').install;
  const dataDirectory=process.env.DSH_CHARACTER_DATA_DIR||local.dataDirectory||path.join(install,'data','character');
  if(!path.isAbsolute(dataDirectory))throw Error('Character data directory must be absolute');
- return {presetId,dataDirectory:path.normalize(dataDirectory).replaceAll('\\','/'),definitionPath:require('./definition-source.cjs')()};
+ const interactionFlag=process.env.DSH_CHARACTER_INTERACTION;
+ if(interactionFlag!==undefined&&!['on','off'].includes(interactionFlag))throw Error('DSH_CHARACTER_INTERACTION must be on or off');
+ const interaction=interactionFlag==='off'?undefined:interactionFlag==='on'?{...local.interaction,enabled:true}:local.interaction?.enabled?local.interaction:undefined;
+ return {presetId,dataDirectory:path.normalize(dataDirectory).replaceAll('\\','/'),definitionPath:require('./definition-source.cjs')(),...(interaction?{interaction}: {})};
 };

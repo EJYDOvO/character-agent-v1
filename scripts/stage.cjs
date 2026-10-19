@@ -7,6 +7,7 @@ fs.mkdirSync(stage,{recursive:true});fs.mkdirSync(root+'/test-data/state',{recur
 const manifest=JSON.parse(fs.readFileSync(live+'/package.json','utf8'));
 for(const kind of ['identity','memory-core','memory-tools','qq-adapter'])manifest.dependencies['dsh-character-'+kind]='file:'+root.replaceAll('\\','/')+'/packages/character-'+kind;
 for(const kind of ['core','extras'])manifest.dependencies['dsh-character-'+kind]='file:'+root.replaceAll('\\','/')+'/bundles/character-'+kind;
+ if(require('./build-settings.cjs')().interaction)manifest.dependencies['dsh-interaction-policy']='file:'+root.replaceAll('\\','/')+'/packages/interaction-policy';
 manifest.name='dsh-profile-character-test';
 const archive=require('./host-archive.cjs').openArchive();
 let nativeSchedule;try{nativeSchedule=archive.read('dsh/node_modules/@deepseek-ai/dsh-web-app/presets/cordis.patch.yml').includes('@deepseek-ai/dsh-tool-schedule');}finally{archive.close();}

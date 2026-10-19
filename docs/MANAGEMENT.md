@@ -1,6 +1,8 @@
 # 功能管理与维护
 
-当前本机为 DSH 0.2.1-rc.2 / test.9，包含下述分层记忆及审计修复；人格化仍为 Character。新版内置 Schedule，旧实验 Bundle 不再额外装配；已停用的旧项目记忆包和数据保留，但移除其不兼容装配。见 [最新验证与恢复记录](RELEASE-test9.md)。
+当前实例已部署 **test.10** 并显式开启 Interaction，详见 [本次发布及恢复记录](RELEASE-test10.md)。下文历史验证保留原版本语境；源码默认仍不启用该可选策略。
+
+当前本机为 DSH 0.2.1-rc.2 / test.10，包含下述分层记忆及审计修复；人格化仍为 Character。新版内置 Schedule，旧实验 Bundle 不再额外装配；已停用的旧项目记忆包和数据保留，但移除其不兼容装配。见 [最新验证与恢复记录](RELEASE-test10.md)。
 
 test.8 的分层记忆已完成隔离验证及授权生产部署，验证范围见 [发布记录](RELEASE-test8.md)。人格化模式、L3 预算、后台节奏和 Schema 3 回滚要求见 [分层记忆管理](MEMORY-LAYERS.md)。修改模式时必须保留完整 Identity 配置，不能只覆盖 memoryMode；旧工具名称继续兼容。
 
@@ -49,3 +51,7 @@ Character 构建保留官方 Creator 的 `tool-plugin-manager`。本机 DSH 0.2.
 构建从实际角色文件读取显示名称；`ensure-build.cjs` 同时检查官方 Creator 和角色文件的指纹。测试与部署源码摘要包含实际角色内容，避免角色修改后复用旧测试证据。角色设定需要重新构建、隔离验证和版本化部署，不是热更新。
 
 本机 test.6 只更新角色与构建选源方式，四个运行插件的功能源码保持 test.5 基线；先前审计发现的记忆确认、冲突处理等问题并未在此次角色试用中修复。私有角色文件、生成的 Core、打包产物和模型测试记录均不进入 Git。真实模型会收到角色提示词，提示词里的虚构测试标记不应作为真实凭据。
+
+## 可选交互策略（test.10）
+
+test.10 提供独立 `dsh-interaction-policy`。普通 Agent 在自己的 Preset 配置；Character 可用 `DSH_CHARACTER_INTERACTION=on/off` 或私有构建配置选择。默认不增加交互条目，不改变运行中的 Agent。等待文案、阈值、流式节流与分段上限，以及安全修正和关闭方式见 [Interaction Policy](INTERACTION-POLICY.md)。

@@ -19,6 +19,7 @@ async function main(){
  const character=yaml.load(creatorText,{schema})[0].insert[0];character.id='preset-qq-character';character.config.id=settings.presetId;character.config.name=`Character ${definition.definition.name} (V1 测试版)`;
  character.config.plugins.find(x=>x.id==='persona').config.prefix=definition.persona;
  character.config.plugins.push({id:'character-memory-tools',name:'dsh-character-memory-tools/character.mjs'});
+ if(settings.interaction){const {options}=await import('../packages/interaction-policy/policy.mjs');character.config.plugins.push({id:'interaction-policy',name:'dsh-interaction-policy',isolate:{interactionPolicy:true},config:options(settings.interaction)});}
  const host=[{id:'character-identity',name:'dsh-character-identity',config:{presetId:settings.presetId,bindingFile:settings.dataDirectory+'/binding.json',stateFile:settings.dataDirectory+'/coordination.sqlite'}},
  {id:'character-memory-core',name:'dsh-character-memory-core',config:{database:settings.dataDirectory+'/memory.sqlite',autoCapture:true}},
  {id:'qq-remote-ops',name:'dsh-remote-ops-local',config:{root:install.replaceAll('\\','/')}},

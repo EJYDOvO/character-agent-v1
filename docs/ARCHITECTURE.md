@@ -1,4 +1,8 @@
-# 运行架构与复用边界（test.8）
+# 运行架构与复用边界（test.10）
+
+当前实例已部署 **test.10** 并显式开启 Interaction，详见 [本次发布及恢复记录](RELEASE-test10.md)。下文历史验证保留原版本语境；源码默认仍不启用该可选策略。
+
+**test.10 交互增量**：独立可选 `dsh-interaction-policy` 通过原生 Agent-scoped 事件和 Preset 服务隔离管理表达与发送策略。QQTK 只接入 Sender 与可信修正入口；Character Identity 复用原入站校验和证据逻辑提供提前接入钩子。没有新数据库、Planner 或 Agent Loop，原四插件和 Core/Extras 保留。详细接口及当前验证见 [Interaction Policy](INTERACTION-POLICY.md)。下文为既有记忆架构。
 
 这是源码实现说明。test.8 增加分层记忆与可选人格化；部署和验收范围见 [发布记录](RELEASE-test8.md)，详细层次、生命周期和限制见 [分层记忆](MEMORY-LAYERS.md)。四个 Character 运行时包保留；Definition 是构建模块，Core/Extras 是项目 Bundle。当前源码 Extras 是空的可选装配模板，不代表旧部署包已同步替换。
 

@@ -47,5 +47,12 @@ if(newExtras.length===0&&fs.existsSync(oldExtras)){
 fs.cpSync(live,candidate,{recursive:true,filter:s=>path.basename(s)!=='node_modules'});
 fs.writeFileSync(candidate+'/package.json',JSON.stringify(manifest,null,2)+'\n');
 fs.writeFileSync(candidate+'/cordis.patch.yml',yaml.dump(rows,{noRefs:true,lineWidth:120}));
+// Rebuild pins from the exact candidate artifacts; copying an older profile's
+// manifest would make subsequent QQTK verification refer to the old release.
+const pins={};
+for(const [name,source]of Object.entries(manifest.dependencies))if((name.startsWith('dsh-character-')||['dsh-interaction-policy','dsh-remote-ops-local'].includes(name))&&source.startsWith('file:')){
+ pins[name]={source,sha256:hash(source.slice(5))};
+}
+fs.writeFileSync(candidate+'/character-artifacts.json',JSON.stringify(pins,null,2)+'\n');
 fs.writeFileSync(candidate+'/host-upgrade.json',JSON.stringify(record,null,2)+'\n');
 console.log(JSON.stringify({prepared:true,candidate,version,release,ownerCount:1,groups:'disabled',optionalBundlesRetained:true}));

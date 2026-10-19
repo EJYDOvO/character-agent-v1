@@ -1,6 +1,8 @@
 # 当前增量
 
-**当前已部署（2026-10-19）**：DSH **0.2.1-rc.2**、Character **0.1.0-test.9**、QQ Bot **0.5.2**、Remote Ops **1.1.0**。test.8 审计修复已纳入运行包，Schema 3 保持；人格化仍为 Character，单 Owner 私聊、群聊关闭。新启动的 Character/Identity/Memory/QQ/Remote Ops/Browser 健康，QQ ready，原 QQ 会话映射逐字节保持，watchdog 恢复 running。
+当前实例已部署 **test.10** 并显式开启 Interaction，详见 [本次发布及恢复记录](RELEASE-test10.md)。下文历史验证保留原版本语境；源码默认仍不启用该可选策略。
+
+**此前 test.9 部署记录（2026-10-19）**：DSH **0.2.1-rc.2**、Character **0.1.0-test.9**、QQ Bot **0.5.2**、Remote Ops **1.1.0**。test.8 审计修复已纳入运行包，Schema 3 保持；人格化仍为 Character，单 Owner 私聊、群聊关闭。新启动的 Character/Identity/Memory/QQ/Remote Ops/Browser 健康，QQ ready，原 QQ 会话映射逐字节保持，watchdog 恢复 running。
 
 72/72 Character 测试、18/18 QQ/审批/维护测试通过；新版真实宿主的 Core-only/Core+Extras、跨会话记忆、原生 Schedule、真实模型提取/巩固、Compaction 和重启验证通过。替身 Sender 的结果不代表手机投递；真实 QQ 消息与按钮未重新验收。详见 [test.9](RELEASE-test9.md) 和 [修复报告](AUDIT-FIXES.md)。
 

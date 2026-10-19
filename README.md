@@ -2,7 +2,9 @@
 
 在 DeepSeek Harness 上运行的角色 Agent 扩展，提供私人 QQ 接入、可配置角色和带来源的长期记忆。Character 从官方 Creator Preset 构建派生，保留其工具能力；角色设定不会增加系统权限。
 
-这是测试版源码仓库，不包含 DSH 本体，也不是一键安装器。当前 test.9 已验证并部署于 **Windows、Node.js 24.21.0、DSH 0.2.1-rc.2、QQ Bot 0.5.2 及配套 QQTK 补丁**。其他版本和平台需要重新验证。
+这是测试版源码仓库，不包含 DSH 本体，也不是一键安装器。当前 test.10 已部署于 **Windows、Node.js 24.21.0、DSH 0.2.1-rc.2、QQ Bot 0.5.2 及配套 QQTK 补丁**。部署检查和隔离验证通过；真实消息验收范围见 [发布记录](docs/RELEASE-test10.md)。其他版本和平台需要重新验证。
+
+test.10 新增可选 [Interaction Policy V1](docs/INTERACTION-POLICY.md)：自然表达、等待提示、流式气泡与安全修正。源码默认构建不启用；当前实例已显式开启。该通用插件不要求安装 Character 或 QQ。
 
 ## 能做什么
 
@@ -25,6 +27,7 @@ packages/
   character-memory-tools/   # 通用工具入口，以及 Character 兼容入口
   character-qq-adapter/     # Character 专用 QQ 集成
   character-definition/    # 构建时角色加载器，不是运行时插件
+  interaction-policy/      # 可选通用 Agent 交互策略，独立安装和关闭
 characters/                # 可公开使用的示例角色
 examples/local-agent/      # 不依赖 Character Identity 的接入示例
 scripts/                   # 构建、验证、迁移与部署辅助脚本
@@ -32,7 +35,7 @@ tests/                     # 单元测试及 DSH 宿主集成探针
 docs/                      # 架构、配置、复用与发布记录
 ```
 
-Core 和 Extras 在同一仓库，分别打包。运行时插件仍是四个；人格化没有新增插件或第二个数据库。[QQTK](https://github.com/EJYDOvO/harness-qq-toolkit-public) 独立维护，搜索、Bilibili 等第三方插件也不在本仓库内。
+Core 和 Extras 在同一仓库，分别打包。核心仍为四个 Character 运行插件；Interaction 是额外可选的通用插件，人格化没有新增插件或第二个数据库。[QQTK](https://github.com/EJYDOvO/harness-qq-toolkit-public) 独立维护，搜索、Bilibili 等第三方插件也不在本仓库内。
 
 ## 从哪里开始
 
@@ -41,6 +44,7 @@ Core 和 Extras 在同一仓库，分别打包。运行时插件仍是四个；�
 | 只在普通 DSH Agent 中使用记忆或 QQ | [跨项目复用](docs/REUSE.md) |
 | 配置完整 Character、私有角色或功能开关 | [功能管理](docs/MANAGEMENT.md) |
 | 理解分层记忆、人格化、预算与遗忘 | [记忆设计与配置](docs/MEMORY-LAYERS.md) |
+| 配置自然交互、等待提示、Streaming 与明确修正 | [Interaction Policy V1](docs/INTERACTION-POLICY.md) |
 | 理解依赖、可信接口和数据流 | [架构说明](docs/ARCHITECTURE.md) |
 | 准备部署、迁移或回滚 | [集成与恢复](docs/INTEGRATION.md) |
 | 判断哪些能力实际验证过 | [当前状态](docs/STATUS.md) · [test.9 验证记录](docs/RELEASE-test9.md) |

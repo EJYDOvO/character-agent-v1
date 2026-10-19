@@ -55,8 +55,10 @@ export function apply(ctx,config) {
    manager.getOrCreate=wrap;
    if(rebuild)manager.rebuildSession=async function(record,options){const old=record.sessionId;const result=await rebuild.call(this,record,options);identity.revoke(old);bound.delete(old);if(runtime===value&&manager.sessions?.get(record.sessionKey)===record)bind(record);return result;};
    try{for(const record of manager.sessions?.values()??[])bind(record);}catch(e){manager.getOrCreate=original;manager.rebuildSession=rebuild;runtime=undefined;identity.clear();bound.clear();throw e;}
-   // SDK middleware sees the actual admitted message body, not history/envelope or model output.
-   value.bot?.use(async(m,next)=>{
+   // Shared trusted ingress for the ordinary pipeline and explicit correction.
+   // The early correction adapter must not bypass Owner binding or L1 evidence.
+   const previousAdmission=manager.admitInteractionInput;
+   const admit=async m=>{
     if(runtime!==value)throw Error('Gateway detached');
     const msg=m.message;
     if(msg.kind!=='c2c'||msg.senderId!==binding.ownerId)throw Error('Owner ingress required');
@@ -67,9 +69,11 @@ export function apply(ctx,config) {
      inputs.set(record.sessionId,evidence);
      for(const fn of listeners)try{fn(trusted,evidence);}catch{ctx.logger?.warn('Character ingress capture rejected');}
     }
-    return next();
-   });
-   detach=()=>{if(runtime!==value)return;runtime=undefined;if(manager.getOrCreate===wrap)manager.getOrCreate=original;if(rebuild)manager.rebuildSession=rebuild;identity.clear();bound.clear();inputs.clear();};
+    return record;
+   };
+   manager.admitInteractionInput=admit;
+   value.bot?.use(async(m,next)=>{await admit(m);return next();});
+   detach=()=>{if(runtime!==value)return;runtime=undefined;if(manager.admitInteractionInput===admit){if(previousAdmission===undefined)delete manager.admitInteractionInput;else manager.admitInteractionInput=previousAdmission;}if(manager.getOrCreate===wrap)manager.getOrCreate=original;if(rebuild)manager.rebuildSession=rebuild;identity.clear();bound.clear();inputs.clear();};
    void pump();return detach;
   },
   async notify(trusted,event){identity.authorize(trusted,'send');enqueue({...event,conversation:trusted.conversationId});await pump();return db.prepare('SELECT status FROM outbox WHERE id=?').get(event.eventId);},
