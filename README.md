@@ -44,7 +44,6 @@ Core 和 Extras 在同一仓库，分别打包。运行时插件仍是四个；�
 | 理解依赖、可信接口和数据流 | [架构说明](docs/ARCHITECTURE.md) |
 | 准备部署、迁移或回滚 | [集成与恢复](docs/INTEGRATION.md) |
 | 判断哪些能力实际验证过 | [当前状态](docs/STATUS.md) · [test.8 验证记录](docs/RELEASE-test8.md) |
-| 修改本仓库，或让另一个 Agent 接手 | [开发约定](AGENTS.md) |
 
 ## 本地开发
 
@@ -89,4 +88,4 @@ Character 保留 Creator 的插件管理工具，但安装仍受权限或审批�
 - 遗忘有来源和近似内容屏障，但原会话、修订和备份可能保留旧内容；不能承诺识别所有改写。
 - QQ ready 或发送 API 成功不代表手机实际收件；单元测试通过也不代表生产功能已经验证。
 
-第三方参考与许可见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)；公开发布边界见 [PUBLICATION.md](docs/PUBLICATION.md)。修改功能、配置、组件或操作方式时，应在同一改动中同步更新相应入口文档，具体约定见 [AGENTS.md](AGENTS.md)。
+第三方参考与许可见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。修改功能、配置、组件或操作方式时，应在同一改动中同步更新 README 和对应专题文档；区分源码默认、实例配置与实际验证结果。

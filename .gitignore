@@ -30,3 +30,8 @@ model-prefs.json
 *.dll
 *.asar
 /bundles/character-core/cordis.patch.yml
+
+# Local agent guidance and publication notes are not published.
+[Aa][Gg][Ee][Nn][Tt].[Mm][Dd]
+[Aa][Gg][Ee][Nn][Tt][Ss].[Mm][Dd]
+[Pp][Uu][Bb][Ll][Ii][Cc][Aa][Tt][Ii][Oo][Nn].[Mm][Dd]
