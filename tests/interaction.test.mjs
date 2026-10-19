@@ -7,7 +7,7 @@ function fixture(config={}){
  const clock={now:()=>time,set(fn,ms){timers.set(++id,{fn,at:time+ms});return id;},clear:id=>timers.delete(id)};
  const agent={status:'running',cancel:(...a)=>actions.push(['cancel',...a]),followup:m=>actions.push(['followup',m]),steer:m=>actions.push(['steer',m])};
  const p=new Interaction(agent,{hangOnMs:30,throttleMs:10,...config},clock);
- const transport={key:agent,async sendText(text,meta){sent.push(['text',text,meta]);},openStream(){const b={text:'',closed:false};bubbles.push(b);sent.push(['open']);return {async update(t){assert(!b.closed);b.text=t;sent.push(['update',t]);},async complete(){assert(!b.closed);b.closed=true;sent.push(['complete']);}};}};
+ const transport={key:agent,async sendText(text,meta){sent.push(['text',text,meta]);},openStream(){const b={text:'',closed:false};bubbles.push(b);sent.push(['open']);return {async update(t){assert(!b.closed);b.text=t;sent.push(['update',t]);},async complete(){assert(!b.closed);b.closed=true;sent.push(['complete']);},cancel(){b.closed=true;sent.push(['cancel']);}};}};
  p.bind(transport);
  const event=(type,data={})=>p.event({type,data});
  let rev=0,attempt=0;const start=()=>{event('turn/start');p.frame({type:'start',attemptId:++attempt,revision:++rev});};
@@ -69,7 +69,7 @@ test('pending approval/question suppresses hang-on and explicit stop suppresses 
 });
 test('slow sender cannot reorder bubbles; cancel discards queued segments',async()=>{
  const f=fixture();let unblock;const wait=new Promise(r=>unblock=r),order=[];
- f.transport.openStream=()=>({async update(text){order.push(text);await wait;},async complete(){order.push('closed');}});
+ f.transport.openStream=()=>({async update(text){order.push(text);await wait;},async complete(){order.push('closed');},cancel(){order.push('closed');}});
  f.start();f.chunk('第一段完整内容。第二段完整内容。');f.message('第一段完整内容。第二段完整内容。');await Promise.resolve();f.p.stopOutput();unblock();await f.p.idle();assert.deepEqual(order,['第一段完整内容。','closed']);await f.p.dispose();
 });
 test('canonical final supplies a missing stream suffix and output target remains bound to its message',async()=>{

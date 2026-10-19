@@ -53,14 +53,16 @@ export class LayeredMemory extends MemoryStore {
     return this.policy(ctx).mode==='assistant'&&source.memoryPolicy==='assistant:v1'&&assistantCompatible(row.statement);
   }
   #resolve(ctx,id){for(const purpose of this.#lanes(ctx)){const cap=this.#cap(ctx,purpose);try{const row=super.get(cap,id);if(this.#visible(ctx,row,purpose))return {cap,row,purpose};}catch(e){if(e.message!=='Memory unavailable')throw e;}}throw Error('Memory unavailable');}
-  get(ctx,id){if(this.#delegates?.has(ctx))return super.get(ctx,id);const {row,purpose}=this.#resolve(ctx,id);return this.#conflicts(ctx,[{...row,purpose}])[0];}
+  get(ctx,id){if(this.#delegates?.has(ctx))return super.get(ctx,id);const {row,purpose}=this.#resolve(ctx,id);if(!this.#valid(row,ctx))return {...row,purpose,statement:'',source:'{}',conflict_with:null};return this.#conflicts(ctx,[{...row,purpose}])[0];}
   #rows(ctx,query=''){
     const rows=[];
     for(const purpose of this.#lanes(ctx))for(const row of super.candidates(this.#cap(ctx,purpose),query))if(this.#visible(ctx,row,purpose)&&this.#valid(row,ctx))rows.push({...row,purpose});
     return rows;
   }
   #resolutionScope(ctx){const p=this.policy(ctx);return hash([p.key,p.agentId,p.mode]);}
-  #conflicts(ctx,rows,visible=this.#rows(ctx)){
+  #conflicts(ctx,rows,visible){
+    if(!rows.some(row=>row.claim_key))return rows;
+    visible??=this.#rows(ctx);
     const groups=new Map();for(const r of visible)if(r.claim_key){const group=groups.get(r.claim_key)??[];group.push(r);groups.set(r.claim_key,group);}
     const scope=this.#resolutionScope(ctx);
     return rows.map(row=>{

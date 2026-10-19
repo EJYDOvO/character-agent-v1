@@ -2,9 +2,11 @@
 
 在 DeepSeek Harness 上运行的角色 Agent 扩展，提供私人 QQ 接入、可配置角色和带来源的长期记忆。Character 从官方 Creator Preset 构建派生，保留其工具能力；角色设定不会增加系统权限。
 
-这是测试版源码仓库，不包含 DSH 本体，也不是一键安装器。当前 test.10 已部署于 **Windows、Node.js 24.21.0、DSH 0.2.1-rc.2、QQ Bot 0.5.2 及配套 QQTK 补丁**。部署检查和隔离验证通过；真实消息验收范围见 [发布记录](docs/RELEASE-test10.md)。其他版本和平台需要重新验证。
+这是测试版源码仓库，不包含 DSH 本体，也不是一键安装器。当前 test.11 已部署于 **Windows、Node.js 24.21.0、DSH 0.2.1-rc.2、QQ Bot 0.5.2 / SDK 1.0.5 及配套 QQTK 补丁**。部署检查和隔离验证通过；当前验收边界见 [test.11 发布记录](docs/RELEASE-test11.md)。其他版本和平台需要重新验证。
 
 test.10 新增可选 [Interaction Policy V1](docs/INTERACTION-POLICY.md)：自然表达、等待提示、流式气泡与安全修正。源码默认构建不启用；当前实例已显式开启。该通用插件不要求安装 Character 或 QQ。
+
+后续[隔离 Bug 审计](docs/AUDIT-test10-INTERACTION.md)发现的交付、停止、来源路由与遗忘接口问题已进行[修复及隔离复测](docs/INTERACTION-AUDIT-FIXES.md)：Character 112/112、QQTK 36/36，另有真实 SDK 与 DSH 宿主验证。修复已配套部署为 test.11；大库扫描、完整 HMR 和实机 QQ 仍有明确验收限制，不能把测试通过当成手机实际收件。
 
 ## 能做什么
 

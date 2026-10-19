@@ -7,6 +7,8 @@ import { mkdirSync, readFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 export const name='character-identity';
 const digest=s=>createHash('sha256').update(s).digest('hex');
+// One revocable delegation slot per Bot, including module reloads.
+const ingressSlots=globalThis[Symbol.for('dsh.character.ingress.v1')]??=new WeakMap();
 export function apply(ctx,config) {
   const presetId=config.presetId??'qq-character';
  const binding=JSON.parse(readFileSync(config.bindingFile,'utf8').replace(/^\uFEFF/,''));
@@ -72,8 +74,8 @@ export function apply(ctx,config) {
     return record;
    };
    manager.admitInteractionInput=admit;
-   value.bot?.use(async(m,next)=>{await admit(m);return next();});
-   detach=()=>{if(runtime!==value)return;runtime=undefined;if(manager.admitInteractionInput===admit){if(previousAdmission===undefined)delete manager.admitInteractionInput;else manager.admitInteractionInput=previousAdmission;}if(manager.getOrCreate===wrap)manager.getOrCreate=original;if(rebuild)manager.rebuildSession=rebuild;identity.clear();bound.clear();inputs.clear();};
+   if(value.bot){let slot=ingressSlots.get(value.bot);if(!slot){slot={};ingressSlots.set(value.bot,slot);value.bot.use(async(m,next)=>{if(!slot.admit)throw Error('Character ingress detached');await slot.admit(m);return next();});}slot.admit=admit;}
+   detach=()=>{if(runtime!==value)return;runtime=undefined;const slot=value.bot&&ingressSlots.get(value.bot);if(slot?.admit===admit)slot.admit=null;if(manager.admitInteractionInput===admit){if(previousAdmission===undefined)delete manager.admitInteractionInput;else manager.admitInteractionInput=previousAdmission;}if(manager.getOrCreate===wrap)manager.getOrCreate=original;if(rebuild)manager.rebuildSession=rebuild;identity.clear();bound.clear();inputs.clear();};
    void pump();return detach;
   },
   async notify(trusted,event){identity.authorize(trusted,'send');enqueue({...event,conversation:trusted.conversationId});await pump();return db.prepare('SELECT status FROM outbox WHERE id=?').get(event.eventId);},

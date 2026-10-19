@@ -27,6 +27,13 @@ for(const n of ['core','extras','identity','memory-core','memory-tools','qq-adap
  manifest.dependencies[name]='file:'+dest.replaceAll('\\','/');record.artifacts[name]=hash(dest);
 }
 if(nativeSchedule)manifest.dsh.profile.bundles=manifest.dsh.profile.bundles.filter(n=>n!=='@deepseek-ai/dsh-experimental-schedule-bundle');
+// Include the independently versioned optional policy when already installed.
+if(manifest.dependencies['dsh-interaction-policy']){
+ const name='dsh-interaction-policy',v=JSON.parse(fs.readFileSync(project+'/packages/interaction-policy/package.json')).version;
+ const file=name+'-'+v+'.tgz',source=project+'/artifacts/packages/'+file,dest=install+'/plugin-packages/'+file;
+ if(fs.existsSync(dest))assert.equal(hash(source),hash(dest),'Immutable Interaction package differs');else fs.copyFileSync(source,dest);
+ manifest.dependencies[name]='file:'+dest.replaceAll('\\','/');record.artifacts[name]=hash(dest);
+}
 const legacyMemory=rows.find(r=>r.id==='task-memory');
 if(legacyMemory?.disabled===true){
  manifest.dsh.profile.bundles=manifest.dsh.profile.bundles.filter(n=>n!=='dsh-task-memory-local');
@@ -45,6 +52,15 @@ if(newExtras.length===0&&fs.existsSync(oldExtras)){
  }
 }
 fs.cpSync(live,candidate,{recursive:true,filter:s=>path.basename(s)!=='node_modules'});
+const toolkit=path.resolve(process.env.DSH_QQTK_PROJECT||install);
+const settings=yaml.load(fs.readFileSync(candidate+'/pnpm-workspace.yaml','utf8'));
+settings.patchedDependencies??={};record.patches={};
+for(const [name,v]of [['dsh-qqbot','0.5.2'],['qqbot-nodejs','1.0.5']]){
+ const rel='patches/'+name+'@'+v+'.patch';fs.copyFileSync(toolkit+'/maintenance/'+rel,candidate+'/'+rel);
+ settings.patchedDependencies['@tencent-connect/'+name+'@'+v]=rel;record.patches[rel]=hash(candidate+'/'+rel);
+}
+settings.overrides={...settings.overrides,'@tencent-connect/qqbot-nodejs':'1.0.5'};
+fs.writeFileSync(candidate+'/pnpm-workspace.yaml',yaml.dump(settings));
 fs.writeFileSync(candidate+'/package.json',JSON.stringify(manifest,null,2)+'\n');
 fs.writeFileSync(candidate+'/cordis.patch.yml',yaml.dump(rows,{noRefs:true,lineWidth:120}));
 // Rebuild pins from the exact candidate artifacts; copying an older profile's

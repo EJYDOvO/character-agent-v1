@@ -79,7 +79,7 @@ export class MemoryStore {
       return this.get(ctx,id);
     });
   }
-  get(ctx,id) { const scope=this.scope(ctx,'read'); const row=this.db.prepare('SELECT * FROM memories WHERE id=? AND principal=? AND character=? AND project=?').get(id,...scope); if(!row) throw Error('Memory unavailable'); return row; }
+  get(ctx,id) { const scope=this.scope(ctx,'read'); const row=this.db.prepare('SELECT * FROM memories WHERE id=? AND principal=? AND character=? AND project=?').get(id,...scope); if(!row) throw Error('Memory unavailable'); if(row.status==='forgotten')row.source='{}'; return row; }
   snapshot(id) { const row=this.db.prepare('SELECT * FROM memories WHERE id=?').get(id); this.db.prepare('INSERT INTO revisions VALUES(?,?,?)').run(id,row.revision,JSON.stringify(row));this.index(row); }
   correct(ctx,id,statement,revision,source) {
     this.scope(ctx,'write'); statement=validateStatement(statement);
