@@ -10,6 +10,14 @@
 
 Schema 3 的迁移工具采用复制后迁移。先在独立副本验证，再安排上线；旧 test.7 无法直接打开 Schema 3。具体数据边界见 [MEMORY-LAYERS.md](MEMORY-LAYERS.md)。
 
+test.9 的 [审计修复](AUDIT-FIXES.md) 保持 Schema 3，新增信息放在既有来源 JSON，不重命名 namespace 或记忆 ID。升级前仍需备份、隔离安装和新版本包；旧人格化记录不会被批量重写。回退原 test.8 虽可读取相同 Schema，却会重新带回模式隔离和召回缺陷，不是安全等价回滚。
+
+跨宿主验证可设置 `DSH_CHARACTER_HOST_ROOT` 为解包后的官方发行目录，`DSH_INSTALL_ROOT` 保持原实例路径。构建和探针从待测宿主读 Creator/SDK，不修改官方文件。`DSH_CHARACTER_TEST_HOME` 必须位于源码 `test-data` 下，隔离结果与重启 checkpoint 随测试目录保存。
+
+`prepare-host-upgrade.cjs <new-profile-name>` 生成未启动的候选：保留单 Owner 策略，处理新版内置 Schedule、已停用旧记忆声明，以及空 Extras 的可选 Bundle 迁移。它不是完整安装器；须结合官方安装包签名/哈希、离线备份、单活切换和启动验证。新旧宿主不能共用生产 QQ 同时启动。跨宿主回滚必须同时恢复完整程序、Profile 和配套数据，旧 Profile 回滚脚本不足以完成宿主降级。当前实际结果见 [test.9](RELEASE-test9.md)。
+
+修复后的 layered-host 重启基线使用 `.checkpoint-v2`，比较 ID、revision、status、fingerprint 与来源摘要。旧纯 ID checkpoint 不能证明这些字段一致；需要先用新探针完成初始运行，再执行 `--restart`。压缩执行受阻会报告 BLOCKED 且 `ok=false`，验证断言失败报告 FAIL；不得以单个旧 `ok` 或前一轮产物充当本轮验证。
+
 ## 部署顺序
 
 1. 先确认目标 DSH/QQTK 版本、工具接口及唯一 Gateway。不要手工修改官方发行文件。

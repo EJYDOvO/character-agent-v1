@@ -8,7 +8,9 @@ const manifest=JSON.parse(fs.readFileSync(live+'/package.json','utf8'));
 for(const kind of ['identity','memory-core','memory-tools','qq-adapter'])manifest.dependencies['dsh-character-'+kind]='file:'+root.replaceAll('\\','/')+'/packages/character-'+kind;
 for(const kind of ['core','extras'])manifest.dependencies['dsh-character-'+kind]='file:'+root.replaceAll('\\','/')+'/bundles/character-'+kind;
 manifest.name='dsh-profile-character-test';
-manifest.dsh.profile.bundles=['@deepseek-ai/dsh-base','@deepseek-ai/dsh-web-app','@deepseek-ai/dsh-experimental-schedule-bundle','dsh-character-core',...(process.argv.includes('--extras')?['dsh-character-extras']:[])];
+const archive=require('./host-archive.cjs').openArchive();
+let nativeSchedule;try{nativeSchedule=archive.read('dsh/node_modules/@deepseek-ai/dsh-web-app/presets/cordis.patch.yml').includes('@deepseek-ai/dsh-tool-schedule');}finally{archive.close();}
+manifest.dsh.profile.bundles=['@deepseek-ai/dsh-base','@deepseek-ai/dsh-web-app',...(!nativeSchedule?['@deepseek-ai/dsh-experimental-schedule-bundle']:[]),'dsh-character-core',...(process.argv.includes('--extras')?['dsh-character-extras']:[])];
 fs.writeFileSync(stage+'/package.json',JSON.stringify(manifest,null,2));
 fs.copyFileSync(live+'/pnpm-workspace.yaml',stage+'/pnpm-workspace.yaml');
 fs.mkdirSync(stage+'/patches',{recursive:true});fs.copyFileSync(install+'/maintenance/patches/dsh-qqbot@0.5.2.patch',stage+'/patches/dsh-qqbot@0.5.2.patch');

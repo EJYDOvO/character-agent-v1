@@ -17,6 +17,7 @@ export function apply(ctx,config){
  ctx.provide('characterMemory',store);ctx.provide('dshMemory',store);
  const removeIngress=identity.onEvidence((trusted,evidence)=>{
   if(config.autoCapture===false)return;lastActivity=Date.now();
+  try{store.noteInput(trusted,evidence);}catch{ctx.logger?.warn('Memory topic rejected');}
   try{if(evidence.text?.trim().length>=8&&!/^confirm:/u.test(evidence.text))store.enqueue(trusted,evidence);}catch{ctx.logger?.warn('Memory evidence rejected');}
  });
  ctx.on('session/event',(session,event)=>{

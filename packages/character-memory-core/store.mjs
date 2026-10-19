@@ -5,6 +5,7 @@ import { dirname } from 'node:path';
 import { tokenizeText } from './tokenize.mjs';
 const terms=text=>[...new Set(tokenizeText(text.normalize('NFKC').toLowerCase()))];
 export const similarity=(a,b)=>{const x=new Set(terms(a)),y=new Set(terms(b));return [...x].filter(t=>y.has(t)).length/Math.max(1,new Set([...x,...y]).size);};
+export const relevance=(row,query)=>(query&&row.statement.includes(query)?2:0)+similarity(query,row.statement)+(row.confidence??0.5)*0.1-(row.rank??0);
 const hash = text => createHash('sha256').update(text.normalize('NFKC').trim()).digest('hex');
 export function validateStatement(text, maxLength=2000) {
   if (typeof text !== 'string' || !text.trim() || text.length > maxLength) throw Error('Invalid memory size');
@@ -98,11 +99,16 @@ export class MemoryStore {
       for(const r of this.db.prepare('SELECT snapshot FROM revisions WHERE id=?').all(id)){const prior=JSON.parse(r.snapshot);const source=JSON.parse(prior.source);this.db.prepare('INSERT OR IGNORE INTO forgotten_sources VALUES(?,?,?,?)').run(old.principal,old.character,old.project,this.sourceKey(source));this.db.prepare('INSERT OR IGNORE INTO blocked VALUES(?,?,?,?)').run(old.principal,old.character,old.project,prior.fingerprint);}
       this.db.prepare("UPDATE memories SET status='forgotten',statement='',revision=revision+1,updated_at=? WHERE id=?").run(new Date().toISOString(),id);this.snapshot(id);return {id,status:'forgotten',revision:revision+1};});
   }
-  recall(ctx,query='',budget=2400) {
+  *candidates(ctx,query='') {
     const scope=this.scope(ctx,'read');if(typeof query!=='string'||query.length>200)throw Error('Invalid query');
     const tokens=terms(query).slice(0,64),now=new Date().toISOString();
-    let rows=tokens.length?this.db.prepare("SELECT m.*,bm25(memory_fts) AS rank FROM memory_fts JOIN memories m ON m.id=memory_fts.id WHERE memory_fts MATCH ? AND principal=? AND character=? AND project=? AND status IN ('active','uncertain') AND (expires_at IS NULL OR expires_at>?) ORDER BY rank LIMIT 200").all(tokens.map(t=>'"'+t.replaceAll('"','""')+'"').join(' OR '),...scope,now):this.db.prepare("SELECT * FROM memories WHERE principal=? AND character=? AND project=? AND status IN ('active','uncertain') AND (expires_at IS NULL OR expires_at>?) ORDER BY updated_at DESC LIMIT 100").all(...scope,now);
-    rows.sort((a,b)=>{const score=r=>(r.statement.includes(query)&&query?2:0)+similarity(query,r.statement)+(r.confidence??0.5)*0.1-(r.rank??0);return score(b)-score(a);});
+    // Consumers must filter evidence/policy before imposing candidate or output limits.
+    const rows=tokens.length?this.db.prepare("SELECT m.*,bm25(memory_fts) AS rank FROM memory_fts JOIN memories m ON m.id=memory_fts.id WHERE memory_fts MATCH ? AND principal=? AND character=? AND project=? AND status IN ('active','uncertain') AND (expires_at IS NULL OR expires_at>?) ORDER BY rank").iterate(tokens.map(t=>'"'+t.replaceAll('"','""')+'"').join(' OR '),...scope,now):this.db.prepare("SELECT * FROM memories WHERE principal=? AND character=? AND project=? AND status IN ('active','uncertain') AND (expires_at IS NULL OR expires_at>?) ORDER BY updated_at DESC").iterate(...scope,now);
+    yield* rows;
+  }
+  recall(ctx,query='',budget=2400) {
+    const rows=[...this.candidates(ctx,query)];
+    rows.sort((a,b)=>relevance(b,query)-relevance(a,query)||a.id.localeCompare(b.id));
     const results=[];let used=0;for(const row of rows){const cost=JSON.stringify(row).length;if(used+cost>Math.min(16000,Math.max(0,budget)))continue;results.push(row);used+=cost;if(results.length===20)break;}return results;
   }
   inspect(ctx,id){const row=this.get(ctx,id);return {memory:row,revisions:this.db.prepare('SELECT revision FROM revisions WHERE id=? ORDER BY revision').all(id)};}

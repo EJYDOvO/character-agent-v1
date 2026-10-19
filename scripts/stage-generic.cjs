@@ -8,7 +8,7 @@ const dump=v=>yaml.dump(v,{schema,noRefs:true,lineWidth:120});
 const home=project+'/test-data/generic-home';fs.mkdirSync(home,{recursive:true});
 const liveRows=yaml.load(fs.readFileSync(install+'/data/profiles/desktop/cordis.patch.yml','utf8'),{schema});
 if(fs.existsSync(install+'/data/.env'))fs.copyFileSync(install+'/data/.env',home+'/.env');
-const archive=require(install+'/maintenance/read-asar.cjs').openArchive();
+const archive=require('./host-archive.cjs').openArchive();
 const creator=yaml.load(archive.read('dsh/node_modules/@deepseek-ai/dsh-web-app/presets/cordis.patch.yml'),{schema})[0].insert[0];archive.close();
 for(const kind of ['qq','memory']){
  const dir=home+'/profiles/generic-'+kind,state=home+'/state/'+kind;fs.mkdirSync(dir,{recursive:true});fs.mkdirSync(state,{recursive:true});

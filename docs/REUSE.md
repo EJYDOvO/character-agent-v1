@@ -1,6 +1,6 @@
 # 在其他 DSH 项目中使用
 
-验证宿主：DSH 0.2.0-rc.2 / Node 24 / Windows。其他 DSH 发行版须重新验证；本文件不是跨版本安装保证。不要向 Profile 安装第二套 DSH 核心，保留 `autoInstallPeers: false`。所有示例路径与身份都是占位值。
+原通用化验收宿主：DSH 0.2.0-rc.2 / Node 24 / Windows。test.9 在 0.2.1-rc.2 上重新验证通用 Memory 独立身份接入及完整 Character，见 [最新记录](RELEASE-test9.md)；纯 QQ 无 Remote Ops 的独立连接组合本次未重跑。本文件不是跨版本安装保证。不要向 Profile 安装第二套 DSH 核心，保留 `autoInstallPeers: false`。所有示例路径与身份都是占位值。
 
 ## 普通 Agent + QQ
 
@@ -75,6 +75,8 @@ Host 层：
 
 每个项目使用自己的 DSH_HOME、绝对数据库路径和三元作用域。没有默认共用数据库；显式重复指定相同数据库及作用域才会共享，这是管理员配置行为。
 
+test.9 审计修复保留契约 v1、Schema 3 和现有工具参数。Host 的 `onEvidence` 同步更新短期话题，短消息不必永久入库；不要由模型调用这一入口。人格化新记录由 Core 标记形成策略，Assistant 不自动继承 Character/未知模式的旧条目，Character 仍可管理它们。详细模式与确认兼容行为见 [AUDIT-FIXES.md](AUDIT-FIXES.md)，此改动已部署于本机 test.9。
+
 ## Character 兼容配置
 
 保持四插件与 Core/Extras。Core 构建将 Tools 挂载为 `dsh-character-memory-tools/character.mjs`，继续提供原有九个 `character_*` 记忆/队列工具及 `character_notifications`。Character Identity 同时提供标准契约和旧服务名。直接引用旧 Tools 默认入口的外部 Profile，应改用这个专用入口；纯通用项目可设置 `toolPrefix: character, legacyQueueNames: true` 保留记忆工具名，但不会获得 QQ 通知或角色提示。
@@ -94,4 +96,4 @@ Host 层：
 | Remote Ops | 独立插件及其 features | 见 QQTK 通用后端文档；维护脚本不是基础 QQ 的安装前提 |
 | Character | 构建参数 + Core；Extras 可选 | 角色、代码和运行数据库分开备份；同 Schema 回滚仅还原代码/Profile |
 
-新版本先固定包与补丁哈希、隔离安装/验证，再在空闲和维护锁下切换。此次没有 Schema 升级；回滚不能覆盖升级后新产生的记忆、提醒、通知或 Session。未来 Schema 变化必须单独设计数据兼容策略。
+新版本先固定包与补丁哈希、隔离安装/验证，再在空闲和维护锁下切换。test.8 已使用 Schema 3；test.9 审计修复不再升级 Schema。回滚的数据影响以 [实际恢复流程](INTEGRATION.md#回滚) 为准，不应把“同 Schema”理解为现有回滚脚本不会恢复快照。未来 Schema 变化必须单独设计数据兼容策略。

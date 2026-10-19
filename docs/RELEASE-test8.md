@@ -2,6 +2,8 @@
 
 日期：2026-10-19。源码版本 `0.1.0-test.8`。先完成本地开发、隔离测试和迁移方案；随后用户明确授权“脱敏，推 github，部署”，已完成公开源码推送与生产升级。**生产为 test.8 / Schema 3，健康及真实模型工具验收通过；人格化保持默认 Off。** 手机收件及审批按钮仍未验证。
 
+后续说明：上段 Off 是首次发布时状态，之后经授权改为 Character，见 [当前状态](STATUS.md)。本轮审计发现模式切换、召回和测试门禁缺陷，修复已随 test.9 部署，见 [修复报告](AUDIT-FIXES.md)。下表保留历史结果，但“三模式隔离”没有覆盖同一 Agent 的历史模式切换；旧重启探针只比较 ID，不能单独证明 revision 保持。最终历史 Compaction 产物确实为 verified，门禁缺陷不等于该次压缩失败。
+
 ## 实际修改
 
 1. `character-memory-core` 继续复用原 SQLite/FTS5/CAS/治理引擎，新增 LayeredMemory：统一 L1、按 general/user/relationship/self 用途区分 L2、按 Host Agent 投影 L3。没有引入新数据库或向量依赖。

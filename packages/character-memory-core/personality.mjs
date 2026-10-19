@@ -1,5 +1,7 @@
 // Optional policy, not a second plugin, database, Persona or authorization authority.
 export const purposes = ['general','user','relationship','self'];
+// A deterministic minimum policy, not a semantic classifier for arbitrary paraphrases.
+export const assistantCompatible=statement=>!/(?:爱上|恋爱|亲密|伴侣|世界观|出生|年龄|姓名|人格|身份)/u.test(statement);
 export function memoryPolicy(scope) {
   const mode=scope.memoryMode??'off';
   if(!['off','assistant','character'].includes(mode))throw Error('Invalid Host memory mode');

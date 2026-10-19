@@ -2,7 +2,7 @@
 
 在 DeepSeek Harness 上运行的角色 Agent 扩展，提供私人 QQ 接入、可配置角色和带来源的长期记忆。Character 从官方 Creator Preset 构建派生，保留其工具能力；角色设定不会增加系统权限。
 
-这是测试版源码仓库，不包含 DSH 本体，也不是一键安装器。已验证的环境基线为 **Windows、Node.js 24、DSH 0.2.0-rc.2、QQ Bot 0.5.2 及配套 QQTK 补丁**。其他版本和平台需要重新验证。
+这是测试版源码仓库，不包含 DSH 本体，也不是一键安装器。当前 test.9 已验证并部署于 **Windows、Node.js 24.21.0、DSH 0.2.1-rc.2、QQ Bot 0.5.2 及配套 QQTK 补丁**。其他版本和平台需要重新验证。
 
 ## 能做什么
 
@@ -10,7 +10,7 @@
 - **私人 QQ 助手**：复用 QQTK 的 Gateway、Session、问答和审批；仅允许单 Owner 私聊，群聊关闭。
 - **长期记忆**：SQLite + 中文 FTS5，支持保存、召回、检查、纠错、确认、合并、遗忘和来源追溯。
 - **分层整理**：L1 保存可信经历，L2 提取和巩固长期记忆，L3 为每轮对话提供少量核心记忆；L0 沿用 DSH Session 与 Compaction。
-- **可选人格化**：Off / Assistant / Character 三种模式，与通用记忆共用数据库，按 Agent 隔离。只形成有证据的用户画像、互动约定和自身经验，不修改固定角色设定。
+- **可选人格化**：Off / Assistant / Character 三种模式，与通用记忆共用数据库，按 Agent 隔离；模式切换同时约束历史记录读取。形成带引用的用户画像、互动约定和自身经验，不修改固定角色设定；引用存在不代表推断一定正确。
 - **提醒与维护集成**：复用官方 Schedule 和独立 QQTK，记录明确任务通知的投递状态。
 
 ## 仓库结构
@@ -43,7 +43,9 @@ Core 和 Extras 在同一仓库，分别打包。运行时插件仍是四个；�
 | 理解分层记忆、人格化、预算与遗忘 | [记忆设计与配置](docs/MEMORY-LAYERS.md) |
 | 理解依赖、可信接口和数据流 | [架构说明](docs/ARCHITECTURE.md) |
 | 准备部署、迁移或回滚 | [集成与恢复](docs/INTEGRATION.md) |
-| 判断哪些能力实际验证过 | [当前状态](docs/STATUS.md) · [test.8 验证记录](docs/RELEASE-test8.md) |
+| 判断哪些能力实际验证过 | [当前状态](docs/STATUS.md) · [test.9 验证记录](docs/RELEASE-test9.md) |
+
+test.9 包含 [test.8 审计修复](docs/AUDIT-FIXES.md)：修正模式读取、跨用途召回/冲突、短消息话题、L3 选择与测试门禁。DSH 升级适配、真实宿主测试和回滚边界见 [test.9 记录](docs/RELEASE-test9.md)。
 
 ## 本地开发
 

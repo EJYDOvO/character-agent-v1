@@ -1,5 +1,7 @@
 # 功能管理与维护
 
+当前本机为 DSH 0.2.1-rc.2 / test.9，包含下述分层记忆及审计修复；人格化仍为 Character。新版内置 Schedule，旧实验 Bundle 不再额外装配；已停用的旧项目记忆包和数据保留，但移除其不兼容装配。见 [最新验证与恢复记录](RELEASE-test9.md)。
+
 test.8 的分层记忆已完成隔离验证及授权生产部署，验证范围见 [发布记录](RELEASE-test8.md)。人格化模式、L3 预算、后台节奏和 Schema 3 回滚要求见 [分层记忆管理](MEMORY-LAYERS.md)。修改模式时必须保留完整 Identity 配置，不能只覆盖 memoryMode；旧工具名称继续兼容。
 
 | 功能 | 管理方式 | 边界 |
@@ -20,9 +22,15 @@ test.8 的分层记忆已完成隔离验证及授权生产部署，验证范围�
 
 QQTK 继续独立维护，没有把它迁为第五个 Character 插件，也不安装第二份 QQ 网关。发布前审阅该补丁在 QQTK 原基线上的差异，单独生成版本化包，更新维护策略哈希；不要在已安装 node_modules 中临时修补。
 
+## 审计修复后的记忆管理
+
+test.9 已部署的审计修复调整了记忆管理行为：Assistant 只管理明确在 Assistant 策略下形成且符合其基本规则的人格化记录；Character/未知模式历史记录仍可在 Character 中管理，Off 继续隐藏它们。切换模式不删除记录或改 Agent ID。纠错在当前模式下重新标记形成策略，不能用 Character 改写内容却保留 Assistant 可见标记。
+
+跨用途相同 `claimKey` 的不同事实会在 inspect/recall 中显示当前可见冲突，L3 暂不采用。真实 Host 确认某项后，只记录当前 Agent/模式对当时其他候选修订的取舍；其他候选后来修改或新增时，冲突会重新出现。不会把另一 Agent 私有记录 ID 写入共享 general 来源。具体边界和未实现能力见 [修复报告](AUDIT-FIXES.md)。
+
 ## Extras 与后续插件声明
 
-当前源码的 `bundles/character-extras/cordis.patch.yml` 是空 YAML 序列 `[]`。保留 Bundle 包清单，作为额外集成的入口；不再预置搜索或 Bilibili。构建只在文件缺失时创建空模板，已有 Extras 声明原样保留，避免角色重建覆盖后续维护内容。这是源码变更，不能据此推断已安装的旧 tarball 已被替换。
+当前源码和本机 test.9 的 `bundles/character-extras/cordis.patch.yml` 都是空 YAML 序列 `[]`。保留 Bundle 包清单，作为额外集成的入口；不再预置搜索或 Bilibili。本机原有这两项能力迁到各自原生 Bundle，保留现有配置。构建只在文件缺失时创建空模板，已有 Extras 声明原样保留，避免角色重建覆盖后续维护内容。
 
 默认维护约定：本项目自有的可选插件声明放 Extras，固定角色/Identity/Memory/QQ 归 Core，密钥和 Owner 参数只放私有 Profile。外部完整 Bundle 由原生管理器装入 Profile，不复制其插入项到 Extras，也不编辑已安装的 node_modules。普通插件包还需独立安装依赖，只有 YAML 声明并不等于已安装。
 

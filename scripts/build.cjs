@@ -11,7 +11,7 @@ async function main(){
  const {loadDefinition}=await import('../packages/character-definition/loader.mjs');
  const settings=require('./build-settings.cjs')();
  const definition=loadDefinition(settings.definitionPath,s=>yaml.load(s));
- const a=require(install+'/maintenance/read-asar.cjs').openArchive();
+ const a=require('./host-archive.cjs').openArchive();
  const creatorText=a.read('dsh/node_modules/@deepseek-ai/dsh-web-app/presets/cordis.patch.yml');
  const version=JSON.parse(a.read('dsh/package.json')).version;
  const workerSupported=a.read('dsh/node_modules/@deepseek-ai/dsh-tool-subagent/lib/index.js').includes('allowedAgentPresets');a.close();

@@ -1,8 +1,14 @@
 # 当前增量
 
+**当前已部署（2026-10-19）**：DSH **0.2.1-rc.2**、Character **0.1.0-test.9**、QQ Bot **0.5.2**、Remote Ops **1.1.0**。test.8 审计修复已纳入运行包，Schema 3 保持；人格化仍为 Character，单 Owner 私聊、群聊关闭。新启动的 Character/Identity/Memory/QQ/Remote Ops/Browser 健康，QQ ready，原 QQ 会话映射逐字节保持，watchdog 恢复 running。
+
+72/72 Character 测试、18/18 QQ/审批/维护测试通过；新版真实宿主的 Core-only/Core+Extras、跨会话记忆、原生 Schedule、真实模型提取/巩固、Compaction 和重启验证通过。替身 Sender 的结果不代表手机投递；真实 QQ 消息与按钮未重新验收。详见 [test.9](RELEASE-test9.md) 和 [修复报告](AUDIT-FIXES.md)。
+
+升级保存并逐文件校验离线快照，保留完整旧程序和旧 Profile。初次切换的门禁错误地要求桌面 PID 等于后台服务 PID，触发自动恢复；独立核验确认原 0.2.0-rc.2/test.8 与 QQ 已恢复正常。修正为进程树、启动时间及本次日志校验后，第二次升级通过。官方 ASAR 与已验签安装包完全一致。test.9 修复源码、测试与文档一同发布；私有配置、原始验证日志和部署数据不进入公开仓库。
+
 test.8 已经授权部署，四插件与 Core/Extras 升级，SQLite Schema 2→3、旧记忆与 Session 保留检查、生产真实模型记忆工具验收通过。初次上线使用 Off，随后经授权开启 Character 模式；同一生产 Session 的 `character_layers_status` 实际返回 `character`，QQ 与健康检查通过。源码默认值仍是 Off。手机收件/审批未验证；本次回滚是在隔离副本执行真实脚本和旧运行时，未降级生产。见 [test.8 交付记录](RELEASE-test8.md) 和 [分层记忆](MEMORY-LAYERS.md)。
 
-后续源码变更：Extras 已改为空模板，构建保留其声明；这是尚未替换生产包的变更。空 YAML 与实际构建检查通过，补充原生加载器复核未执行；不将其计入上线验收。原生 Creator 插件安装仍写入 Profile，不自动写入 Extras。
+test.9 的 Extras 空模板已上线，并通过新版真实 Core+Extras 宿主检查。原搜索与 Bilibili 改由各自原生 Bundle 装配，保留配置。原生 Creator 插件安装仍写入 Profile，不自动写入 Extras。
 
 test.7 的历史通用化验收见 [RELEASE-test7.md](RELEASE-test7.md)；下文原始功能清单保留为历史基线。
 
