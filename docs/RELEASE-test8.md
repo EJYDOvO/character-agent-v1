@@ -67,7 +67,7 @@
 - 当前生产 Session 真实模型完成临时记录保存→召回→遗忘→再次召回；报告绑定本次 requestId、事件边界和标记，遗忘后无召回结果。输入来自本地维护 RPC，不作为真实 QQ 用户入站自动提取验收。
 - `test8-rollback-rehearsal.json`：用真实 `rollback.cjs` 在隔离目录恢复生产快照副本，旧 test.7 MemoryStore 打开 Schema 2 成功；不是生产降级演练。
 
-维护锁在成功健康检查后释放。人格化 Off 是默认安全配置，通用分层记忆正常工作；没有自动开启 Character 模式、主动聊天或新增 QQ 连接。
+维护锁在成功健康检查后释放。收尾发现看门狗状态文件过旧、配置启用但进程未运行；已按既有配置恢复单实例看门狗，并验证状态时间刷新为当前运行，未修改自启动注册或功能配置。人格化 Off 是默认安全配置，通用分层记忆正常工作；没有自动开启 Character 模式、主动聊天或新增 QQ 连接。
 
 回滚入口仍为 `scripts/rollback.ps1`，使用本机 `data/maintenance/character-deploy/candidate.json` 记录的旧 Profile 与 checkpoint。test.7 不支持 Schema 3；回滚必须同时恢复旧插件/配置与迁移前数据库，不能仅降级代码。回滚前先停止/确认空闲并保存新版数据；脚本保留较新记忆库用于后续人工处理，新版数据不会自动逆迁移。不要编辑 schema 版本号规避兼容检查。详见 [迁移步骤](MEMORY-LAYERS.md#schema-3-与迁移回滚)。
 
