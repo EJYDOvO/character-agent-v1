@@ -1,3 +1,9 @@
+# 当前增量
+
+2026-10-19 已部署 test.7。通用化范围、A/B/C/D真实宿主验收、生产恢复和未验证部分见 [RELEASE-test7.md](RELEASE-test7.md)；下文原始功能清单保留为历史基线，不能替代最新验证记录。
+
+---
+
 > 本文保留 test.2 的历史边界。当前 test.5 的已验证状态、部署与回滚说明以 [RELEASE-test5.md](RELEASE-test5.md) 和 [MANAGEMENT.md](MANAGEMENT.md) 为准。
 
 # 实现与测试状态

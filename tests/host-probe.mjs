@@ -4,6 +4,7 @@ export function apply(ctx,config){
  ctx.effect(()=>{const timer=setTimeout(()=>void run(),1500);return()=>clearTimeout(timer);});
  async function run(){const handles=[];const report={ok:false,at:new Date().toISOString(),sourceDigest:sourceDigest(),checks:[]};try{
    const create=async preset=>{const h=await ctx.agents.create({sessionId:randomUUID(),meta:{cwd:config.cwd,agentPreset:preset},setup:async c=>{await ctx.agentPresets.mount(c,preset);}});handles.push(h);return h.agent;};
+   report.profileBundles=JSON.parse(fs.readFileSync(process.env.DSH_HOME+'/profiles/character-test/package.json','utf8')).dsh.profile.bundles;
    const creator=await create('cordis'),character=await create('qq-character');
    const base=[...ctx.tools.view(creator).visible.keys()],actual=[...ctx.tools.view(character).visible.keys()];
    assert.deepEqual(base.filter(n=>!actual.includes(n)),[]);assert(actual.includes('character_remember'));report.checks.push('Creator tool registry parity');report.tools={creator:base,character:actual};

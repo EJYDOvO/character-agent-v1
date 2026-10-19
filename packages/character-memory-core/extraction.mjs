@@ -7,7 +7,7 @@ export function parseExtraction(text){
  return value;
 }
 export async function processJob(store,identity,job,generate){
- let trusted;try{trusted=identity.forSession(job.session);}catch{trusted=identity.current();}const scope=store.scope(trusted,'write');
+  let trusted;try{trusted=identity.forSession(job.session);}catch{trusted=identity.current(JSON.parse(job.scope));}const scope=store.scope(trusted,'write');
  if(JSON.stringify(scope)!==job.scope)throw Error('Job identity scope mismatch');
  const evidence=JSON.parse(job.evidence);
  if(evidence.origin!=='direct_user')throw Error('Automatic memory requires admitted user evidence');

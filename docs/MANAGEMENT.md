@@ -18,3 +18,11 @@ QQTK 继续独立维护，没有把它迁为第五个 Character 插件，也不�
 生产依赖部署本机已经配置的 QQ/DSH/QQTK，脚本不是跨机器通用安装器。Node 依赖安装使用缓存和 `--ignore-scripts`；迁移机器前需要重新构建官方派生配置并核对路径。测试产物、配置、凭据和会话均被 Git 忽略。
 
 本次部署的 QQTK 独立源码提交为 `8b947d7`（本机依赖源码仓库）；公共 Character 仓库保存可审查补丁，不复制私有配置或安装产物。
+
+## 本机角色试用配置（test.6）
+
+公开的 `characters/character-a/definition.yaml` 继续作为通用样例。本机可在 Git 忽略的 `private/build-config.json` 中配置 `definitionPath`，指向私有角色 YAML；也可以使用 `DSH_CHARACTER_DEFINITION` 显式覆盖路径。默认角色 ID 仍为 `character-a`，修改 ID 需要另行迁移 Identity 绑定与记忆归属。
+
+构建从实际角色文件读取显示名称；`ensure-build.cjs` 同时检查官方 Creator 和角色文件的指纹。测试与部署源码摘要包含实际角色内容，避免角色修改后复用旧测试证据。角色设定需要重新构建、隔离验证和版本化部署，不是热更新。
+
+本机 test.6 只更新角色与构建选源方式，四个运行插件的功能源码保持 test.5 基线；先前审计发现的记忆确认、冲突处理等问题并未在此次角色试用中修复。私有角色文件、生成的 Core、打包产物和模型测试记录均不进入 Git。真实模型会收到角色提示词，提示词里的虚构测试标记不应作为真实凭据。

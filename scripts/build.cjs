@@ -9,24 +9,25 @@ const dump=v=>yaml.dump(v,{schema,noRefs:true,lineWidth:120});
 const write=(rel,body)=>{fs.mkdirSync(path.dirname(root+'/'+rel),{recursive:true});fs.writeFileSync(root+'/'+rel,body);};
 async function main(){
  const {loadDefinition}=await import('../packages/character-definition/loader.mjs');
- const definition=loadDefinition(root+'/characters/character-a/definition.yaml',s=>yaml.load(s));
+ const settings=require('./build-settings.cjs')();
+ const definition=loadDefinition(settings.definitionPath,s=>yaml.load(s));
  const a=require(install+'/maintenance/read-asar.cjs').openArchive();
  const creatorText=a.read('dsh/node_modules/@deepseek-ai/dsh-web-app/presets/cordis.patch.yml');
  const version=JSON.parse(a.read('dsh/package.json')).version;
  const workerSupported=a.read('dsh/node_modules/@deepseek-ai/dsh-tool-subagent/lib/index.js').includes('allowedAgentPresets');a.close();
  const creator=yaml.load(creatorText,{schema})[0].insert[0];
- const character=yaml.load(creatorText,{schema})[0].insert[0];character.id='preset-qq-character';character.config.id='qq-character';character.config.name='Character 澄 (V1 测试版)';
+ const character=yaml.load(creatorText,{schema})[0].insert[0];character.id='preset-qq-character';character.config.id=settings.presetId;character.config.name=`Character ${definition.definition.name} (V1 测试版)`;
  character.config.plugins.find(x=>x.id==='persona').config.prefix=definition.persona;
- character.config.plugins.push({id:'character-memory-tools',name:'dsh-character-memory-tools'});
- const host=[{id:'character-identity',name:'dsh-character-identity',config:{bindingFile:install.replaceAll('\\','/')+'/data/character/binding.json',stateFile:install.replaceAll('\\','/')+'/data/character/coordination.sqlite'}},
- {id:'character-memory-core',name:'dsh-character-memory-core',config:{database:install.replaceAll('\\','/')+'/data/character/memory.sqlite',autoCapture:true}},
+ character.config.plugins.push({id:'character-memory-tools',name:'dsh-character-memory-tools/character.mjs'});
+ const host=[{id:'character-identity',name:'dsh-character-identity',config:{presetId:settings.presetId,bindingFile:settings.dataDirectory+'/binding.json',stateFile:settings.dataDirectory+'/coordination.sqlite'}},
+ {id:'character-memory-core',name:'dsh-character-memory-core',config:{database:settings.dataDirectory+'/memory.sqlite',autoCapture:true}},
  {id:'qq-remote-ops',name:'dsh-remote-ops-local',config:{root:install.replaceAll('\\','/')}},
- {id:'im-qqbot',name:'dsh-character-qq-adapter',config:{preset:'qq-character',access:{c2cMode:'allowlist',c2cAllow:[],groupMode:'disabled',groupAllow:[]}}},character];
+ {id:'im-qqbot',name:'dsh-character-qq-adapter',config:{preset:settings.presetId,access:{c2cMode:'allowlist',c2cAllow:[],groupMode:'disabled',groupAllow:[]}}},character];
  write('bundles/character-core/cordis.patch.yml',dump([{insert:host}]));
  write('bundles/character-extras/cordis.patch.yml','# Optional features are separately enabled below; never owns QQ or Character preset.\n'+dump([{insert:[{id:'web-search-free',name:'dsh-free-search'},{id:'bilibili',name:'dsh-plugin-bilibili'}]}]));
  for(const [folder,name]of [['character-identity','dsh-character-identity'],['character-memory-core','dsh-character-memory-core'],['character-memory-tools','dsh-character-memory-tools'],['character-qq-adapter','dsh-character-qq-adapter']])write('packages/'+folder+'/package.json',JSON.stringify({name,version:release,private:true,type:'module',main:'index.mjs',files:['*.mjs','LICENSE*'],engines:{node:'>=24'}},null,2)+'\n');
  for(const kind of ['core','extras'])write('bundles/character-'+kind+'/package.json',JSON.stringify({name:'dsh-character-'+kind,version:release,private:true,type:'module',dsh:{bundle:{patch:'./cordis.patch.yml'}}},null,2)+'\n');
- write('artifacts/build-manifest.json',JSON.stringify({version,workerSupported,definitionRevision:definition.revision,creatorSha256:crypto.createHash('sha256').update(creatorText).digest('hex'),creatorPluginIds:creator.config.plugins.map(p=>p.id),characterPluginIds:character.config.plugins.map(p=>p.id)},null,2));
+ write('artifacts/build-manifest.json',JSON.stringify({version,workerSupported,settings,characterId:definition.definition.id,definitionRevision:definition.revision,creatorSha256:crypto.createHash('sha256').update(creatorText).digest('hex'),creatorPluginIds:creator.config.plugins.map(p=>p.id),characterPluginIds:character.config.plugins.map(p=>p.id)},null,2));
  console.log(JSON.stringify({built:true,version,workerSupported,creatorPlugins:creator.config.plugins.length,characterPlugins:character.config.plugins.length}));
 }
 main().catch(e=>{console.error(e);process.exitCode=1});

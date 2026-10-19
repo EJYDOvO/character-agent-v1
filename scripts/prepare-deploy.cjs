@@ -2,6 +2,10 @@ const fs=require('fs'),path=require('path'),crypto=require('crypto'),assert=requ
 require('child_process').execFileSync(process.execPath,[path.join(__dirname,'ensure-build.cjs'),'--check'],{stdio:'inherit'});
 const project=path.resolve(__dirname,'..'),root=require('./installation.cjs').install,live=root+'/data/profiles/desktop',candidate=root+'/data/profiles/character-candidate';
 const version=JSON.parse(fs.readFileSync(project+'/package.json','utf8')).version;
+const build=JSON.parse(fs.readFileSync(project+'/artifacts/build-manifest.json','utf8'));
+assert.equal(build.settings.presetId,'qq-character','Local deploy adapter requires existing QQ route; custom projects configure their own Profile');
+assert.equal(path.resolve(build.settings.dataDirectory),path.resolve(root+'/data/character'),'Alternate data directory requires migration');
+assert.equal(build.characterId,JSON.parse(fs.readFileSync(root+'/data/character/binding.json','utf8')).characterId,'Character identity change requires migration');
 const yaml=require(require.resolve('js-yaml',{paths:[live]}));const hash=f=>crypto.createHash('sha256').update(fs.readFileSync(f)).digest('hex');
 assert(!fs.existsSync(candidate),'Candidate exists; inspect before replacing');fs.mkdirSync(candidate,{recursive:true});
 const manifest=JSON.parse(fs.readFileSync(live+'/package.json','utf8'));
@@ -14,14 +18,15 @@ record.baseline.prefs=hash(root+'/data/qqbot/model-prefs.json');record.baseline.
 record.baseline.policy=hash(root+'/maintenance/plugin-policy.json');record.sourceDigest=require('./source-digest.cjs')();
 for(const f of fs.readdirSync(project+'/artifacts/packages').filter(x=>x.endsWith('-'+version+'.tgz'))){const dest=root+'/plugin-packages/'+f;assert(!fs.existsSync(dest),'Immutable artifact already exists');fs.copyFileSync(project+'/artifacts/packages/'+f,dest);const name=f.replace('-'+version+'.tgz','');manifest.dependencies[name]='file:'+dest.replaceAll('\\','/');record.artifacts[name]={source:manifest.dependencies[name],sha256:hash(dest),version};}
 assert.equal(Object.keys(record.artifacts).length,6,'All six Character artifacts required');
-const toolkit='dsh-remote-ops-local',toolkitFile='dsh-remote-ops-local-1.0.1.tgz',toolkitDest=root+'/plugin-packages/'+toolkitFile;
-if(fs.existsSync(toolkitDest))assert.equal(hash(toolkitDest),hash(project+'/artifacts/packages/'+toolkitFile),'Immutable toolkit artifact differs');else fs.copyFileSync(project+'/artifacts/packages/'+toolkitFile,toolkitDest);manifest.dependencies[toolkit]='file:'+toolkitDest.replaceAll('\\','/');record.artifacts[toolkit]={source:manifest.dependencies[toolkit],sha256:hash(toolkitDest),version:'1.0.1'};
+const toolkit='dsh-remote-ops-local',toolkitFile='dsh-remote-ops-local-1.1.0.tgz',toolkitDest=root+'/plugin-packages/'+toolkitFile;
+if(fs.existsSync(toolkitDest))assert.equal(hash(toolkitDest),hash(project+'/artifacts/packages/'+toolkitFile),'Immutable toolkit artifact differs');else fs.copyFileSync(project+'/artifacts/packages/'+toolkitFile,toolkitDest);manifest.dependencies[toolkit]='file:'+toolkitDest.replaceAll('\\','/');record.artifacts[toolkit]={source:manifest.dependencies[toolkit],sha256:hash(toolkitDest),version:'1.1.0'};
 manifest.dsh.profile.bundles=manifest.dsh.profile.bundles.filter(x=>!['@tencent-connect/dsh-qqbot','dsh-remote-ops-local','dsh-free-search','dsh-plugin-bilibili','dsh-character-core','dsh-character-extras'].includes(x));manifest.dsh.profile.bundles.push('dsh-character-core','dsh-character-extras');
 qq.config.preset='qq-character';delete qq.name;rows.find(x=>x.id==='task-memory').disabled=true;
 fs.writeFileSync(candidate+'/package.json',JSON.stringify(manifest,null,2));fs.writeFileSync(candidate+'/cordis.patch.yml',yaml.dump(rows,{noRefs:true,lineWidth:120}));
 fs.writeFileSync(candidate+'/character-artifacts.json',JSON.stringify(record.artifacts,null,2));
 for(const f of ['pnpm-workspace.yaml','pnpm-lock.yaml'])fs.copyFileSync(live+'/'+f,candidate+'/'+f);
 fs.cpSync(live+'/patches',candidate+'/patches',{recursive:true});
+fs.copyFileSync(root+'/maintenance/patches/dsh-qqbot@0.5.2.patch',candidate+'/patches/dsh-qqbot@0.5.2.patch');
 const privateDir=root+'/data/maintenance/character-deploy';fs.mkdirSync(privateDir,{recursive:true});
 if(fs.existsSync(privateDir+'/candidate.json'))fs.copyFileSync(privateDir+'/candidate.json',privateDir+'/history-'+Date.now()+'.json');
 fs.writeFileSync(privateDir+'/binding.json',JSON.stringify({appId:qq.config.appId,ownerId:owner.openid,characterId:'character-a',projectId:'personal'},null,2));

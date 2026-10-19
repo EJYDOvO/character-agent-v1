@@ -1,5 +1,6 @@
 import { Identity } from './identity.mjs';
 import { scheduledEvents } from './schedule.mjs';
+import { confirmationEvidence } from './confirmation.mjs';
 import { DatabaseSync } from 'node:sqlite';
 import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync } from 'node:fs';
@@ -7,6 +8,7 @@ import { dirname } from 'node:path';
 export const name='character-identity';
 const digest=s=>createHash('sha256').update(s).digest('hex');
 export function apply(ctx,config) {
+  const presetId=config.presetId??'qq-character';
  const binding=JSON.parse(readFileSync(config.bindingFile,'utf8').replace(/^\uFEFF/,''));
  const identity=new Identity(binding);mkdirSync(dirname(config.stateFile),{recursive:true});
  const db=new DatabaseSync(config.stateFile);
@@ -15,10 +17,10 @@ export function apply(ctx,config) {
  CREATE TABLE IF NOT EXISTS outbox(id TEXT PRIMARY KEY,kind TEXT NOT NULL,conversation TEXT NOT NULL,text TEXT NOT NULL,status TEXT NOT NULL,at TEXT NOT NULL);`);
  db.prepare("UPDATE outbox SET status='unknown' WHERE status='sending'").run();
  let runtime,detach,closed=false,pumping=false;const listeners=new Set(),bound=new Set(),inputs=new Map();
- function validateGateway(c){if(c.appId!==binding.appId||c.preset!=='qq-character'||c.access?.c2cMode!=='allowlist'||c.access.c2cAllow?.length!==1||c.access.c2cAllow[0]!==binding.ownerId||c.access.groupMode!=='disabled')throw Error('Owner gateway policy mismatch');}
+  function validateGateway(c){if(c.appId!==binding.appId||c.preset!==presetId||c.access?.c2cMode!=='allowlist'||c.access.c2cAllow?.length!==1||c.access.c2cAllow[0]!==binding.ownerId||c.access.groupMode!=='disabled')throw Error('Owner gateway policy mismatch');}
  function bind(record){
   const preset=record.agentPreset??ctx.get?.('agentPresets')?.composedPreset(record.agent.ctx)??record.agent.session.header?.agentPreset;
-  if(record.scope!=='c2c'||record.peerId!==binding.ownerId||record.senderId!==binding.ownerId||preset!=='qq-character')throw Error('Untrusted restored QQ record');
+   if(record.scope!=='c2c'||record.peerId!==binding.ownerId||record.senderId!==binding.ownerId||preset!==presetId)throw Error('Untrusted restored QQ record');
   const trusted=identity.bind({appId:binding.appId,scope:'c2c',peerId:binding.ownerId,senderId:binding.ownerId,sessionId:record.sessionId});bound.add(record.sessionId);
   db.prepare('INSERT INTO routes VALUES(?,?,1) ON CONFLICT(conversation) DO UPDATE SET generation=generation+CASE WHEN session!=excluded.session THEN 1 ELSE 0 END,session=excluded.session').run(trusted.conversationId,record.sessionId);return trusted;
  }
@@ -88,5 +90,13 @@ export function apply(ctx,config) {
    try{const trusted=identity.forSession(session.header.id);for(const notification of scheduledEvents(message))void service.notify(trusted,notification).catch(()=>ctx.logger?.warn('Schedule notification deferred'));}catch{ctx.logger?.warn('Schedule notification requires a bound owner and supported host framing');}}
  });
  ctx.provide('characterIdentity',service);
+  ctx.provide('memoryIdentity',Object.freeze({
+   contractVersion:1,
+   authorize(c,a){const trusted=identity.authorize(c,a);return Object.freeze({...trusted,namespaceId:trusted.characterId});},
+   forSession:id=>identity.forSession(id),
+   current(scope){const trusted=service.current();if(scope&&JSON.stringify([trusted.principalId,trusted.characterId,trusted.projectId])!==JSON.stringify(scope))throw Error('No current session for memory scope');return trusted;},
+   onEvidence:fn=>service.onIngress(fn),
+   confirmationEvidence(c,{memory,quote}){identity.authorize(c,'write');return confirmationEvidence(service.latestInput(c),memory,quote);}
+  }));
  ctx.effect(()=>{const timer=setInterval(()=>void pump(),5000);return()=>{clearInterval(timer);detach?.();closed=true;identity.clear();listeners.clear();db.close();};});
 }

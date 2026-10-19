@@ -12,6 +12,7 @@ assert.equal(hash(root+'/resources/app.asar').toUpperCase(),snapshot.officialAsa
 const probe=JSON.parse(fs.readFileSync(project+'/artifacts/host-probe.json','utf8'));assert(probe.ok);
 const digest=require('./source-digest.cjs')();assert.equal(digest,record.sourceDigest,'Source changed after packaging');assert.equal(probe.sourceDigest,digest,'Host probe belongs to other source');
 const unit=JSON.parse(fs.readFileSync(project+'/artifacts/test-results.json','utf8'));assert(unit.ok);assert.equal(unit.sourceDigest,digest,'Unit results belong to other source');
+for(const name of ['generic-memory-host','generic-qq-host','core-only-host','core-extras-host']){const result=JSON.parse(fs.readFileSync(project+'/artifacts/'+name+'.json','utf8'));assert(result.ok,'Compatibility failed: '+name);assert.equal(result.sourceDigest,digest,'Stale compatibility evidence: '+name);if(name==='generic-qq-host')assert.equal(result.qqPatchSha256,hash(root+'/maintenance/patches/dsh-qqbot@0.5.2.patch'),'Different QQ patch tested');}
 record.sealed={};for(const f of ['package.json','cordis.patch.yml','pnpm-lock.yaml','pnpm-workspace.yaml','character-artifacts.json'])record.sealed[f]=hash(record.candidate+'/'+f);
 record.checkpoint=checkpoint;record.verifiedAt=new Date().toISOString();fs.writeFileSync(state+'/candidate.json',JSON.stringify(record,null,2));
 console.log(JSON.stringify({gate:'passed',checkpointFiles:snapshot.files.length,pendingTurns:0,activeScheduleTasks:0,officialAsarUnchanged:true}));

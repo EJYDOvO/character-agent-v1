@@ -1,3 +1,9 @@
+# test.7 通用接口入口
+
+当前跨项目配置请先阅读 [REUSE.md](REUSE.md) 与 [ARCHITECTURE.md](ARCHITECTURE.md)。以下原部署说明保留作历史背景；通用 Memory 不再硬依赖 Character Identity，QQ 基础接入不再硬依赖 Remote Ops。完整 Character 仍使用这两个专用集成组件。
+
+---
+
 > 本文保留 test.2 的历史边界。当前 test.5 的已验证状态、部署与回滚说明以 [RELEASE-test5.md](RELEASE-test5.md) 和 [MANAGEMENT.md](MANAGEMENT.md) 为准。
 
 # 集成与恢复边界
