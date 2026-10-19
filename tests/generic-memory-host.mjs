@@ -8,11 +8,11 @@ export function apply(ctx,config){ctx.effect(()=>{const t=setTimeout(()=>void ru
   const a=await create(),b=await create(),call=async(agent,name,args)=>JSON.parse(await ctx.tools.get('memory_'+name,agent).execute(args,{agent}));
   const names=[...ctx.tools.view(a).visible.keys()];for(const n of ['remember','recall','correct','forget','inspect','confirm','merge','status','retry'])assert(names.includes('memory_'+n));assert(!names.some(n=>n.startsWith('character_')));report.checks.push('Nine generic tools on native Creator-derived Agent');
   const r=await call(a,'remember',{kind:'semantic',statement:'独立项目验收偏好：先检查错误栈 '+a.id});assert.equal(r.status,'uncertain');assert((await call(b,'recall',{query:'错误栈'})).some(x=>x.id===r.id));
-  assert(JSON.stringify(await b.ctx.systemPrompt.assemble({agent:b,scope:b})).includes(r.statement));report.checks.push('Chinese retrieval and cross-session context');
+  assert(!JSON.stringify(await b.ctx.systemPrompt.assemble({agent:b,scope:b})).includes(r.statement));report.checks.push('Chinese retrieval; unconfirmed manual inference excluded from stable L3');
   assert.throws(()=>ctx.dshMemory.recall({...ctx.memoryIdentity.forSession(a.id)},''));
   await assert.rejects(()=>call(a,'confirm',{id:r.id,revision:1,quote:'confirm:'+r.id}));
   ctx.localMemoryIngress.admit(a,{messageId:'generic-confirm-'+a.id,text:'confirm:'+r.id,eventSeq:1});
-  const confirmed=await call(a,'confirm',{id:r.id,revision:1,quote:'confirm:'+r.id});assert.equal(confirmed.status,'active');assert.equal(confirmed.confidence,1);report.checks.push('Host capability, forged-handle rejection and independent confirmation');
+  const confirmed=await call(a,'confirm',{id:r.id,revision:1,quote:'confirm:'+r.id});assert.equal(confirmed.status,'active');assert.equal(confirmed.confidence,1);assert(JSON.stringify(await b.ctx.systemPrompt.assemble({agent:b,scope:b})).includes(r.statement));report.checks.push('Host capability, independent confirmation and cross-session L3');
   await assert.rejects(()=>call(b,'correct',{id:r.id,revision:1,statement:'stale'}),/conflict/);
   const fixed=await call(b,'correct',{id:r.id,revision:confirmed.revision,statement:'独立项目验收偏好：先保留错误栈 '+a.id});
   await call(a,'forget',{id:r.id,revision:fixed.revision});assert(!(await call(b,'recall',{query:'错误栈'})).some(x=>x.id===r.id));report.checks.push('CAS, correction and durable forget');

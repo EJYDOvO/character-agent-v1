@@ -50,6 +50,9 @@ Host 层：
         namespaceId: research-assistant
         projectId: research-project-a
         allowedPresetId: research-agent
+        agentId: research-agent
+        memoryMode: off  # off / assistant / character；由 Host 管理
+        l3Tokens: 1200
     - id: generic-memory
       name: dsh-character-memory-core
       config:
@@ -64,7 +67,7 @@ Host 层：
   name: dsh-character-memory-tools
 ```
 
-该 Preset 须由原生 DSH 注册/挂载。默认工具名为 `memory_remember`、`memory_recall`、`memory_correct`、`memory_forget`、`memory_inspect`、`memory_confirm`、`memory_merge`、`memory_status`、`memory_retry`。工具参数不接受 principal、namespace、project 或授权标记。
+该 Preset 须由原生 DSH 注册/挂载。默认工具名为 `memory_remember`、`memory_recall`、`memory_correct`、`memory_forget`、`memory_inspect`、`memory_confirm`、`memory_merge`、`memory_status`、`memory_retry`。test.8 增加 `memory_trace`、`memory_projection`、`memory_layers_status`。工具参数不接受 principal、namespace、project、Agent ID 或授权标记。升级前阅读 [分层记忆和 Schema 3 迁移](MEMORY-LAYERS.md)，不要把旧版直接指向迁移后的库。
 
 `examples/local-agent/identity.mjs` 是可直接审查的 Host 适配示例。可信入口验证登录/用户之后调用 `localMemoryIngress.admit(actualAgent, evidence)`，不要把它注册为模型工具，也不要把所有 `user/message` 历史事件无差别认定为真人输入。示例确认格式为完整 `confirm:<memory-id>`，必须先由这个可信入口接收。
 

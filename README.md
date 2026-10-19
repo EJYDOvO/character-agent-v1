@@ -1,6 +1,6 @@
 # Character Agent V1
 
-面向 DeepSeek Harness 与私人 QQ 助手的 Character Agent 核心测试版。`0.1.0-test.7` 将通用 Memory Core/Tools 与 Character 身份集成分开，配套独立 QQTK Remote Ops 1.1.0。私有角色配置方式见 [功能管理](docs/MANAGEMENT.md)，跨项目使用见 [复用指南](docs/REUSE.md)，依赖与可信接口见 [架构说明](docs/ARCHITECTURE.md)。
+面向 DeepSeek Harness 与私人 QQ 助手的 Character Agent 核心测试版。当前源码 `0.1.0-test.8` 在通用 Memory Core/Tools 上增加 L1 经历、跨事件 L2 巩固、L3 投影及 Off / Assistant / Character 模式，仍保留四插件和 Core/Extras。**本轮仅隔离验证，未部署生产。** 见 [分层记忆与迁移](docs/MEMORY-LAYERS.md)、[test.8 验证记录](docs/RELEASE-test8.md)。私有角色配置方式见 [功能管理](docs/MANAGEMENT.md)，跨项目使用见 [复用指南](docs/REUSE.md)，依赖与可信接口见 [架构说明](docs/ARCHITECTURE.md)。
 
 这是经过本机部署验证的部分实现的脱敏源码导出，不是完整 V1，也不是跨版本一键安装器。公开仓库不包含生产配置、QQ 身份、凭据、聊天、记忆数据库、备份、原始执行附件或官方发行文件。
 
@@ -9,7 +9,7 @@
 | 目录 | 职责 |
 |---|---|
 | `packages/character-identity` | Owner 私聊身份绑定、可信 Session 上下文、会话映射、持久通知账本与生命周期撤销 |
-| `packages/character-memory-core` | SQLite 长期记忆、作用域过滤、修订/CAS、遗忘、中文 FTS5 和 LLM 后台增量整理 |
+| `packages/character-memory-core` | 同一 SQLite 中的 L1/L2/L3、FTS5/CAS、可信来源、可选人格化与后台巩固 |
 | `packages/character-memory-tools` | 默认入口提供通用记忆工具；character.mjs 保留旧名称、角色提示和 QQ 通知查询 |
 | `packages/character-qq-adapter` | 复用原 QQ Gateway、Sender、QQTK，并接入身份服务 |
 | `packages/character-definition` | 构建时校验角色 YAML；不是运行时插件 |
@@ -52,6 +52,7 @@ node scripts/build.cjs
 - 主 Preset 保留 Creator 工具配置，但复杂任务质量与 Token A/B 未完成。
 - 当前没有官方独立 Worker Preset，也没有完整的文件/网络沙箱隔离。
 - 中文 FTS5 BM25 + 词项相似度/置信度排序，最多返回 20 条；没有 embedding 语义向量检索。
+- L3 默认约 1200、上限 1500 个估算 Token；以有效 L2 原文生成投影。人格化默认 Off，由 Host 配置开启，按稳定 Agent ID 隔离；未接入自动任务结果桥接时不会凭空形成 self 经历。
 - 自动捕获消费 Identity Provider 的可信入口事件；Character Provider 提供 QQ 原始正文，其他项目可接自己的 Host。使用当前宿主模型后台提取和近重复整理，不扫描历史会话，不把注入上下文或工具输出当用户原话。
 - 遗忘阻止相同指纹、同来源及高相似内容复活；修订、备份和原会话仍可能保留内容，低相似改写不能保证全部识别。
 - 官方 Schedule 到期与 QQTK 明确事件接入同一账本。sent 仅表示发送 API 返回成功，unknown 不盲目重发；真实收件和异常网络验收见发布报告。

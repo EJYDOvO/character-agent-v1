@@ -1,6 +1,6 @@
-# 运行架构与复用边界（test.7）
+# 运行架构与复用边界（test.8）
 
-这是实现说明，不代表未来长期记忆设计已经实现。四个 Character 运行时包保留；Definition 是构建模块，Core/Extras 是项目 Bundle。
+这是源码实现说明。test.8 增加分层记忆与可选人格化，尚未部署生产；详细层次、生命周期和限制见 [分层记忆](MEMORY-LAYERS.md)。四个 Character 运行时包保留；Definition 是构建模块，Core/Extras 是项目 Bundle。
 
 | 组件 | 之前 | 现在 |
 |---|---|---|
@@ -46,7 +46,7 @@ Host 服务 `memoryIdentity`：
 - `onEvidence(listener)`：订阅可信入口证据，返回卸载函数。事件是 `(handle, {sessionId, eventSeq, origin, messageId, text, receivedAt})`。真实用户原文使用 `direct_user`；模型记忆工具只产生 `inference`。工具输出不可冒充用户。
 - 可选 `confirmationEvidence(handle, {memory, quote})`：Host 核对真实、近期的完整确认输入，返回来源。未提供时 confirm 工具拒绝执行，不静默确认。
 
-Core 提供 `dshMemory`，保留 `characterMemory` 服务别名。SQLite 原有 `character` 列承载通用 namespace；旧 Character scope 值保持不变，Schema 仍为 2，没有搬迁或重建生产数据库。
+Core 提供 `dshMemory`，保留 `characterMemory` 服务别名。SQLite 原有 `character` 列承载通用 namespace；旧 Character scope 值保持不变。test.8 在隔离副本中验证 Schema 3 增量迁移，生产库仍未迁移。可选 Host 字段 `agentId`、`memoryMode`、`l3Tokens` 控制人格化与投影；模型不能填写这些权限字段。
 
 身份句柄只在当前进程有效，Session 恢复后重新由 Host 确认。示例 Provider 用实际 Agent 对象、挂载的 Preset 和 WeakSet 颁发/验证句柄。它用于可信单用户本机入口，不是互联网登录或多租户认证系统。能够加载任意 Host 插件的代码属于可信计算基，插件同进程执行不构成恶意代码沙箱。
 
@@ -61,4 +61,4 @@ Core 提供 `dshMemory`，保留 `characterMemory` 服务别名。SQLite 原有 
 
 ## 明确未改变的部分
 
-保留既有三类记忆、FTS5、CAS、近重复处理、时效、来源、遗忘防复活和提取队列。本次不增加记忆层级、跨经历巩固、摘要投影、消费策略、Worker Preset 或主动闲聊。冲突的语义判断、网络投递 exactly-once 和跨机器认证仍不属于本次已完成能力。
+保留既有三类记忆、FTS5、CAS、近重复处理、时效、来源、遗忘防复活和提取队列。test.8 已新增 L1、跨事件 L2 巩固、L3 摘录投影及话题消费策略；这项范围变更来自新的开发要求，不追溯改变 test.7 交付声明。没有 Worker Preset 或主动闲聊。冲突的完整语义判断、网络投递 exactly-once 和跨机器认证仍不是已完成能力。

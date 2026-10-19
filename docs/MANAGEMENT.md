@@ -1,10 +1,15 @@
 # 功能管理与维护
 
+test.8 的分层记忆仅完成隔离验证，尚未部署生产。人格化模式、L3 预算、后台节奏和 Schema 3 回滚要求见 [分层记忆管理](MEMORY-LAYERS.md)。旧工具名称继续兼容。
+
 | 功能 | 管理方式 | 边界 |
 |---|---|---|
 | 自动记忆 | Core 配置 `character-memory-core.config.autoCapture`；Owner 可要求调用 `character_memory_status`、`character_memory_retry` | 默认开；后台每 5 秒挑选最多 4 个任务串行执行，当前 Agent 空闲才调用现有模型；45 秒超时，最多 3 次；可能产生现有模型 API 用量 |
 | 自主保存与召回 | 自然语言要求保存/回忆，使用 `character_remember` / `character_recall` | 三类 semantic/episodic/procedural；模型保存默认 uncertain；作用域来自 Host，不接受参数声明身份 |
 | 检查与纠错 | `character_inspect` / `character_correct` | 修改需当前 revision；并发冲突应重新读取，不覆盖他人的更新 |
+| 分层检查 | `character_trace` / `character_projection` / `character_layers_status` | 追溯 L1、查看本 Agent 的 L3 和后台状态；仅 test.8 |
+| 人格化 | Identity Host 配置 `memoryMode`、`memoryAgentId` | 默认 off；assistant/character 可选；关掉不删除数据，不影响通用记忆 |
+| 跨事件巩固 | Core `consolidation`、`consolidateIntervalMs` | 默认每作用域/Agent/模式低频 6 小时；相同输入跳过；来源不足不归纳 |
 | 确认事实 | `character_confirm` | 最新 10 分钟内真实 QQ 原文需逐字包含确认词和记忆完整陈述或 ID；泛泛的“确认”不能提升任意记忆置信度 |
 | 合并与遗忘 | `character_merge` / `character_forget` | 合并要求两条 revision 和高相似度、相同否定/数字形态；不同事实请纠错，不能强行合并。遗忘保留屏障 |
 | 通知记录 | `character_notifications` | 查看 sent/pending/unknown；unknown 不自动重发。先核对手机收件，再由 Owner 明确决定创建新的提醒或维护任务；不直接修改 SQLite 状态 |

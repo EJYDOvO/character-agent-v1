@@ -1,4 +1,8 @@
-# test.7 通用接口入口
+# test.8 集成提示
+
+分层记忆新增 Schema 3，只能先在独立数据副本验证。生产没有在本轮升级。升级与回滚完整要求见 [MEMORY-LAYERS.md](MEMORY-LAYERS.md)；回滚必须同时恢复旧包和迁移前数据库，不能只降级插件。
+
+## test.7 通用接口入口
 
 当前跨项目配置请先阅读 [REUSE.md](REUSE.md) 与 [ARCHITECTURE.md](ARCHITECTURE.md)。以下原部署说明保留作历史背景；通用 Memory 不再硬依赖 Character Identity，QQ 基础接入不再硬依赖 Remote Ops。完整 Character 仍使用这两个专用集成组件。
 

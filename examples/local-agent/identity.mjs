@@ -4,7 +4,7 @@ export const inject=['agents','agentPresets'];
 export function apply(ctx,config){
  for(const key of ['principalId','namespaceId','projectId','allowedPresetId'])if(typeof config[key]!=='string'||!config[key])throw Error('Explicit local identity '+key+' required');
  const handles=new Map(),issued=new WeakSet(),listeners=new Set(),latest=new Map();let closed=false;
- const scope=Object.freeze({principalId:config.principalId,namespaceId:config.namespaceId,projectId:config.projectId});
+ const scope=Object.freeze({principalId:config.principalId,namespaceId:config.namespaceId,projectId:config.projectId,agentId:config.agentId??config.allowedPresetId,memoryMode:config.memoryMode??'off',l3Tokens:config.l3Tokens});
  function agentFor(id){const a=ctx.agents.get(id);if(!a||ctx.agentPresets.composedPreset(a.ctx)!==config.allowedPresetId)throw Error('Session not authorized for this local project');return a;}
  const provider=Object.freeze({contractVersion:1,
   forSession(id){if(closed)throw Error('Identity disposed');const agent=agentFor(id);let entry=handles.get(id);if(entry?.agent!==agent){if(entry)issued.delete(entry.handle);const handle=Object.freeze({...scope,sessionId:id});issued.add(handle);entry={agent,handle};handles.set(id,entry);}return entry.handle;},

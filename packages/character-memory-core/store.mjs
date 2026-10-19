@@ -32,7 +32,7 @@ export class MemoryStore {
   }
   migrate(){
     const version=this.db.prepare('SELECT MAX(version) AS version FROM schema_version').get().version;
-    if(version>2)throw Error('Unsupported future memory schema');
+    if(version>3)throw Error('Unsupported future memory schema');
     this.transaction(()=>{
       const columns=new Set(this.db.prepare('PRAGMA table_info(memories)').all().map(x=>x.name));
       for(const [name,decl] of Object.entries({confidence:'REAL NOT NULL DEFAULT 0.5',expires_at:'TEXT',claim_key:'TEXT',conflict_with:'TEXT'}))if(!columns.has(name))this.db.exec(`ALTER TABLE memories ADD COLUMN ${name} ${decl}`);
@@ -53,7 +53,7 @@ export class MemoryStore {
     const q=new Set(terms(statement).map(hash));
     return this.db.prepare('SELECT terms FROM tombstones WHERE principal=? AND character=? AND project=?').all(...scope).some(r=>{const t=new Set(JSON.parse(r.terms));return [...q].filter(x=>t.has(x)).length/Math.max(1,new Set([...q,...t]).size)>=0.86;});
   }
-  transaction(fn) { this.db.exec('BEGIN IMMEDIATE'); try { const v=fn(); this.db.exec('COMMIT'); return v; } catch(e) {this.db.exec('ROLLBACK');throw e;} }
+  transaction(fn) { const depth=this._transactionDepth??0,point='memory_'+depth;this.db.exec(depth?'SAVEPOINT '+point:'BEGIN IMMEDIATE');this._transactionDepth=depth+1;try{const v=fn();this.db.exec(depth?'RELEASE '+point:'COMMIT');return v;}catch(e){try{this.db.exec(depth?'ROLLBACK TO '+point:'ROLLBACK');if(depth)this.db.exec('RELEASE '+point);}catch{}throw e;}finally{this._transactionDepth=depth;} }
   scope(ctx, action) { const s=this.authorize(ctx, action); const namespace=s?.namespaceId??s?.characterId; if(!s?.principalId||!namespace||!s.projectId) throw Error('Missing trusted scope'); return [s.principalId,namespace,s.projectId]; }
   remember(ctx, candidate, source) {
     const scope=this.scope(ctx,'write'), statement=validateStatement(candidate.statement);

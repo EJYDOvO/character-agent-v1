@@ -92,7 +92,7 @@ export function apply(ctx,config) {
  ctx.provide('characterIdentity',service);
   ctx.provide('memoryIdentity',Object.freeze({
    contractVersion:1,
-   authorize(c,a){const trusted=identity.authorize(c,a);return Object.freeze({...trusted,namespaceId:trusted.characterId});},
+   authorize(c,a){const trusted=identity.authorize(c,a);return Object.freeze({...trusted,namespaceId:trusted.characterId,agentId:config.memoryAgentId??presetId,memoryMode:config.memoryMode??'off',l3Tokens:config.l3Tokens});},
    forSession:id=>identity.forSession(id),
    current(scope){const trusted=service.current();if(scope&&JSON.stringify([trusted.principalId,trusted.characterId,trusted.projectId])!==JSON.stringify(scope))throw Error('No current session for memory scope');return trusted;},
    onEvidence:fn=>service.onIngress(fn),

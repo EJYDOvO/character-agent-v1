@@ -14,7 +14,10 @@ export function apply(ctx,config){
    const call=async(agent,name,args)=>JSON.parse(await ctx.tools.get(name,agent).execute(args,{agent}));
    const row=await call(character,'character_remember',{kind:'semantic',statement:'集成测试偏好：中文短报告 '+character.id});assert.equal(row.status,'uncertain');
    const second=await create('qq-character');await bind(second);assert((await call(second,'character_recall',{query:'中文短报告'})).some(m=>m.id===row.id));report.checks.push('Real preset tools cross-session memory');
-   const prompt=await second.ctx.systemPrompt.assemble({agent:second,scope:second});assert(JSON.stringify(prompt).includes('中文短报告'));report.checks.push('Scoped cross-session context injection');
+   // Unconfirmed manual inference is not stable L3. Admit a separate synthetic
+   // Host fact to verify native prompt injection under the new consumption policy.
+   const contextFact=ctx.characterMemory.remember(identity.forSession(character.id),{kind:'semantic',statement:'隔离上下文事实：报告使用中文 '+character.id},{sessionId:character.id,eventSeq:1,messageId:'context:'+character.id,origin:'direct_user'});
+   const prompt=await second.ctx.systemPrompt.assemble({agent:second,scope:second});assert(JSON.stringify(prompt).includes(contextFact.statement));report.checks.push('Scoped cross-session L3 context injection');
    await assert.rejects(()=>call(character,'character_correct',{id:row.id,statement:'已纠正',revision:0}),/conflict/);
    const corrected=await call(character,'character_correct',{id:row.id,statement:'集成测试偏好：详细报告 '+character.id,revision:1});assert.equal(corrected.revision,2);
    await call(character,'character_forget',{id:row.id,revision:2});assert(!(await call(second,'character_recall',{query:'详细报告'})).some(m=>m.id===row.id));report.checks.push('Real tool CAS and forget');

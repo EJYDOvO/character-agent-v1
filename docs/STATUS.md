@@ -1,6 +1,6 @@
 # 当前增量
 
-2026-10-19 已部署 test.7。通用化范围、A/B/C/D真实宿主验收、生产恢复和未验证部分见 [RELEASE-test7.md](RELEASE-test7.md)；下文原始功能清单保留为历史基线，不能替代最新验证记录。
+2026-10-19：生产基线为 test.7；当前源码 test.8 已实现分层记忆与可选人格化，仅做隔离验证，未部署生产。见 [test.8 交付记录](RELEASE-test8.md) 和 [分层记忆](MEMORY-LAYERS.md)。test.7 的历史通用化验收见 [RELEASE-test7.md](RELEASE-test7.md)；下文原始功能清单保留为历史基线。
 
 ---
 
