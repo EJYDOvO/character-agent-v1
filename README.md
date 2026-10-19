@@ -1,6 +1,6 @@
 # Character Agent V1
 
-面向 DeepSeek Harness 与私人 QQ 助手的 Character Agent 核心测试版。当前源码 `0.1.0-test.8` 在通用 Memory Core/Tools 上增加 L1 经历、跨事件 L2 巩固、L3 投影及 Off / Assistant / Character 模式，仍保留四插件和 Core/Extras。**本轮仅隔离验证，未部署生产。** 见 [分层记忆与迁移](docs/MEMORY-LAYERS.md)、[test.8 验证记录](docs/RELEASE-test8.md)。私有角色配置方式见 [功能管理](docs/MANAGEMENT.md)，跨项目使用见 [复用指南](docs/REUSE.md)，依赖与可信接口见 [架构说明](docs/ARCHITECTURE.md)。
+面向 DeepSeek Harness 与私人 QQ 助手的 Character Agent 核心测试版。当前源码 `0.1.0-test.8` 在通用 Memory Core/Tools 上增加 L1 经历、跨事件 L2 巩固、L3 投影及 Off / Assistant / Character 模式，仍保留四插件和 Core/Extras。**2026-10-19 经授权部署 test.8，生产健康与真实模型记忆工具验收通过；人格化默认 Off，手机收件和审批按钮未验证。** 见 [分层记忆与迁移](docs/MEMORY-LAYERS.md)、[test.8 验证记录](docs/RELEASE-test8.md)。私有角色配置方式见 [功能管理](docs/MANAGEMENT.md)，跨项目使用见 [复用指南](docs/REUSE.md)，依赖与可信接口见 [架构说明](docs/ARCHITECTURE.md)。
 
 这是经过本机部署验证的部分实现的脱敏源码导出，不是完整 V1，也不是跨版本一键安装器。公开仓库不包含生产配置、QQ 身份、凭据、聊天、记忆数据库、备份、原始执行附件或官方发行文件。
 

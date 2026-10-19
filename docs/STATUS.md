@@ -1,6 +1,6 @@
 # 当前增量
 
-2026-10-19：生产基线为 test.7；当前源码 test.8 已实现分层记忆与可选人格化，仅做隔离验证，未部署生产。见 [test.8 交付记录](RELEASE-test8.md) 和 [分层记忆](MEMORY-LAYERS.md)。test.7 的历史通用化验收见 [RELEASE-test7.md](RELEASE-test7.md)；下文原始功能清单保留为历史基线。
+2026-10-19：test.8 已经授权部署，四插件与 Core/Extras 升级，SQLite Schema 2→3、旧记忆与 Session 保留检查、生产真实模型记忆工具验收通过。人格化模式仍为 Off，通用 L1/L2/L3 已启用。手机收件/审批未验证；本次回滚是在隔离副本执行真实脚本和旧运行时，未降级生产。见 [test.8 交付记录](RELEASE-test8.md) 和 [分层记忆](MEMORY-LAYERS.md)。test.7 的历史通用化验收见 [RELEASE-test7.md](RELEASE-test7.md)；下文原始功能清单保留为历史基线。
 
 ---
 

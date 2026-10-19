@@ -1,6 +1,6 @@
 # test.8 分层记忆交付记录
 
-日期：2026-10-19。源码版本 `0.1.0-test.8`。**完成本地开发、隔离测试和迁移方案；没有生产部署、生产数据库迁移或真实 QQ 操作。** 生产安装包仍为 `0.1.0-test.7`。
+日期：2026-10-19。源码版本 `0.1.0-test.8`。先完成本地开发、隔离测试和迁移方案；随后用户明确授权“脱敏，推 github，部署”，已完成公开源码推送与生产升级。**生产为 test.8 / Schema 3，健康及真实模型工具验收通过；人格化保持默认 Off。** 手机收件及审批按钮仍未验证。
 
 ## 实际修改
 
@@ -14,7 +14,7 @@
 
 ## 验证证据与范围
 
-环境：Windows、Node 24.21.0、本机 DSH 0.2.0-rc.2。测试使用项目 `test-data` 下的独立 DSH_HOME/数据库；未连接 QQ。原始测试产物留在忽略目录 `artifacts`，不随公开源码上传。
+环境：Windows、Node 24.21.0、本机 DSH 0.2.0-rc.2。下表为开发阶段隔离验证，使用项目 `test-data` 下的独立 DSH_HOME/数据库，未连接 QQ；后续上线验证单列于文末。原始测试产物留在忽略目录 `artifacts`，不随公开源码上传。
 
 | 验证 | 结果 | 证据/限定 |
 |---|---|---|
@@ -31,7 +31,7 @@
 | Schema 2→3 和回滚材料 | 已验证隔离副本 | backup API 复制后迁移，源文件字节不变、完整性/条数一致、拒绝覆盖，原 Schema 2 可继续打开 |
 | Character Core-only | **10/10 通过** | 真 Creator 派生、原生工具/Scope/Context/Schedule；Sender 是隔离模拟，不是手机投递 |
 | Character Core+Extras | **10/10 通过** | 同上，Extras 实际加载；QQ/Remote Ops 禁用，没有新增 QQ 连接 |
-| QQ 收发/手机审批/真实通知 | **本轮未验证** | 本轮禁止生产部署，未用真实 QQ 测试替代隔离验证；沿用 test.7 已部署版本 |
+| QQ 收发/手机审批/真实通知 | **开发隔离阶段未验证** | 后续上线检查见文末；QQ ready 与 Sender 成功不等于手机收件或按钮回传 |
 
 最终核心运行时与验证源摘要：`221b9ac5b9b90f6c59d56c5eba26eaf3abe5bc83a38a68c0e570af76350825fe`。该摘要包含脚本、测试、包和本机有效定义，不含普通 docs 编辑；不公开私有定义内容。
 
@@ -52,8 +52,23 @@
 
 ## 部署与回滚状态
 
-本轮未运行生产部署/重启/迁移；本机生产 Memory 包核对仍为 test.7。官方 `app.asar` SHA256 与开发前一致：`a2be73b7e34a79d4d2560698e492d9b008a3df5c3f5f099582ef818b100f6d8d`。
+授权上线后，四个运行时插件及 Core/Extras 为 test.8，生产 Memory Schema 为 3。官方 `app.asar` SHA256 与开发前一致：`a2be73b7e34a79d4d2560698e492d9b008a3df5c3f5f099582ef818b100f6d8d`。
 
 开发前源码副本和版本/归档摘要保存在本机 `private/layers-before-1792378081147`，没有公开上传。隔离测试库及日志留在忽略目录用于复核，不作为公开样例。
 
-未来上线必须另行授权。先空闲与备份，再用 `scripts/migrate-memory.mjs` 生成新库，验证后切换。test.7 不支持 Schema 3；回滚必须同时恢复旧插件/配置与迁移前数据库，不能仅降级代码。新版切换后产生的数据不会自动逆迁移，不能以删版本号方式规避。详见 [迁移步骤](MEMORY-LAYERS.md#schema-3-与迁移回滚)。
+实际流程：空闲门禁 → 独占维护锁 → 停止旧宿主 → 207 文件离线快照与哈希校验 → 独立 QQ Gateway 验证 → 部署门禁 → 切换候选 Profile → 复制生成 Schema 3 新库并保留旧库 → 启动与健康检查。原记忆逐字段保持一致，QQ Session 路由未改变；单 Owner 私聊、禁群限制保留。
+
+新增上线证据（本机私有产物，不上传正文/标识）：
+
+- `test-results.json`：当前源码摘要重新执行 51/51 单元/确定性测试。
+- `generic-memory-host.json`：实际安装本次不可变 tarball，无 Character Identity/QQ/Remote Ops；当前请求的真实 LLM 提取、跨 Session、确认/CAS/遗忘与既有持久记忆恢复通过。初次目录依赖误用旧安装缓存，检查文件哈希后改为本次 tarball 重跑；只采用重跑结果。
+- `generic-qq-host.json`：生产停机、维护锁内运行独立 QQ，未装 Character/Remote Ops，Gateway、审批/问答通道、普通 Preset、Session 创建与恢复通过；结束后关闭测试宿主再启动生产。
+- `test8-deployment.json`：四插件实际文件与源代码一致，Identity/Memory/QQ/Remote Ops active；新启动日志一次 QQ ready、Schema 3 完整性检查通过、原有记忆和 Session 保留、官方发行文件未变。
+- 当前生产 Session 真实模型完成临时记录保存→召回→遗忘→再次召回；报告绑定本次 requestId、事件边界和标记，遗忘后无召回结果。输入来自本地维护 RPC，不作为真实 QQ 用户入站自动提取验收。
+- `test8-rollback-rehearsal.json`：用真实 `rollback.cjs` 在隔离目录恢复生产快照副本，旧 test.7 MemoryStore 打开 Schema 2 成功；不是生产降级演练。
+
+维护锁在成功健康检查后释放。人格化 Off 是默认安全配置，通用分层记忆正常工作；没有自动开启 Character 模式、主动聊天或新增 QQ 连接。
+
+回滚入口仍为 `scripts/rollback.ps1`，使用本机 `data/maintenance/character-deploy/candidate.json` 记录的旧 Profile 与 checkpoint。test.7 不支持 Schema 3；回滚必须同时恢复旧插件/配置与迁移前数据库，不能仅降级代码。回滚前先停止/确认空闲并保存新版数据；脚本保留较新记忆库用于后续人工处理，新版数据不会自动逆迁移。不要编辑 schema 版本号规避兼容检查。详见 [迁移步骤](MEMORY-LAYERS.md#schema-3-与迁移回滚)。
+
+公开发布只包含源码、测试与文档：扫描全部 92 个可上传文件、待上传历史、凭据特征及本机真实私有值，无命中；私有角色定义/内部标记、QQ 标识、密钥、聊天、数据库、日志、快照、生成 Bundle 与运行 tarball 均未上传。该检查降低泄漏风险，不宣称能证明任意形式的秘密不存在。
