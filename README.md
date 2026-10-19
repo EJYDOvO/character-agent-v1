@@ -1,61 +1,92 @@
 # Character Agent V1
 
-面向 DeepSeek Harness 与私人 QQ 助手的 Character Agent 核心测试版。当前源码 `0.1.0-test.8` 在通用 Memory Core/Tools 上增加 L1 经历、跨事件 L2 巩固、L3 投影及 Off / Assistant / Character 模式，仍保留四插件和 Core/Extras。**2026-10-19 经授权部署 test.8，生产健康与真实模型记忆工具验收通过；人格化默认 Off，手机收件和审批按钮未验证。** 见 [分层记忆与迁移](docs/MEMORY-LAYERS.md)、[test.8 验证记录](docs/RELEASE-test8.md)。私有角色配置方式见 [功能管理](docs/MANAGEMENT.md)，跨项目使用见 [复用指南](docs/REUSE.md)，依赖与可信接口见 [架构说明](docs/ARCHITECTURE.md)。
+在 DeepSeek Harness 上运行的角色 Agent 扩展，提供私人 QQ 接入、可配置角色和带来源的长期记忆。Character 从官方 Creator Preset 构建派生，保留其工具能力；角色设定不会增加系统权限。
 
-这是经过本机部署验证的部分实现的脱敏源码导出，不是完整 V1，也不是跨版本一键安装器。公开仓库不包含生产配置、QQ 身份、凭据、聊天、记忆数据库、备份、原始执行附件或官方发行文件。
+这是测试版源码仓库，不包含 DSH 本体，也不是一键安装器。已验证的环境基线为 **Windows、Node.js 24、DSH 0.2.0-rc.2、QQ Bot 0.5.2 及配套 QQTK 补丁**。其他版本和平台需要重新验证。
 
-## 组件
+## 能做什么
 
-| 目录 | 职责 |
+- **角色配置**：通过 YAML 定义身份、表达方式、背景和边界，构建为完整 Character Preset。
+- **私人 QQ 助手**：复用 QQTK 的 Gateway、Session、问答和审批；仅允许单 Owner 私聊，群聊关闭。
+- **长期记忆**：SQLite + 中文 FTS5，支持保存、召回、检查、纠错、确认、合并、遗忘和来源追溯。
+- **分层整理**：L1 保存可信经历，L2 提取和巩固长期记忆，L3 为每轮对话提供少量核心记忆；L0 沿用 DSH Session 与 Compaction。
+- **可选人格化**：Off / Assistant / Character 三种模式，与通用记忆共用数据库，按 Agent 隔离。只形成有证据的用户画像、互动约定和自身经验，不修改固定角色设定。
+- **提醒与维护集成**：复用官方 Schedule 和独立 QQTK，记录明确任务通知的投递状态。
+
+## 仓库结构
+
+```text
+bundles/
+  character-core/           # 身份、记忆、QQ 和 Character Preset 的核心装配
+  character-extras/         # 空的可选装配模板，留给项目自己的额外集成
+packages/
+  character-identity/       # Host 身份授权、来源认证、Session 与通知衔接
+  character-memory-core/    # 通用记忆引擎及可选人格化策略
+  character-memory-tools/   # 通用工具入口，以及 Character 兼容入口
+  character-qq-adapter/     # Character 专用 QQ 集成
+  character-definition/    # 构建时角色加载器，不是运行时插件
+characters/                # 可公开使用的示例角色
+examples/local-agent/      # 不依赖 Character Identity 的接入示例
+scripts/                   # 构建、验证、迁移与部署辅助脚本
+tests/                     # 单元测试及 DSH 宿主集成探针
+docs/                      # 架构、配置、复用与发布记录
+```
+
+Core 和 Extras 在同一仓库，分别打包。运行时插件仍是四个；人格化没有新增插件或第二个数据库。[QQTK](https://github.com/EJYDOvO/harness-qq-toolkit-public) 独立维护，搜索、Bilibili 等第三方插件也不在本仓库内。
+
+## 从哪里开始
+
+| 你的目标 | 阅读入口 |
 |---|---|
-| `packages/character-identity` | Owner 私聊身份绑定、可信 Session 上下文、会话映射、持久通知账本与生命周期撤销 |
-| `packages/character-memory-core` | 同一 SQLite 中的 L1/L2/L3、FTS5/CAS、可信来源、可选人格化与后台巩固 |
-| `packages/character-memory-tools` | 默认入口提供通用记忆工具；character.mjs 保留旧名称、角色提示和 QQ 通知查询 |
-| `packages/character-qq-adapter` | 复用原 QQ Gateway、Sender、QQTK，并接入身份服务 |
-| `packages/character-definition` | 构建时校验角色 YAML；不是运行时插件 |
-| `bundles` | Core/Extras 的包清单；Extras 装配搜索和 Bilibili |
-| `characters` | 通用测试角色“澄”，不包含用户个人设定 |
-| `scripts` | 构建、隔离验证及原部署流程的脚本 |
-| `tests` | 可独立执行的单元测试，以及需要 DSH 的宿主探针 |
+| 只在普通 DSH Agent 中使用记忆或 QQ | [跨项目复用](docs/REUSE.md) |
+| 配置完整 Character、私有角色或功能开关 | [功能管理](docs/MANAGEMENT.md) |
+| 理解分层记忆、人格化、预算与遗忘 | [记忆设计与配置](docs/MEMORY-LAYERS.md) |
+| 理解依赖、可信接口和数据流 | [架构说明](docs/ARCHITECTURE.md) |
+| 准备部署、迁移或回滚 | [集成与恢复](docs/INTEGRATION.md) |
+| 判断哪些能力实际验证过 | [当前状态](docs/STATUS.md) · [test.8 验证记录](docs/RELEASE-test8.md) |
+| 修改本仓库，或让另一个 Agent 接手 | [开发约定](AGENTS.md) |
 
-## 本地测试
+## 本地开发
 
-需要 Node.js 24 或以上；单元测试只使用 Node 内置模块，不需要安装依赖，也不连接 QQ。
+**先运行独立测试。** 使用 Node.js 24 或以上，无需安装 npm 依赖，也不会连接 QQ：
 
 ```sh
 npm test
 ```
 
-`tests/host-probe.mjs` 是 DSH 插件式集成探针，不能当普通 Node 单元测试运行。
+宿主探针需要实际 DSH 环境，不能直接当作普通 Node 测试运行。真实模型、QQ 收发和审批验收也不包含在 `npm test` 中。
 
-## 构建与集成前提
+**构建完整 Character 前，准备宿主依赖。** 当前脚本需要已安装 DSH、desktop Profile 可解析的 `js-yaml`、QQTK 的维护工具及兼容补丁；完整 Core 还会使用 Remote Ops。通用 Memory 的独立接入不需要这些 Character 构建依赖。
 
-已验证的历史基线为 Windows、DSH `0.2.0-rc.2`、QQ Bot `0.5.2` 及既有版本化 QQTK 补丁；这不是对当前最新版本的声明。适配层依赖 QQTK 的 `qqRemoteOps.attach(runtime)` 接口，单独安装未打补丁的上游 QQ Bot 不保证兼容。
-
-完整 Character 的构建/部署需要已安装的 DSH、Profile 中的 `js-yaml`、QQTK maintenance 工具（包括 `read-asar.cjs`、`ops.cjs`、`local-client.cjs`）、Remote Ops 及兼容补丁。通用 Memory 独立安装不需要这些 Character 构建脚本或 QQ 组件；基本 QQ 接入不需要 Remote Ops。参考 [Harness QQ Toolkit](https://github.com/EJYDOvO/harness-qq-toolkit-public)。历史维护增量仅供比对，不能在当前文件上重复套用。
-
-在 PowerShell 中显式设置本机路径，示例占位符必须替换：
+在仓库根目录运行，替换路径占位符：
 
 ```powershell
-$env:DSH_INSTALL_ROOT = '<absolute-installation-path>'
+$env:DSH_INSTALL_ROOT = '<absolute-path-to-dsh-installation>'
 $env:DSH_CHARACTER_PROJECT = (Get-Location).Path
 node scripts/build.cjs
 ```
 
-构建脚本只读提取本机官方 Creator 配置，生成 Core Bundle 和带角色的 Preset。生成的 `bundles/character-core/cordis.patch.yml` 含官方配置，故不随公开仓库分发。构建不会自行下载或安装第二份 DSH 核心。
+构建读取本机官方 Creator 配置，生成 Core Bundle，不修改官方发行文件。默认角色来自 `characters/character-a/definition.yaml`；私有角色可用 `DSH_CHARACTER_DEFINITION` 或忽略目录内的 `private/build-config.json` 指定。构建会保留已有 Extras 声明。
 
-部署脚本保留原实例的目录约定和门禁，不是通用安装器。它们依赖固定 tgz、候选 Profile、补丁和私有状态。先阅读 [集成与恢复边界](docs/INTEGRATION.md)，为目标机器审阅并适配后才能使用。不要直接重复运行 prepare/deploy 覆盖已存在的同版本产物；本版验证与回滚状态见 [test.7 交付记录](docs/RELEASE-test7.md)。
+生成的 Core 声明可能包含私有角色内容，因此不提交 Git。构建完成不等于安装或部署成功；部署脚本有原实例目录、产物和门禁约定，必须先按目标环境审阅，不能作为通用安装命令直接执行。
 
-## 实现边界
+## 如何添加可选插件
 
-- 仅支持单 Owner 私聊，群聊关闭；没有主动闲聊插件。
-- 主 Preset 保留 Creator 工具配置，但复杂任务质量与 Token A/B 未完成。
-- 当前没有官方独立 Worker Preset，也没有完整的文件/网络沙箱隔离。
-- 中文 FTS5 BM25 + 词项相似度/置信度排序，最多返回 20 条；没有 embedding 语义向量检索。
-- L3 默认约 1200、上限 1500 个估算 Token；以有效 L2 原文生成投影。人格化默认 Off，由 Host 配置开启，按稳定 Agent ID 隔离；未接入自动任务结果桥接时不会凭空形成 self 经历。
-- 自动捕获消费 Identity Provider 的可信入口事件；Character Provider 提供 QQ 原始正文，其他项目可接自己的 Host。使用当前宿主模型后台提取和近重复整理，不扫描历史会话，不把注入上下文或工具输出当用户原话。
-- 遗忘阻止相同指纹、同来源及高相似内容复活；修订、备份和原会话仍可能保留内容，低相似改写不能保证全部识别。
-- 官方 Schedule 到期与 QQTK 明确事件接入同一账本。sent 仅表示发送 API 返回成功，unknown 不盲目重发；真实收件和异常网络验收见发布报告。
-- 角色修改需要重新构建。当前生产仍使用 `personal`；通用 Provider 可配置独立项目与 namespace。没有 Inspector、自动 Session 轮换或跨机迁移。
+- **第三方包自带 Bundle**：由原生 `plugin_manager` 安装到当前 Profile，使用该包自己的声明；不要再复制到 Extras。
+- **普通插件包或自有可选集成**：安装对应依赖后，在 `bundles/character-extras/cordis.patch.yml` 维护装配声明。当前模板为 `[]`，不预装搜索或 Bilibili。
+- **角色基础能力**：仍由 Core 管理，不在 Extras 创建第二个 QQ Gateway 或替换身份授权。
 
-详见 [实现与测试状态](docs/STATUS.md)、[公开导出检查](docs/PUBLICATION.md) 和 [来源说明](docs/PROVENANCE.md)。
+Character 保留 Creator 的插件管理工具，但安装仍受权限或审批控制。原生安装器没有“写入 Extras”的选项；Extras 是项目维护约定，不是自动转存机制。一个插件只应有一个装配来源。
+
+密钥、Owner 标识和本机参数放私有 Profile。仓库不包含生产配置、聊天、记忆库、备份或运行日志；源码模板与某台机器当前部署状态可能不同，以部署验收记录为准。
+
+## 当前边界
+
+- 人格化默认 Off，启用由可信 Host 配置决定。记忆内容不能改变角色基础设定、ACL 或审批规则。
+- L3 默认约 1200、上限约 1500 个**估算 Token**；它是有效 L2 的摘录，不是整轮上下文预算。
+- 自动提取依赖可信入口，不扫描全部历史聊天；没有向量检索、管理 UI、独立 Worker Preset、自动 Session 轮换或主动闲聊。
+- Self Model 的存储和策略已实现，真实多轮任务形成自身认知的端到端验收仍未完成。工具正常返回不等于任务目标成功。
+- 遗忘有来源和近似内容屏障，但原会话、修订和备份可能保留旧内容；不能承诺识别所有改写。
+- QQ ready 或发送 API 成功不代表手机实际收件；单元测试通过也不代表生产功能已经验证。
+
+第三方参考与许可见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)；公开发布边界见 [PUBLICATION.md](docs/PUBLICATION.md)。修改功能、配置、组件或操作方式时，应在同一改动中同步更新相应入口文档，具体约定见 [AGENTS.md](AGENTS.md)。

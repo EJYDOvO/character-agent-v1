@@ -1,6 +1,10 @@
 # 当前增量
 
-2026-10-19：test.8 已经授权部署，四插件与 Core/Extras 升级，SQLite Schema 2→3、旧记忆与 Session 保留检查、生产真实模型记忆工具验收通过。人格化模式仍为 Off，通用 L1/L2/L3 已启用。手机收件/审批未验证；本次回滚是在隔离副本执行真实脚本和旧运行时，未降级生产。见 [test.8 交付记录](RELEASE-test8.md) 和 [分层记忆](MEMORY-LAYERS.md)。test.7 的历史通用化验收见 [RELEASE-test7.md](RELEASE-test7.md)；下文原始功能清单保留为历史基线。
+test.8 已经授权部署，四插件与 Core/Extras 升级，SQLite Schema 2→3、旧记忆与 Session 保留检查、生产真实模型记忆工具验收通过。初次上线使用 Off，随后经授权开启 Character 模式；同一生产 Session 的 `character_layers_status` 实际返回 `character`，QQ 与健康检查通过。源码默认值仍是 Off。手机收件/审批未验证；本次回滚是在隔离副本执行真实脚本和旧运行时，未降级生产。见 [test.8 交付记录](RELEASE-test8.md) 和 [分层记忆](MEMORY-LAYERS.md)。
+
+后续源码变更：Extras 已改为空模板，构建保留其声明；这是尚未替换生产包的变更。空 YAML 与实际构建检查通过，补充原生加载器复核未执行；不将其计入上线验收。原生 Creator 插件安装仍写入 Profile，不自动写入 Extras。
+
+test.7 的历史通用化验收见 [RELEASE-test7.md](RELEASE-test7.md)；下文原始功能清单保留为历史基线。
 
 ---
 

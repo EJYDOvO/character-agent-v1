@@ -1,6 +1,4 @@
-# Optional features are separately enabled below; never owns QQ or Character preset.
-- insert:
-    - id: web-search-free
-      name: dsh-free-search
-    - id: bilibili
-      name: dsh-plugin-bilibili
+# Empty optional integration layer. Add reviewed project-owned declarations here.
+# Third-party bundles remain managed by the native Profile plugin manager.
+# Never declare another QQ Gateway or replace the Character core here.
+[]

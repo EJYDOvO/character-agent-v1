@@ -1,6 +1,6 @@
 # 分层记忆：test.8
 
-本文件描述已经写入源码的实现。生产仍未部署 test.8；实际验证范围见 [交付记录](RELEASE-test8.md)。仍是原来的四个运行时插件，不增加人格化插件或第二个数据库。
+本文件描述当前源码实现及默认配置；实际部署与验证范围见 [交付记录](RELEASE-test8.md) 和 [当前状态](STATUS.md)。仍是原来的四个运行时插件，不增加人格化插件或第二个数据库。某个实例是否启用人格化，应读取该实例 Host 配置和状态工具，而不是根据默认值判断。
 
 ## 层次与数据流
 
@@ -91,11 +91,15 @@ DSH 普通 `user/message` 可能来自插件、摘要或模型决策，不能直
 原有九个通用工具及 `character_*` 别名保持；增加 `memory_trace`、`memory_projection`、`memory_layers_status`，Character 入口对应 `character_trace`、`character_projection`、`character_layers_status`。`remember` 仍保存通用 L2，人格化条目由专用后台巩固策略生成；Owner 可用原有 inspect/correct/confirm/forget/merge 管理它们。
 
 ```yaml
-# Character Identity 配置覆盖；不会改变 QQ 白名单
+# Profile config 覆盖会替换整块配置：先复制已安装 Core 的完整 Identity config，
+# 保留实际 presetId、bindingFile、stateFile，再设置模式；以下路径只是占位。
 - id: character-identity
   config:
+    presetId: qq-character
+    bindingFile: '<ABSOLUTE_PROJECT_DATA>/binding.json'
+    stateFile: '<ABSOLUTE_PROJECT_DATA>/coordination.sqlite'
     memoryMode: character  # off / assistant / character
-    memoryAgentId: archive-agent
+    memoryAgentId: qq-character  # 保留既有稳定 ID；更改会切换人格化投影作用域
     l3Tokens: 1200
 - id: character-memory-core
   config:

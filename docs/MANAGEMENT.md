@@ -1,6 +1,6 @@
 # 功能管理与维护
 
-test.8 的分层记忆仅完成隔离验证，尚未部署生产。人格化模式、L3 预算、后台节奏和 Schema 3 回滚要求见 [分层记忆管理](MEMORY-LAYERS.md)。旧工具名称继续兼容。
+test.8 的分层记忆已完成隔离验证及授权生产部署，验证范围见 [发布记录](RELEASE-test8.md)。人格化模式、L3 预算、后台节奏和 Schema 3 回滚要求见 [分层记忆管理](MEMORY-LAYERS.md)。修改模式时必须保留完整 Identity 配置，不能只覆盖 memoryMode；旧工具名称继续兼容。
 
 | 功能 | 管理方式 | 边界 |
 |---|---|---|
@@ -19,6 +19,16 @@ test.8 的分层记忆仅完成隔离验证，尚未部署生产。人格化模�
 | 数据/恢复 | 安装目录 `data/character`，与源码隔离 | SQLite 主库和通知库、binding 都不入 Git；离线备份必须包含 SQLite WAL；回滚按版本配套恢复 |
 
 QQTK 继续独立维护，没有把它迁为第五个 Character 插件，也不安装第二份 QQ 网关。发布前审阅该补丁在 QQTK 原基线上的差异，单独生成版本化包，更新维护策略哈希；不要在已安装 node_modules 中临时修补。
+
+## Extras 与后续插件声明
+
+当前源码的 `bundles/character-extras/cordis.patch.yml` 是空 YAML 序列 `[]`。保留 Bundle 包清单，作为额外集成的入口；不再预置搜索或 Bilibili。构建只在文件缺失时创建空模板，已有 Extras 声明原样保留，避免角色重建覆盖后续维护内容。这是源码变更，不能据此推断已安装的旧 tarball 已被替换。
+
+默认维护约定：本项目自有的可选插件声明放 Extras，固定角色/Identity/Memory/QQ 归 Core，密钥和 Owner 参数只放私有 Profile。外部完整 Bundle 由原生管理器装入 Profile，不复制其插入项到 Extras，也不编辑已安装的 node_modules。普通插件包还需独立安装依赖，只有 YAML 声明并不等于已安装。
+
+Character 构建保留官方 Creator 的 `tool-plugin-manager`。本机 DSH 0.2.0-rc.2 的 `plugin_manager` 支持列举、开关、安装/移除 Bundle 等操作；每次需满足 `danger-full-access` 或当前调用审批，不授予 Character 无条件安装权。安装写入当前 Profile 的依赖/锁文件及 Bundle 列表，开关写入 Profile patch；接口没有目标 Bundle/Extras 参数。
+
+因此，上述约定不是“原生安装后自动转存 Extras”的已实现机制，也不是权限隔离。如果需要严格强制所有扩展经过 Extras，需要另行实现自有安装适配与声明迁移、重复加载检查、失败恢复，并保留原生审批；不能仅靠提示词承诺这些保证。目前未修改官方插件管理器或安装链路。
 
 生产依赖部署本机已经配置的 QQ/DSH/QQTK，脚本不是跨机器通用安装器。Node 依赖安装使用缓存和 `--ignore-scripts`；迁移机器前需要重新构建官方派生配置并核对路径。测试产物、配置、凭据和会话均被 Git 忽略。
 

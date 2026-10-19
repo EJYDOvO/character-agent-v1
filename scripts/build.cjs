@@ -24,7 +24,11 @@ async function main(){
  {id:'qq-remote-ops',name:'dsh-remote-ops-local',config:{root:install.replaceAll('\\','/')}},
  {id:'im-qqbot',name:'dsh-character-qq-adapter',config:{preset:settings.presetId,access:{c2cMode:'allowlist',c2cAllow:[],groupMode:'disabled',groupAllow:[]}}},character];
  write('bundles/character-core/cordis.patch.yml',dump([{insert:host}]));
- write('bundles/character-extras/cordis.patch.yml','# Optional features are separately enabled below; never owns QQ or Character preset.\n'+dump([{insert:[{id:'web-search-free',name:'dsh-free-search'},{id:'bilibili',name:'dsh-plugin-bilibili'}]}]));
+ // Extras is maintained independently from generated Core. Rebuilding a persona
+ // must neither restore former defaults nor erase reviewed optional declarations.
+ const extrasFile=root+'/bundles/character-extras/cordis.patch.yml';
+ if(!fs.existsSync(extrasFile))write('bundles/character-extras/cordis.patch.yml','# Empty optional integration layer.\n[]\n');
+ else if(!Array.isArray(yaml.load(fs.readFileSync(extrasFile,'utf8'),{schema})))throw Error('Extras patch must be a YAML sequence');
  for(const [folder,name]of [['character-identity','dsh-character-identity'],['character-memory-core','dsh-character-memory-core'],['character-memory-tools','dsh-character-memory-tools'],['character-qq-adapter','dsh-character-qq-adapter']])write('packages/'+folder+'/package.json',JSON.stringify({name,version:release,private:true,type:'module',main:'index.mjs',files:['*.mjs','LICENSE*'],engines:{node:'>=24'}},null,2)+'\n');
  for(const kind of ['core','extras'])write('bundles/character-'+kind+'/package.json',JSON.stringify({name:'dsh-character-'+kind,version:release,private:true,type:'module',dsh:{bundle:{patch:'./cordis.patch.yml'}}},null,2)+'\n');
  write('artifacts/build-manifest.json',JSON.stringify({version,workerSupported,settings,characterId:definition.definition.id,definitionRevision:definition.revision,creatorSha256:crypto.createHash('sha256').update(creatorText).digest('hex'),creatorPluginIds:creator.config.plugins.map(p=>p.id),characterPluginIds:character.config.plugins.map(p=>p.id)},null,2));

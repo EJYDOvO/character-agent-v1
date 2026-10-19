@@ -1,6 +1,6 @@
 # 运行架构与复用边界（test.8）
 
-这是源码实现说明。test.8 增加分层记忆与可选人格化，尚未部署生产；详细层次、生命周期和限制见 [分层记忆](MEMORY-LAYERS.md)。四个 Character 运行时包保留；Definition 是构建模块，Core/Extras 是项目 Bundle。
+这是源码实现说明。test.8 增加分层记忆与可选人格化；部署和验收范围见 [发布记录](RELEASE-test8.md)，详细层次、生命周期和限制见 [分层记忆](MEMORY-LAYERS.md)。四个 Character 运行时包保留；Definition 是构建模块，Core/Extras 是项目 Bundle。当前源码 Extras 是空的可选装配模板，不代表旧部署包已同步替换。
 
 | 组件 | 之前 | 现在 |
 |---|---|---|
