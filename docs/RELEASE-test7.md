@@ -1,5 +1,7 @@
 # test.7：通用依赖拆分交付
 
+> 历史记录；当前状态统一见 [STATUS.md](STATUS.md)，部署与回滚按 [INTEGRATION.md](INTEGRATION.md) 执行。
+
 日期：2026-10-19。以本机官方 DSH 0.2.0-rc.2、QQ 0.5.2 为准。Character test.7 / Remote Ops 1.1.0 已部署。官方发行文件未修改，私人角色沿用原配置。
 
 ## 已完成

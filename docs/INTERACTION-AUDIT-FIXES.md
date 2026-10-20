@@ -1,5 +1,7 @@
 # test.10 审计后的隔离修复（未发布）
 
+> 历史记录；当前状态统一见 [STATUS.md](STATUS.md)，部署与回滚按 [INTEGRATION.md](INTEGRATION.md) 执行。
+
 > 后续状态：已获用户授权，于 2026-10-20 配套部署为 test.11，见 [部署记录](RELEASE-test11.md)。以下保留部署前修复报告的时间语境；未完成的验收仍有效。
 
 2026-10-20。基于 DSH 0.2.1-rc.2、QQ Bot 0.5.2、qqbot-nodejs 1.0.5。

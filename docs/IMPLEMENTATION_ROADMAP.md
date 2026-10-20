@@ -2,15 +2,17 @@
 
 本页以 test.12 源码及隔离验证为准，对照归档 v0.7.8 的 S0–S5；不继承旧文档中的部署授权。
 
-2026-10-20 更新：见 [T01–T15 修复与验收](AUDIT-T01-T15.md)。已补充 1 万条性能基线、原生 Schedule 完整进程重启、网页实际治理操作、同模型两任务对照和保留新增记忆的回滚。完整能力 A/B、Desktop 窗口、QQ 手机审批及完整 Profile 安装门禁仍待完成。
+2026-10-20 更新：见 [当前状态与验收边界](STATUS.md)。已补充 1 万条性能基线、原生 Schedule 完整进程重启、网页实际治理操作、同模型两任务对照和保留新增记忆的回滚。完整能力 A/B、Desktop 窗口、QQ 手机审批及完整 Profile 安装门禁仍待完成。
 
 | 阶段 | 当前完成 | 剩余/未验证 |
 |---|---|---|
 | S0 环境 | 读取安装 ASAR，确认 DSH 0.2.1-rc.2 / Node 24.21.0，重新审查原生 Worker、Web、认证及工具守卫 | 其他 DSH 构建、Mac、生产变更前快照 |
-| S1 身份/装配 | 单 Owner、可撤销 Host capability、Core/Extras 分离；现有 Gateway 生命周期/ACL 回归 | 全组合生产 HMR、实机审批 |
-| S2 角色/Worker | 完整 Creator 工具基线、原生 worker-general、按需 worker-review、冷恢复及工具/Memory 越权测试 | 有执行权限的专业 Worker；同模型真实任务 A/B；真实 QQ 主代审批 |
-| S3 记忆 | L1/L2/L3、自动抽取、巩固、CAS、来源/遗忘屏障；新增授权分页/修订接口 | 推断质量长测、大库性能、旧项目记忆导入验收 |
-| S4 通知 | Schedule→outbox，去重、unknown 不重放、Owner 路由；原生到期事件隔离通过 | 手机送达/按钮、完整进程重启后的待办提醒演练 |
+| S1 身份/装配 | 单 Owner、可撤销 Host capability、固定可信项目绑定；Core/Extras 和通用模块原生启停回归 | 任务级 grants、项目管理；全组合生产 HMR、实机审批 |
+| S2 角色/Worker | 完整 Creator 工具基线、原生 worker-general、按需 worker-review、冷恢复及工具/Memory 越权测试 | 有执行权限的专业 Worker；超出既有两任务小样本的质量 A/B；真实 QQ 主代审批 |
+| S3 记忆 | L1/L2/L3、自动抽取、巩固、CAS、来源/遗忘屏障；授权分页/修订及跨 Session 检索 | 推断质量长测、大库冷重建；旧 Task Memory 只有预览，正式导入未开发；向量检索未开发 |
+| S4 通知 | Schedule→outbox，去重、unknown 不重放、Owner 路由；到期及两个 Host 进程间同 Session 重启恢复通过 | 手机送达/按钮；跨 Session 稳定目标尚未开发 |
 | S5 UI/轮换 | Inspector 原生设置页、网页/桌面连接与原生认证集成；只读路由代次接口 | 自动轮换与稳定 Schedule 目标仍阻塞，保持关闭；离线 Agent 管理后置；桌面窗口人工验收待部署授权后进行 |
 
 下一步补齐发布门禁与必要的实机测试，再考虑更细粒度 Worker 授权、大库冷重建优化和稳定 Schedule 目标。不要将未启用的自动轮换加入常规升级，也不开发主动闲聊。
+
+Mac 迁移尚无实际验收；不能复制 Windows 依赖或把活动 SQLite 放到多机同步目录。这些是路线图目标，不作为本轮架构修复必须补齐的缺陷。

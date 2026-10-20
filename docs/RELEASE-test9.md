@@ -1,5 +1,7 @@
 # test.9：DSH 0.2.1-rc.2 适配与记忆审计修复
 
+> 历史记录；当前状态统一见 [STATUS.md](STATUS.md)，部署与回滚按 [INTEGRATION.md](INTEGRATION.md) 执行。
+
 2026-10-19。本版本沿用四个运行插件与 Core/Extras，数据库仍为 Schema 3。包含 [test.8 审计修复](AUDIT-FIXES.md)，不新增记忆层级或 Worker Preset。
 
 ## 兼容改动

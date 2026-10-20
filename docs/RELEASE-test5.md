@@ -1,5 +1,7 @@
 # 0.1.0-test.5 实施与验收记录
 
+> 历史记录；当前状态统一见 [STATUS.md](STATUS.md)，部署与回滚按 [INTEGRATION.md](INTEGRATION.md) 执行。
+
 日期：2026-10-17。保留四插件、Core/Extras、构建时派生 Creator 主 Agent。生产使用 DSH 0.2.0-rc.2、QQ 0.5.2、QQTK 1.0.1；没有升级或手工修改官方 DSH 发行文件。
 
 ## 修改与实际状态

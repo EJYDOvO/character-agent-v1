@@ -1,6 +1,6 @@
 # 在其他 DSH 项目中使用
 
-当前实例已部署 **test.10** 并显式开启 Interaction，详见 [本次发布及恢复记录](RELEASE-test10.md)。下文历史验证保留原版本语境；源码默认仍不启用该可选策略。
+实例版本统一见 [当前状态](STATUS.md)；源码 test.12 候选不代表已部署。
 
 原通用化验收宿主：DSH 0.2.0-rc.2 / Node 24 / Windows。test.9 在 0.2.1-rc.2 上重新验证通用 Memory 独立身份接入及完整 Character，见 [最新记录](RELEASE-test9.md)；纯 QQ 无 Remote Ops 的独立连接组合本次未重跑。本文件不是跨版本安装保证。不要向 Profile 安装第二套 DSH 核心，保留 `autoInstallPeers: false`。所有示例路径与身份都是占位值。
 
@@ -96,9 +96,9 @@ test.9 审计修复保留契约 v1、Schema 3 和现有工具参数。Host 的 `
 | 授权 | Host Provider 配置 | 更换 scope 不自动迁移/共享旧数据；停用 Provider 不能降级成免授权 |
 | QQ | 单个 Profile 插件条目 | 停用先断开，再启动替代实例；保留 Session 和偏好文件 |
 | Remote Ops | 独立插件及其 features | 见 QQTK 通用后端文档；维护脚本不是基础 QQ 的安装前提 |
-| Character | 构建参数 + Core；Extras 可选 | 角色、代码和运行数据库分开备份；同 Schema 回滚仅还原代码/Profile |
+| Character | 构建参数 + Core；Extras 可选 | 角色、代码和运行数据库分开备份；旧运行时兼容验证后保留当前数据库，恢复配置/Profile |
 
-新版本先固定包与补丁哈希、隔离安装/验证，再在空闲和维护锁下切换。test.8 已使用 Schema 3；test.9 审计修复不再升级 Schema。回滚的数据影响以 [实际恢复流程](INTEGRATION.md#回滚) 为准，不应把“同 Schema”理解为现有回滚脚本不会恢复快照。未来 Schema 变化必须单独设计数据兼容策略。
+新版本先固定包与补丁哈希、隔离安装/验证，再在空闲和维护锁下切换。test.8 已使用 Schema 3；test.9 审计修复不再升级 Schema。回滚的数据影响以 [实际恢复流程](INTEGRATION.md#回滚) 为准，必须先验证旧运行时兼容当前库；兼容时保留新记录，不自动恢复旧快照。未来 Schema 变化必须单独设计数据兼容策略。
 
 ## 可选通用 Interaction
 

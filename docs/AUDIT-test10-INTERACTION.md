@@ -1,5 +1,7 @@
 # test.10 Interaction / QQTK 潜在 Bug 审计
 
+> 历史记录；当前状态统一见 [STATUS.md](STATUS.md)，部署与回滚按 [INTEGRATION.md](INTEGRATION.md) 执行。
+
 结论：**NO-GO，不满足下一版发布条件。** 本轮仅新增隔离测试、审计报告和入口说明，没有修复运行代码、打包发布、推送或部署。未发现已证实的 P0；下面的 P1 足以阻断发布。没有声称不存在其他缺陷。
 
 ## 基线、范围与证据等级

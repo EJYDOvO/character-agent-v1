@@ -9,6 +9,8 @@ data/
 resources/
 backups/
 reports/
+# Local-only audit narratives; durable regressions remain in tests/.
+/docs/AUDIT-T01-T15.md
 spec-v078/
 browser-profile/
 browser-output/

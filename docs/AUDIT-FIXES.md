@@ -1,5 +1,7 @@
 # test.8 审计修复（已纳入 test.9）
 
+> 历史记录；当前状态统一见 [STATUS.md](STATUS.md)，部署与回滚按 [INTEGRATION.md](INTEGRATION.md) 执行。
+
 日期：2026-10-19。基线：`ad8d295`。初次修复完成本地隔离测试；随后已打包为 test.9，完成 DSH 0.2.1-rc.2 宿主验证并部署。升级、真实模型与恢复证据见 [test.9](RELEASE-test9.md)。对应修复源码与本文一同发布；原 test.8 验收不能替代本次验证。
 
 ## 修复内容

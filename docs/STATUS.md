@@ -1,63 +1,26 @@
-# 当前增量
+# 当前状态
 
-**2026-10-20 审计增量（未部署）**：test.12 候选的遗忘读取、过期证据脱敏、L3/Jobs/分层筛选、页面并发和回滚数据保留已修复；最新矩阵、真实模型小样本与发布缺口见 [T01–T15](AUDIT-T01-T15.md)。当前安装包读取得到 Character/Core test.11，Inspector 未安装；不能把源码验收写成上线。
+本页是版本与验收状态的统一入口。历史发布记录说明当时结果，不代表最新运行状态。
 
-当前实例已部署 **test.11 / Interaction 0.1.0-test.2**，QQ 已连接、Agent 空闲，仍为 Character 人格化模式。详见 [本次发布与备份记录](RELEASE-test11.md)。下文历史验证保留原版本语境；源码默认仍不启用该可选策略。
+## 安装与源码
 
-**此前 test.9 部署记录（2026-10-19）**：DSH **0.2.1-rc.2**、Character **0.1.0-test.9**、QQ Bot **0.5.2**、Remote Ops **1.1.0**。test.8 审计修复已纳入运行包，Schema 3 保持；人格化仍为 Character，单 Owner 私聊、群聊关闭。新启动的 Character/Identity/Memory/QQ/Remote Ops/Browser 健康，QQ ready，原 QQ 会话映射逐字节保持，watchdog 恢复 running。
+2026-10-20 只读核验安装元数据：DSH **0.2.1-rc.2**，Character/Core **test.11**，Remote Ops **1.1.1-test.1**，Interaction **0.1.0-test.2**，QQ Bot **0.5.2**、SDK **1.0.5**。Inspector 未安装。本轮没有检查实时 QQ 连通状态，没有修改生产配置、数据库或重启。
 
-72/72 Character 测试、18/18 QQ/审批/维护测试通过；新版真实宿主的 Core-only/Core+Extras、跨会话记忆、原生 Schedule、真实模型提取/巩固、Compaction 和重启验证通过。替身 Sender 的结果不代表手机投递；真实 QQ 消息与按钮未重新验收。详见 [test.9](RELEASE-test9.md) 和 [修复报告](AUDIT-FIXES.md)。
+源码仍为 **test.12 候选**：包含原生分析 Worker、可选 Inspector，以及遗忘脱敏、分层筛选、异步请求和保留新增记忆的回滚修复；未部署。不可覆盖同版本不可变发布包，实际发布前需分配版本并重新打包验证。
 
-升级保存并逐文件校验离线快照，保留完整旧程序和旧 Profile。初次切换的门禁错误地要求桌面 PID 等于后台服务 PID，触发自动恢复；独立核验确认原 0.2.0-rc.2/test.8 与 QQ 已恢复正常。修正为进程树、启动时间及本次日志校验后，第二次升级通过。官方 ASAR 与已验签安装包完全一致。test.9 修复源码、测试与文档一同发布；私有配置、原始验证日志和部署数据不进入公开仓库。
+## 验证范围
 
-test.8 已经授权部署，四插件与 Core/Extras 升级，SQLite Schema 2→3、旧记忆与 Session 保留检查、生产真实模型记忆工具验收通过。初次上线使用 Off，随后经授权开启 Character 模式；同一生产 Session 的 `character_layers_status` 实际返回 `character`，QQ 与健康检查通过。源码默认值仍是 Off。手机收件/审批未验证；本次回滚是在隔离副本执行真实脚本和旧运行时，未降级生产。见 [test.8 交付记录](RELEASE-test8.md) 和 [分层记忆](MEMORY-LAYERS.md)。
+- `npm test` / `npm run test:audit` 保留安全、权限、CAS、遗忘、防数据丢失和交互回归。前一提交 `55551ff` 的 [GitHub Actions](https://github.com/EJYDOvO/character-agent-v1/actions/runs/39377065399) 已在 Linux/Windows 成功；不代表后续未提交改动的 CI 已通过。
+- 当前安装版原生宿主：Core-only、Core+Extras、普通 Creator + 独立 Identity/Core/Inspector；Extras 工具可见、停用和恢复；Inspector 独立卸载；Interaction 单独启停；Provider 撤销使依赖服务和旧 capability 失效。
+- Worker：独立 Preset/Session、晚挂载 scoped tool 守卫、伪造 Memory 授权拒绝及冷恢复。模型和 QQ Sender 使用合成替身，不证明手机投递或复杂任务质量。
+- 原生 Schedule 到期、去重与同 Session 的进程重启恢复已验证；没有稳定目标迁移或自动 Session 轮换。
+- Inspector 已在 DSH Web 设置页实际操作；Desktop 使用安装版 relay 验证，尚缺实际桌面窗口验收。
+- 100/1,000/10,000 条合成性能基线可用 `tests/inspector-benchmark.mjs` 重跑；同步 SQLite 和大库冷投影仍有阻塞，非并发服务吞吐保证。
 
-test.9 的 Extras 空模板已上线，并通过新版真实 Core+Extras 宿主检查。原搜索与 Bilibili 改由各自原生 Bundle 装配，保留配置。原生 Creator 插件安装仍写入 Profile，不自动写入 Extras。
+## 发布前仍需完成
 
-test.7 的历史通用化验收见 [RELEASE-test7.md](RELEASE-test7.md)；下文原始功能清单保留为历史基线。
+完整候选 Profile 的依赖安装/冻结锁文件、真实切换与恢复、实际 Desktop 窗口和必要的 QQ 审批验收。候选准备和哈希检查不等于安装成功；生产动作需另行授权。初始 Inspector 保持 `writable:false`。
 
----
+任务级细粒度授权、旧 Task Memory 正式导入、自动轮换及稳定 Schedule 目标、具备执行权限的专业 Worker、向量检索和 Mac 迁移均不是已交付能力。参见 [路线图](IMPLEMENTATION_ROADMAP.md)。
 
-> 本文保留 test.2 的历史边界。当前 test.5 的已验证状态、部署与回滚说明以 [RELEASE-test5.md](RELEASE-test5.md) 和 [MANAGEMENT.md](MANAGEMENT.md) 为准。
-
-# 实现与测试状态
-
-## 历史部署记录：2026-10-16
-
-自有组件 `0.1.0-test.2` 已在原部署完成启动与健康检查，官方 DSH 保持 `0.2.0-rc.2`，QQ Bot 保持 `0.5.2` 和既有补丁。这里只公布技术结论；原始生产日志、会话与请求 ID、数据库及配置留在本机，不上传。
-
-| 模块 | 状态 |
-|---|---|
-| Core/Extras | 最小装配完成，Core-only 与 Extras-on 宿主验证通过 |
-| QQ/审批 | 唯一 Gateway、Owner-only 与原审批复用；手机按钮未验 |
-| Identity | Host 可信上下文完成；固定 personal，无项目管理/Worker grants |
-| Definition | 静态 YAML 校验和构建完成，无热更新 |
-| 主 Preset | 原 Creator 33 工具保留，Character 37 工具；任务质量 A/B 未做 |
-| 独立 Worker | 当前安装版本不支持目标独立 Preset 接口，未实现 |
-| Memory | CRUD、CAS、来源、状态、遗忘、跨 Session 已验证；高级检索未做 |
-| 自动整理 | 仅有限自动捕获，无后台 LLM 巩固/合并/压缩回补 |
-| Coordinator | 路由镜像与 generation；权威路由仍为原 QQ prefs |
-| 提醒/通知 | 原 Schedule 创建/取消验证；新账本尚未统一接线 |
-| Extras | 搜索/Bilibili；浏览器和市场尚未统一管理 |
-| Inspector | 未实现 |
-| 回滚/迁移 | 离线快照哈希验证通过；生产回滚演练、跨机迁移未做 |
-
-## 历史验证的证据强度
-
-- 自有单元测试 10/10；原 QQ/审批/维护回归 16/16，后者需要外部 QQTK 环境，不包含在本仓库独立测试中。
-- 官方隔离宿主验证工具装配、记忆读写、跨会话、未绑定 Session 拒绝与原生 Schedule 创建/取消。
-- `test.1` 单次真实模型完成记忆写入、读取、遗忘、再次读取。`test.2` 修复后完成隔离回归与生产启动验证，没有再次发送真实 QQ 测试消息。
-- QQ ready 与发送无错误已观察；没有独立手机送达确认，也没有真实审批按钮点击验收。
-- 官方 ASAR 未修改。两次停机快照均逐文件校验，旧数据保留，没有把备份内容放入源码仓库。
-
-## 公开导出验证：2026-10-17
-
-历史公开副本曾重新运行 Node 单元测试。该检查不连接生产、不发送 QQ、不修改原部署。运行包源码和单元测试保持原样；脚本中的固定安装位置改为显式环境变量。当时集成/部署脚本仅做语法检查，没有在公开副本重新执行真实升级；后续实际验收见对应发布记录。
-
-## test.12 源码增量（未部署）
-
-新增原生分析 Worker 与可选 Memory Inspector；四个核心插件和空 Extras 保持。配置与权限边界见 [Worker](WORKERS.md)、[Inspector](MEMORY-INSPECTOR.md)，阶段状态及隔离测试见 [test.12](RELEASE-test12.md)。自动 Session 轮换仍关闭，旧 Schedule 不迁移。
-
-## 内嵌管理页补充验收
-
-Inspector 已替换为 DSH 原生 **设置 → 记忆管理**，不再提供独立页面。之前关于外置页面、缺少内嵌入口和浏览器操作未完成的记录，已由 [原生 UI 验收](INSPECTOR-NATIVE-UI.md) 更新。网页实际点击已通过；桌面模块装配与官方转发代码通过隔离验证，未操作生产桌面窗口。仍未部署。
+详细运行日志、截图、临时审计和模型对照记录仅留在本地忽略目录。历史版本可从 `RELEASE-test*.md` 查询，实际恢复始终使用 [当前集成说明](INTEGRATION.md)。

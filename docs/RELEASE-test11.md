@@ -1,5 +1,7 @@
 # test.11：Interaction 审计修复部署
 
+> 历史记录；当前状态统一见 [STATUS.md](STATUS.md)，部署与回滚按 [INTEGRATION.md](INTEGRATION.md) 执行。
+
 2026-10-20，本机已从 test.10 切换到 **Character 0.1.0-test.11 / Interaction 0.1.0-test.2**。DSH 保持官方 **0.2.1-rc.2**，QQ Bot **0.5.2**、SDK **1.0.5** 使用配套的两份版本化补丁。Remote Ops 仍为 **1.1.1-test.1**。未修改官方 DSH 文件。
 
 修复范围和仍有限制的行为见 [审计修复报告](INTERACTION-AUDIT-FIXES.md)。本次部署前额外处理了 Creator 的 `skill-catalog` 原生上下文注入：它和 `runtime-context` 一样不改变真实 QQ 输入登记，也不能凭自身开启 QQ 输出。

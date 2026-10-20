@@ -1,8 +1,8 @@
 # 功能管理与维护
 
-当前实例已部署 **test.10** 并显式开启 Interaction，详见 [本次发布及恢复记录](RELEASE-test10.md)。下文历史验证保留原版本语境；源码默认仍不启用该可选策略。
+实例版本统一见 [当前状态](STATUS.md)；源码 test.12 候选不代表已部署。
 
-当前本机为 DSH 0.2.1-rc.2 / test.10，包含下述分层记忆及审计修复；人格化仍为 Character。新版内置 Schedule，旧实验 Bundle 不再额外装配；已停用的旧项目记忆包和数据保留，但移除其不兼容装配。见 [最新验证与恢复记录](RELEASE-test10.md)。
+安装版本和验收范围以 [STATUS](STATUS.md) 为唯一当前入口。官方内置 Schedule 保持；旧项目记忆数据保留，但不自动导入新库。
 
 test.8 的分层记忆已完成隔离验证及授权生产部署，验证范围见 [发布记录](RELEASE-test8.md)。人格化模式、L3 预算、后台节奏和 Schema 3 回滚要求见 [分层记忆管理](MEMORY-LAYERS.md)。修改模式时必须保留完整 Identity 配置，不能只覆盖 memoryMode；旧工具名称继续兼容。
 
@@ -11,7 +11,7 @@ test.8 的分层记忆已完成隔离验证及授权生产部署，验证范围�
 | 自动记忆 | Core 配置 `character-memory-core.config.autoCapture`；Owner 可要求调用 `character_memory_status`、`character_memory_retry` | 默认开；后台每 5 秒挑选最多 4 个任务串行执行，当前 Agent 空闲才调用现有模型；45 秒超时，最多 3 次；可能产生现有模型 API 用量 |
 | 自主保存与召回 | 自然语言要求保存/回忆，使用 `character_remember` / `character_recall` | 三类 semantic/episodic/procedural；模型保存默认 uncertain；作用域来自 Host，不接受参数声明身份 |
 | 检查与纠错 | `character_inspect` / `character_correct` | 修改需当前 revision；并发冲突应重新读取，不覆盖他人的更新 |
-| 分层检查 | `character_trace` / `character_projection` / `character_layers_status` | 追溯 L1、查看本 Agent 的 L3 和后台状态；仅 test.8 |
+| 分层检查 | `character_trace` / `character_projection` / `character_layers_status` | 追溯 L1、查看本 Agent 的 L3 和后台状态；test.8 起支持 |
 | 人格化 | Identity Host 配置 `memoryMode`、`memoryAgentId` | 默认 off；assistant/character 可选；关掉不删除数据，不影响通用记忆 |
 | 跨事件巩固 | Core `consolidation`、`consolidateIntervalMs` | 默认每作用域/Agent/模式低频 6 小时；相同输入跳过；来源不足不归纳 |
 | 确认事实 | `character_confirm` | 最新 10 分钟内真实 QQ 原文需逐字包含确认词和记忆完整陈述或 ID；泛泛的“确认”不能提升任意记忆置信度 |
@@ -32,7 +32,7 @@ test.9 已部署的审计修复调整了记忆管理行为：Assistant 只管理
 
 ## Extras 与后续插件声明
 
-当前源码和本机 test.9 的 `bundles/character-extras/cordis.patch.yml` 都是空 YAML 序列 `[]`。保留 Bundle 包清单，作为额外集成的入口；不再预置搜索或 Bilibili。本机原有这两项能力迁到各自原生 Bundle，保留现有配置。构建只在文件缺失时创建空模板，已有 Extras 声明原样保留，避免角色重建覆盖后续维护内容。
+当前源码的 `bundles/character-extras/cordis.patch.yml` 都是空 YAML 序列 `[]`。保留 Bundle 包清单，作为额外集成的入口；不再预置搜索或 Bilibili。本机原有这两项能力迁到各自原生 Bundle，保留现有配置。构建只在文件缺失时创建空模板，已有 Extras 声明原样保留，避免角色重建覆盖后续维护内容。
 
 默认维护约定：本项目自有的可选插件声明放 Extras，固定角色/Identity/Memory/QQ 归 Core，密钥和 Owner 参数只放私有 Profile。外部完整 Bundle 由原生管理器装入 Profile，不复制其插入项到 Extras，也不编辑已安装的 node_modules。普通插件包还需独立安装依赖，只有 YAML 声明并不等于已安装。
 

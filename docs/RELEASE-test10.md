@@ -1,5 +1,7 @@
 # test.10：Interaction Policy V1
 
+> 历史记录；当前状态统一见 [STATUS.md](STATUS.md)，部署与回滚按 [INTEGRATION.md](INTEGRATION.md) 执行。
+
 本机 DSH 仍为官方 0.2.1-rc.2，未修改发行文件。Character test.10、Interaction 0.1.0-test.1、Remote Ops 1.1.1-test.1 与 QQ Bot 0.5.2 新版本化补丁配套部署。数据库仍为 Schema 3，无数据迁移。原角色、Character 人格化模式、Session 和单 Owner 私聊策略保留。
 
 ## 变更和管理

@@ -1,53 +1,39 @@
 # 集成、部署与恢复
 
-当前 test.11 的配套部署、备份与验收边界见 [发布记录](RELEASE-test11.md)。`pack.cjs` 与源码摘要支持 `DSH_QQTK_PROJECT` 指定独立维护源码；`prepare-host-upgrade.cjs` 现在同时准备已有 Interaction 的独立版本以及 QQ/SDK 两份补丁，并固定 SDK 1.0.5。候选必须包含匹配的 Identity、Remote Ops、锁文件和维护代码，不可只复制新版 Core。旧部署辅助脚本仍不是通用一键升级器，尤其不得直接使用旧日期的门禁报告。
+版本与部署状态统一见 [STATUS](STATUS.md)。本仓库不包含 DSH 本体，不是通用一键安装器；现有运维入口仍面向 desktop Profile、单 Owner 私聊及 QQTK 维护目录。普通 Agent 复用模块见 [REUSE](REUSE.md)。
 
-本仓库是 DSH + QQTK 上的扩展，不包含完整宿主和运维依赖。完整 Character 集成需要本机 DSH、desktop Profile 中可解析的 `js-yaml`、独立 QQTK 维护组件、Remote Ops 与版本匹配的 QQ 补丁。普通 Agent 只复用 Memory 或 QQ 时，先阅读 [REUSE.md](REUSE.md)。
+## 构建与候选准备
 
-## 使用脚本前
+通过 `DSH_INSTALL_ROOT` / `DSH_CHARACTER_PROJECT` 指定安装与源码；`DSH_QQTK_PROJECT` 指定独立 QQTK 源码。官方 DSH 文件及内置 Bundle 不手工修改。Creator/SDK 从实际安装包读取，指纹变化后必须重新构建、测试。
 
-脚本通过 `DSH_INSTALL_ROOT`、`DSH_CHARACTER_PROJECT` 定位安装和源码，但仍保留原实例的 Profile、维护目录、包名、产物命名和验收文件约定。路径参数化不代表通用安装器。先审阅 build/stage/prepare/deploy/rollback 的实际要求，为目标实例准备独立配置及恢复点，不要直接在陌生实例执行部署脚本。
+- `pack.cjs` 默认打包自有八包，分别记录版本、源码摘要和 SHA-256；`--core-only` 只打包四个核心插件及 Core Bundle。打包不等于启用，Extras 与可选组件按当前有效声明选择。
+- `prepare-deploy.cjs` / `prepare-host-upgrade.cjs` 共用依赖清单。Core 必需包必须存在；只有启用的 Inspector/Interaction 才要求本次对应产物，未启用的已安装依赖保留。启用状态按自有 Core/Extras 和 Profile 覆盖计算，不自动扫描第三方任意代码动态装配。
+- 配置选择遵循原生 patch 的替换语义，保留 `!!js` 条件但不执行。Preset 的 `config.plugins` 不能用全局子 ID 覆盖；需修改所属 Preset 声明。条件启停无法静态判定时保守保留产物，实际启停仍由 Host 决定。
+- Extras 是否启用沿用 Profile；常规准备支持 `--extras` 显式启用。第三方搜索等已有 Bundle 保留，不能因替换 Core 而被移除。专业分析 Worker 在 Core 显式声明，与 Extras 启停无关。
+- Remote Ops 不再由 Character 隐式重打包或写死版本。验证当前安装版本、Profile 的 pin、tarball 包元数据和 SHA-256 后保留相同版本；缺少 pin、哈希不符或版本不符直接失败。独立升级 QQTK 须先完成其受控升级及验收。
+- 依据安装的 QQ Bot/SDK 版本选择两份版本化补丁；两条候选路径记录相同格式的版本/哈希。补丁文件、workspace、锁文件及已安装版本必须一致。没有匹配的已审阅补丁则拒绝准备。
+- `task-memory` 声明存在则停用，已停用保持停用，缺失不报错；旧 Bundle 不重新激活。保留旧依赖与数据，不导入、不删除。
+- `--inspector` 在唯一 Profile/Extras 声明上设置 `writable:false`。Inspector 是普通插件，不会自动获得 Bundle；Core 不依赖 Inspector。
 
-构建只生成源码产物；已有同版本不可变 tarball 不应被覆盖。更改源码后使用新的发布版本、重新打包并验证当前摘要，不能沿用旧验证文件。
+候选复制旧锁文件只是安装输入。必须在隔离候选目录安装依赖、更新锁文件并完成冻结锁文件验证；部署门禁检查 specifier、安装版本、产物及 QQ/SDK patch hash，不能把准备成功当成可以切换。已有同版本产物若内容变化必须使用新版本，不能覆盖不可变包。
 
-Schema 3 的迁移工具采用复制后迁移。先在独立副本验证，再安排上线；旧 test.7 无法直接打开 Schema 3。具体数据边界见 [MEMORY-LAYERS.md](MEMORY-LAYERS.md)。
+构建参数中的角色与数据目录必须与现有绑定一致。常规准备保留原始项目/角色绑定，不把项目重写为 `personal`。切换前再次核对绑定、Profile、QQ prefs、维护策略和官方 ASAR 基线。
 
-test.9 的 [审计修复](AUDIT-FIXES.md) 保持 Schema 3，新增信息放在既有来源 JSON，不重命名 namespace 或记忆 ID。升级前仍需备份、隔离安装和新版本包；旧人格化记录不会被批量重写。回退原 test.8 虽可读取相同 Schema，却会重新带回模式隔离和召回缺陷，不是安全等价回滚。
+## 验证与切换
 
-跨宿主验证可设置 `DSH_CHARACTER_HOST_ROOT` 为解包后的官方发行目录，`DSH_INSTALL_ROOT` 保持原实例路径。构建和探针从待测宿主读 Creator/SDK，不修改官方文件。`DSH_CHARACTER_TEST_HOME` 必须位于源码 `test-data` 下，隔离结果与重启 checkpoint 随测试目录保存。
+1. `npm test`、`npm run test:audit`；原生隔离入口为 `run-inspector.ps1`、`--extras`、`--modules` 和 `run-interaction.ps1`。测试数据与结果只在 `test-data/`。
+2. 在无生产 QQ 凭据的候选中确认插件装配、Worker/ACL、Session、提醒恢复与独立启停。不要同时启动同一 QQ 应用的两套 Gateway。
+3. 实际部署另行授权，确认空闲及无待处理审批；持有维护锁，停机后制作含数据库/WAL、Session、Profile 和维护策略的一致快照。
+4. 核验当前提交的测试证据、安装后的候选及快照；单活切换后检查健康、路由、权限及真实链路。进程启动或 Sender 无错误不是手机送达证明。
 
-`prepare-host-upgrade.cjs <new-profile-name>` 生成未启动的候选：保留单 Owner 策略，处理新版内置 Schedule、已停用旧记忆声明，以及空 Extras 的可选 Bundle 迁移。它不是完整安装器；须结合官方安装包签名/哈希、离线备份、单活切换和启动验证。新旧宿主不能共用生产 QQ 同时启动。跨宿主回滚必须同时恢复完整程序、Profile 和配套数据，旧 Profile 回滚脚本不足以完成宿主降级。当前实际结果见 [test.9](RELEASE-test9.md)。
-
-修复后的 layered-host 重启基线使用 `.checkpoint-v2`，比较 ID、revision、status、fingerprint 与来源摘要。旧纯 ID checkpoint 不能证明这些字段一致；需要先用新探针完成初始运行，再执行 `--restart`。压缩执行受阻会报告 BLOCKED 且 `ok=false`，验证断言失败报告 FAIL；不得以单个旧 `ok` 或前一轮产物充当本轮验证。
-
-## 部署顺序
-
-1. 先确认目标 DSH/QQTK 版本、工具接口及唯一 Gateway。不要手工修改官方发行文件。
-2. 在本机填写 Owner 绑定和 QQ 凭据，保持一个私聊 Owner、群聊 disabled。不要将真实 binding、Profile 或环境文件加入 Git。
-3. 构建 Core（只读官方文件、写入自有产物），准备固定新版本包及候选 Profile。在无生产 QQ 凭据的隔离 Profile 先验证。`stage.cjs` 禁用 QQ/Remote Ops；集成探针使用 mock 身份。真实 QQ 探针须遵守单连接门禁并另行记录验证范围。
-4. 部署前重新确认宿主空闲、无待处理重要任务和审批；持有维护锁，停机并核实退出后备份。不要从活跃 SQLite 单独复制主文件。
-5. 核对快照与候选文件的 SHA-256、锁文件、包版本及官方发行文件完整性，再单活切换。包管理器与打包过程需遵循现有部署约定；仓库不是一键安装流程。
-6. 启动后分别核对插件 active、Preset、QQ ready、身份拒绝、审批及受控真实验收。进程已启动不等于服务健康，Sender 成功也不等于手机已收消息。
+跨宿主测试可使用 `DSH_CHARACTER_HOST_ROOT` 选择官方发行目录。整机宿主降级还涉及匹配的官方程序、运行依赖及数据格式，不能仅运行 Profile 回滚脚本。
 
 ## 回滚
 
-当前流程保存离线数据快照、previous Profile、QQ prefs、维护策略及候选记录。`rollback.ps1` 核对基线、确认空闲并停机；`rollback.cjs` 校验快照，保留较新记忆库，再恢复快照记忆库、旧 Profile、QQ prefs 和维护策略。随后启动，仍需验证健康与 QQ 就绪。
+优先禁用可选 Inspector，保留 Core 与记忆库。回退 Core 必须停机并持锁；`rollback-memory.cjs` 创建当前数据库的一致副本，用旧运行时检查 Schema、记录、修订及遗忘屏障没有改变。
 
-这是恢复到快照时间点，不是自动逆迁移。即使 Schema 相同，当前回滚脚本也会恢复快照记忆；新版写入被保留在另一份库中，不会自动合并回去。回滚前明确数据影响、保留当前状态，正确处理数据库/WAL/SHM。备份内含秘密，只能留在受控本地目录。
+兼容时恢复旧 Profile、Binding、QQ prefs 与维护策略，**当前记忆数据库和新增记录保留原位**。不兼容则拒绝自动降级；checkpoint 仅作灾难恢复资源，不能自动覆盖新版写入。历史文档中的“恢复旧快照记忆库”不再是当前流程。
 
-实际验收范围见 [RELEASE-test8.md](RELEASE-test8.md)：test.8 的回滚验证使用真实脚本、旧运行时和隔离快照副本，并非生产降级演练。不要用通用 QQTK Stage 替代 Character 的候选流程，以免重复装配 QQ/运维入口。
+Schema 相同也不代表行为安全等价：旧 Core 可能重新带回已经修复的读取缺陷。需要维持新隐私保证时，只禁用/回退 GUI，不回退修复后的 Core。
 
-`live-smoke.cjs` 会使用真实模型并可能向 Owner 发出明确测试消息，它不是离线测试。本仓库的 `npm test` 不执行该脚本。
-
-## test.12 源码增量（未部署）
-
-新增原生分析 Worker 与可选 Memory Inspector；四个核心插件和空 Extras 保持。配置与权限边界见 [Worker](WORKERS.md)、[Inspector](MEMORY-INSPECTOR.md)，阶段状态及隔离测试见 [test.12](RELEASE-test12.md)。自动 Session 轮换仍关闭，旧 Schedule 不迁移。
-
-### Inspector 原生页面
-
-安装 `dsh-memory-inspector@0.1.0-test.2` 后保留同一条 Extras/Profile 声明，从网页或桌面 **设置 → 记忆管理** 使用。包必须包含 `client.js` 与 `dsh.client` 元数据；不需要新增地址、端口或 iframe。部署仍需审批和备份，默认先只读。禁用该声明可回滚 UI，不回滚 Schema 或生产数据。原生页面与桌面代理证据见 [内嵌验收](INSPECTOR-NATIVE-UI.md)。
-# test.12 候选回滚更新
-
-最新发布门禁见 [T01–T15](AUDIT-T01-T15.md)。`pack.cjs` 记录八个自有包的独立版本、源码摘要与哈希；旧打包清单必须重建。`prepare-deploy.cjs --inspector` 使用原生插入/覆盖语义并初始设为 `writable:false`。本轮没有执行真实 Profile 切换。
-
-回退 Core 时，`rollback-memory.cjs` 在一致副本上验证旧运行时能保留 Schema、记录、修订及遗忘屏障；成功后恢复旧 Profile，**当前记忆数据库及新增数据保留原位**。不兼容时拒绝自动回退，不直接恢复 checkpoint 覆盖新记忆。停机前预检失败不会停止 Host；实际异常重启分支仍需完整隔离安装演练。以下历史集成记录中的“恢复 checkpoint 数据库”不能作为当前自动回滚行为。
+失败 Profile 切换会恢复 Profile、Binding、QQ prefs 和策略；源码和合成安装测试覆盖该路径。完整生产切换、异常启动及实际 QQ 恢复仍需专门验收。脚本不自动迁移提醒、轮换 Session、导入旧记忆或放开 Worker 权限。

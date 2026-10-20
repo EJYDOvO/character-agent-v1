@@ -2,11 +2,9 @@
 
 在 DeepSeek Harness 上运行的角色 Agent 扩展，提供私人 QQ 接入、可配置角色和带来源的长期记忆。Character 从官方 Creator Preset 构建派生，保留其工具能力；角色设定不会增加系统权限。
 
-这是测试版源码仓库，不包含 DSH 本体，也不是一键安装器。当前源码 **test.12 候选**包含原生分析 Worker 与可选 Memory Inspector；后续 [T01–T15 审计修复](docs/AUDIT-T01-T15.md)补齐遗忘读取、分层筛选、页面竞态和安全回滚，**发布门禁尚未全部完成，未部署**。现有部署记录仍为 test.11，基线是 **Windows、Node.js 24.21.0、DSH 0.2.1-rc.2、QQ Bot 0.5.2 / SDK 1.0.5 及配套 QQTK 补丁**。其他版本和平台需要重新验证。
+这是测试版源码仓库，不包含 DSH 本体，也不是一键安装器。当前源码为 **test.12 候选，未部署**；现有部署记录为 test.11。验证基线是 **Windows、Node.js 24.21.0、DSH 0.2.1-rc.2、QQ Bot 0.5.2 / SDK 1.0.5 及配套 QQTK 补丁**。其他版本和平台需要重新验证。发布门禁、安装版本及未完成事项统一见[当前状态](docs/STATUS.md)。
 
-test.10 新增可选 [Interaction Policy V1](docs/INTERACTION-POLICY.md)：自然表达、等待提示、流式气泡与安全修正。源码默认构建不启用；当前实例已显式开启。该通用插件不要求安装 Character 或 QQ。
-
-后续[隔离 Bug 审计](docs/AUDIT-test10-INTERACTION.md)发现的交付、停止、来源路由与遗忘接口问题已进行[修复及隔离复测](docs/INTERACTION-AUDIT-FIXES.md)：Character 112/112、QQTK 36/36，另有真实 SDK 与 DSH 宿主验证。修复已配套部署为 test.11；大库扫描、完整 HMR 和实机 QQ 仍有明确验收限制，不能把测试通过当成手机实际收件。
+可选 [Interaction Policy V1](docs/INTERACTION-POLICY.md) 提供自然表达、等待提示、流式气泡与安全修正。源码默认构建不启用；该通用插件不要求安装 Character 或 QQ。
 
 ## 能做什么
 
@@ -55,9 +53,7 @@ Core 和 Extras 在同一仓库，分别打包。核心仍为四个 Character �
 | 配置自然交互、等待提示、Streaming 与明确修正 | [Interaction Policy V1](docs/INTERACTION-POLICY.md) |
 | 理解依赖、可信接口和数据流 | [架构说明](docs/ARCHITECTURE.md) |
 | 准备部署、迁移或回滚 | [集成与恢复](docs/INTEGRATION.md) |
-| 判断哪些能力实际验证过 | [当前状态](docs/STATUS.md) · [test.9 验证记录](docs/RELEASE-test9.md) |
-
-test.9 包含 [test.8 审计修复](docs/AUDIT-FIXES.md)：修正模式读取、跨用途召回/冲突、短消息话题、L3 选择与测试门禁。DSH 升级适配、真实宿主测试和回滚边界见 [test.9 记录](docs/RELEASE-test9.md)。
+| 判断哪些能力实际验证过 | [当前状态](docs/STATUS.md) |
 
 ## 本地开发
 

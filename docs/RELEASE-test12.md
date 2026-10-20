@@ -1,5 +1,7 @@
 # test.12：Worker 收尾与 Memory Inspector 候选版
 
+> 历史记录；当前状态统一见 [STATUS.md](STATUS.md)，部署与回滚按 [INTEGRATION.md](INTEGRATION.md) 执行。
+
 2026-10-20。**源码已开发和隔离验证，未部署。** 本轮没有修改官方 DSH、生产配置、生产数据库或生产 Session，没有重启生产，也没有连接真实 QQ。现有上线记录仍为 test.11。
 
 ## 重新核实的接口

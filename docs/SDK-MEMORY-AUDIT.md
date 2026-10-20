@@ -1,5 +1,7 @@
 # test.8：本机 SDK 与接口核对
 
+> 历史记录；当前状态统一见 [STATUS.md](STATUS.md)，部署与回滚按 [INTEGRATION.md](INTEGRATION.md) 执行。
+
 日期：2026-10-19。以本机 DSH `0.2.0-rc.2` 的 `resources/app.asar` 为准，不以远端 master 代替已安装发行版。以下均为只读读取的归档内部路径，未修改官方发行文件。
 
 路径前缀为 `dsh/node_modules/@deepseek-ai/`：
