@@ -155,6 +155,66 @@ export class LayeredMemory extends MemoryStore {
   expire(ctx){const p=this.policy(ctx);const ids=this.db.prepare("SELECT DISTINCT l.memory_id id FROM memory_evidence l JOIN experiences e ON e.id=l.evidence_id JOIN memories m ON m.id=l.memory_id WHERE e.scope=? AND e.status='active' AND m.expires_at IS NOT NULL AND m.expires_at<=?").all(p.key,now());if(!ids.length)return;this.policy(ctx,'write');this.transaction(()=>{for(const r of ids)this.#invalidate(ctx,r.id);});}
   trace(ctx,id){const row=this.get(ctx,id),p=this.policy(ctx);const evidence=this.db.prepare('SELECT e.* FROM experiences e JOIN memory_evidence l ON l.evidence_id=e.id WHERE l.memory_id=? AND e.scope=?').all(id,p.key);return {memory:row,valid:this.#valid(row,ctx),evidence:evidence.map(e=>({...e,body:e.status==='active'?e.body:''}))};}
   inspect(ctx,id){const {row,cap}=this.#resolve(ctx,id);return {...super.inspect(cap,id),memory:this.get(ctx,id),valid:this.#valid(row,ctx),layer:2};}
+  // Inspector is a consumer of this authorized API, never of the SQLite handle.
+  browse(ctx,filter={}){
+    const p=this.policy(ctx),{layer='l2',query='',agent='',status='',kind='',from='',to='',offset=0,limit=50}=filter;
+    if(!['l1','l2','l3','jobs'].includes(layer)||typeof query!=='string'||query.length>200||!Number.isSafeInteger(offset)||offset<0||offset>100000||!Number.isSafeInteger(limit)||limit<1||limit>100)throw Error('Invalid inspector filter');
+    if(typeof agent!=='string'||agent.length>128)throw Error('Invalid Agent filter');
+    for(const date of [from,to])if(date&&(!Number.isFinite(Date.parse(date))||typeof date!=='string'))throw Error('Invalid date');
+    const matches=(r,text,at)=> (!query||text.includes(query))&&(!status||r.status===status)&&(!kind||r.kind===kind)&&(!from||at>=new Date(from).toISOString())&&(!to||at<=new Date(to).toISOString());
+    if(layer==='l3')return agent&&agent!==p.agentId?{items:[],offset:0,total:0}:{items:[this.projection(ctx)],offset:0,total:1};
+    const items=[];let total=0;
+    const append=r=>{if(total++>=offset&&items.length<limit)items.push(r);};
+    if(layer==='l1'){
+      // L1 is intentionally shared within the authorized project/user scope.
+      for(const r of this.db.prepare('SELECT * FROM experiences WHERE scope=? ORDER BY at DESC,id').iterate(p.key)){
+        if(agent&&r.agent_key!==agent)continue;
+        const body=r.status==='active'?r.body:'';
+        if(!matches(r,body,r.at))continue;
+        if(total>=offset&&items.length<limit){const links=this.db.prepare('SELECT memory_id FROM memory_evidence WHERE evidence_id=?').all(r.id).flatMap(x=>{try{return [this.get(ctx,x.memory_id).id];}catch{return [];}});append({...r,body,memories:links});}else total++;
+      }
+    }else if(layer==='jobs'){
+      for(const r of this.db.prepare('SELECT id,session,status,attempts,error,at FROM extraction_jobs WHERE scope=? ORDER BY at DESC,id').iterate(p.key))if((!agent||this.db.prepare('SELECT 1 FROM experiences WHERE scope=? AND session=? AND agent_key=? LIMIT 1').get(p.key,r.session,agent))&&matches({...r,kind:'extraction'},'',r.at))append({...r,kind:'extraction'});
+      if(!agent||agent===p.agentId)for(const r of this.db.prepare('SELECT fingerprint id,status,attempts,error,at FROM consolidation_runs WHERE scope=? AND agent_key=? AND mode=? ORDER BY at DESC').iterate(p.key,p.agentId,p.mode))if(matches({...r,kind:'consolidation'},'',r.at))append({...r,kind:'consolidation'});
+    }else{
+      // One SQL union provides chronological pagination across visible lanes.
+      const lanes=this.#lanes(ctx).map(purpose=>({purpose,scope:this.scope(this.#cap(ctx,purpose),'read')}));
+      const where=lanes.map(()=>'(principal=? AND character=? AND project=?)').join(' OR ');
+      for(const row of this.db.prepare(`SELECT * FROM memories WHERE ${where} ORDER BY updated_at DESC,id`).iterate(...lanes.flatMap(x=>x.scope))){
+        const lane=lanes.find(x=>x.scope[1]===row.character);if(!this.#visible(ctx,row,lane.purpose))continue;
+        if(agent&&(lane.purpose==='general'?!this.db.prepare('SELECT 1 FROM memory_evidence l JOIN experiences e ON e.id=l.evidence_id WHERE l.memory_id=? AND e.scope=? AND e.agent_key=? LIMIT 1').get(row.id,p.key,agent):p.agentId!==agent))continue;
+        const valid=this.#valid(row,ctx),statement=valid?row.statement:'';
+        if(!matches(row,statement,row.updated_at))continue;
+        if(total>=offset&&items.length<limit)append({...this.get(ctx,row.id),valid});else total++;
+      }
+    }
+    return {items,offset,total};
+  }
+  revisionHistory(ctx,id){
+    const {row,cap}=this.#resolve(ctx,id),root=JSON.parse(this.policy(ctx).key),lane=this.scope(cap,'read');
+    return this.db.prepare('SELECT snapshot FROM revisions WHERE id=? ORDER BY revision DESC').all(id).map(r=>{
+      const old=JSON.parse(r.snapshot),source=JSON.parse(old.source);
+      const safe=this.#valid(row,ctx)&&validStatus(old)&&!this.blocked(root,old.statement,source)&&!this.blocked(lane,old.statement,source);
+      // A retired quote is not a backdoor around forget/correction.
+      return {...old,statement:safe?old.statement:'',source:safe?old.source:'{}',redacted:!safe,restorable:safe&&old.fingerprint===row.fingerprint};
+    });
+  }
+  restoreRevision(ctx,id,targetRevision,revision,source){
+    this.policy(ctx,'write');this.evidence(ctx,source);
+    return this.transaction(()=>{
+      const {row}=this.#resolve(ctx,id);if(row.revision!==revision)throw Error('Revision conflict');
+      const old=this.revisionHistory(ctx,id).find(r=>r.revision===targetRevision);
+      if(!old?.restorable)throw Error('Retired content cannot be restored; correction requires fresh evidence');
+      // Content corrections are deliberately irreversible through history. Only
+      // still-valid same-content metadata is restorable; append a new revision.
+      this.db.prepare('UPDATE memories SET status=?,confidence=?,expires_at=?,revision=revision+1,updated_at=?,source=? WHERE id=?').run(old.status,old.confidence,old.expires_at,now(),JSON.stringify({...JSON.parse(row.source),restoredRevision:targetRevision,managementAction:source}),id);
+      this.snapshot(id);this.#clearProjection(ctx);return this.get(ctx,id);
+    });
+  }
+  inspectorStats(ctx){
+    const p=this.policy(ctx),l2=this.browse(ctx,{limit:1}).total;
+    return {schema:3,mode:p.mode,agentId:p.agentId,l1:this.db.prepare('SELECT status,count(*) count FROM experiences WHERE scope=? GROUP BY status').all(p.key),l2,l3:this.projection(ctx).refs.length,storage:{engine:'SQLite',journalMode:this.db.prepare('PRAGMA journal_mode').get().journal_mode},jobs:this.browse(ctx,{layer:'jobs',limit:1}).total};
+  }
   reconcile(ctx,eventKey){const p=this.policy(ctx,'write');return this.transaction(()=>{
     if(this.db.prepare('SELECT 1 FROM memory_checkpoints WHERE scope=? AND session=? AND event_key=?').get(p.key,ctx.sessionId,eventKey))return {duplicate:true};
     let recovered=0;for(const e of this.db.prepare("SELECT * FROM experiences WHERE scope=? AND status='active'").all(p.key)){

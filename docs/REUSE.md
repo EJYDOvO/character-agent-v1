@@ -103,3 +103,7 @@ test.9 审计修复保留契约 v1、Schema 3 和现有工具参数。Host 的 `
 ## 可选通用 Interaction
 
 `packages/interaction-policy` 可独立安装到普通 DSH Preset，不需要 Character、QQTK 或 Memory。它使用原生作用域服务、Session/流式事件与 Inbox，平台通过小型 Sender 接口接入。声明必须提供服务隔离域；详见 [安装及契约](../packages/interaction-policy/README.md)。已完成隔离与本机部署检查，Web 额外气泡/状态 UI 未实现。
+
+## test.12 源码增量（未部署）
+
+新增原生分析 Worker 与可选 Memory Inspector；四个核心插件和空 Extras 保持。配置与权限边界见 [Worker](WORKERS.md)、[Inspector](MEMORY-INSPECTOR.md)，阶段状态及隔离测试见 [test.12](RELEASE-test12.md)。自动 Session 轮换仍关闭，旧 Schedule 不迁移。

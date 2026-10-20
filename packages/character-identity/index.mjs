@@ -46,6 +46,7 @@ export function apply(ctx,config) {
   authorize:(c,a)=>identity.authorize(c,a),forSession:id=>identity.forSession(id),validateGateway,
   current(){if(!runtime)throw Error('Gateway unavailable');for(const record of runtime.manager.sessions?.values()??[]){try{return identity.forSession(record.sessionId);}catch{}}throw Error('No active trusted owner session');},
   latestInput(trusted){identity.authorize(trusted,'read');return inputs.get(trusted.sessionId);},
+  route(trusted){identity.authorize(trusted,'read');const row=db.prepare('SELECT session,generation FROM routes WHERE conversation=?').get(trusted.conversationId);return row?{conversation:trusted.conversationId,...row,automaticRotation:false,scheduleTarget:'session',blockers:['stable_schedule_target_not_migrated']}:null;},
   onIngress(fn){listeners.add(fn);return()=>listeners.delete(fn);},
   attach(value){
    if(closed||runtime)throw Error('Duplicate Character QQ gateway');validateGateway(value.config);

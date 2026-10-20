@@ -2,7 +2,7 @@
 
 在 DeepSeek Harness 上运行的角色 Agent 扩展，提供私人 QQ 接入、可配置角色和带来源的长期记忆。Character 从官方 Creator Preset 构建派生，保留其工具能力；角色设定不会增加系统权限。
 
-这是测试版源码仓库，不包含 DSH 本体，也不是一键安装器。当前 test.11 已部署于 **Windows、Node.js 24.21.0、DSH 0.2.1-rc.2、QQ Bot 0.5.2 / SDK 1.0.5 及配套 QQTK 补丁**。部署检查和隔离验证通过；当前验收边界见 [test.11 发布记录](docs/RELEASE-test11.md)。其他版本和平台需要重新验证。
+这是测试版源码仓库，不包含 DSH 本体，也不是一键安装器。当前源码 **test.12** 新增原生分析 Worker 与可选 Memory Inspector，完成隔离验证，**尚未部署**，见 [test.12 验收与限制](docs/RELEASE-test12.md)。现有部署记录仍为 test.11，基线是 **Windows、Node.js 24.21.0、DSH 0.2.1-rc.2、QQ Bot 0.5.2 / SDK 1.0.5 及配套 QQTK 补丁**。其他版本和平台需要重新验证。
 
 test.10 新增可选 [Interaction Policy V1](docs/INTERACTION-POLICY.md)：自然表达、等待提示、流式气泡与安全修正。源码默认构建不启用；当前实例已显式开启。该通用插件不要求安装 Character 或 QQ。
 
@@ -16,6 +16,8 @@ test.10 新增可选 [Interaction Policy V1](docs/INTERACTION-POLICY.md)：自�
 - **分层整理**：L1 保存可信经历，L2 提取和巩固长期记忆，L3 为每轮对话提供少量核心记忆；L0 沿用 DSH Session 与 Compaction。
 - **可选人格化**：Off / Assistant / Character 三种模式，与通用记忆共用数据库，按 Agent 隔离；模式切换同时约束历史记录读取。形成带引用的用户画像、互动约定和自身经验，不修改固定角色设定；引用存在不代表推断一定正确。
 - **提醒与维护集成**：复用官方 Schedule 和独立 QQTK，记录明确任务通知的投递状态。
+- **独立分析 Worker**：原生 Spawn/Session，Core 默认 `worker-general`，可选 `worker-review`；无执行与 Memory 权限，操作提案交回主 Agent 核验。
+- **Memory Inspector**：可选的 DSH 原生「设置 → 记忆管理」页面，网页与桌面共用客户端插件，查看分层记忆、来源、修订与后台任务，按现有治理规则确认、纠错、遗忘和恢复有效元数据。
 
 ## 仓库结构
 
@@ -30,6 +32,7 @@ packages/
   character-qq-adapter/     # Character 专用 QQ 集成
   character-definition/    # 构建时角色加载器，不是运行时插件
   interaction-policy/      # 可选通用 Agent 交互策略，独立安装和关闭
+  memory-inspector/        # 可选原生设置页，复用双端客户端、主题和 Host 认证
 characters/                # 可公开使用的示例角色
 examples/local-agent/      # 不依赖 Character Identity 的接入示例
 scripts/                   # 构建、验证、迁移与部署辅助脚本
@@ -37,7 +40,7 @@ tests/                     # 单元测试及 DSH 宿主集成探针
 docs/                      # 架构、配置、复用与发布记录
 ```
 
-Core 和 Extras 在同一仓库，分别打包。核心仍为四个 Character 运行插件；Interaction 是额外可选的通用插件，人格化没有新增插件或第二个数据库。[QQTK](https://github.com/EJYDOvO/harness-qq-toolkit-public) 独立维护，搜索、Bilibili 等第三方插件也不在本仓库内。
+Core 和 Extras 在同一仓库，分别打包。核心仍为四个 Character 运行插件；Interaction 与 Inspector 是额外可选的通用插件，人格化没有新增插件或第二个数据库。[QQTK](https://github.com/EJYDOvO/harness-qq-toolkit-public) 独立维护，搜索、Bilibili 等第三方插件也不在本仓库内。
 
 ## 从哪里开始
 
@@ -46,6 +49,9 @@ Core 和 Extras 在同一仓库，分别打包。核心仍为四个 Character �
 | 只在普通 DSH Agent 中使用记忆或 QQ | [跨项目复用](docs/REUSE.md) |
 | 配置完整 Character、私有角色或功能开关 | [功能管理](docs/MANAGEMENT.md) |
 | 理解分层记忆、人格化、预算与遗忘 | [记忆设计与配置](docs/MEMORY-LAYERS.md) |
+| 启用本机记忆管理界面 | [Memory Inspector](docs/MEMORY-INSPECTOR.md) |
+| 使用基础/专业分析 Worker | [Worker 能力与边界](docs/WORKERS.md) |
+| 查看阶段完成状态及后续计划 | [路线图](docs/IMPLEMENTATION_ROADMAP.md) |
 | 配置自然交互、等待提示、Streaming 与明确修正 | [Interaction Policy V1](docs/INTERACTION-POLICY.md) |
 | 理解依赖、可信接口和数据流 | [架构说明](docs/ARCHITECTURE.md) |
 | 准备部署、迁移或回滚 | [集成与恢复](docs/INTEGRATION.md) |
@@ -91,7 +97,7 @@ Character 保留 Creator 的插件管理工具，但安装仍受权限或审批�
 
 - 人格化默认 Off，启用由可信 Host 配置决定。记忆内容不能改变角色基础设定、ACL 或审批规则。
 - L3 默认约 1200、上限约 1500 个**估算 Token**；它是有效 L2 的摘录，不是整轮上下文预算。
-- 自动提取依赖可信入口，不扫描全部历史聊天；没有向量检索、管理 UI、独立 Worker Preset、自动 Session 轮换或主动闲聊。
+- 自动提取依赖可信入口，不扫描全部历史聊天；没有向量检索、自动 Session 轮换或主动闲聊。Inspector V1 与独立分析 Worker 已在源码实现并隔离验证，尚未上线。
 - Self Model 的存储和策略已实现，真实多轮任务形成自身认知的端到端验收仍未完成。工具正常返回不等于任务目标成功。
 - 遗忘有来源和近似内容屏障，但原会话、修订和备份可能保留旧内容；不能承诺识别所有改写。
 - QQ ready 或发送 API 成功不代表手机实际收件；单元测试通过也不代表生产功能已经验证。

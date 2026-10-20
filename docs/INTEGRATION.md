@@ -38,3 +38,11 @@ test.9 的 [审计修复](AUDIT-FIXES.md) 保持 Schema 3，新增信息放在�
 实际验收范围见 [RELEASE-test8.md](RELEASE-test8.md)：test.8 的回滚验证使用真实脚本、旧运行时和隔离快照副本，并非生产降级演练。不要用通用 QQTK Stage 替代 Character 的候选流程，以免重复装配 QQ/运维入口。
 
 `live-smoke.cjs` 会使用真实模型并可能向 Owner 发出明确测试消息，它不是离线测试。本仓库的 `npm test` 不执行该脚本。
+
+## test.12 源码增量（未部署）
+
+新增原生分析 Worker 与可选 Memory Inspector；四个核心插件和空 Extras 保持。配置与权限边界见 [Worker](WORKERS.md)、[Inspector](MEMORY-INSPECTOR.md)，阶段状态及隔离测试见 [test.12](RELEASE-test12.md)。自动 Session 轮换仍关闭，旧 Schedule 不迁移。
+
+### Inspector 原生页面
+
+安装 `dsh-memory-inspector@0.1.0-test.2` 后保留同一条 Extras/Profile 声明，从网页或桌面 **设置 → 记忆管理** 使用。包必须包含 `client.js` 与 `dsh.client` 元数据；不需要新增地址、端口或 iframe。部署仍需审批和备份，默认先只读。禁用该声明可回滚 UI，不回滚 Schema 或生产数据。原生页面与桌面代理证据见 [内嵌验收](INSPECTOR-NATIVE-UI.md)。

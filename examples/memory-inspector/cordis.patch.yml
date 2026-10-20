@@ -1,0 +1,8 @@
+# Install dsh-memory-inspector into the Profile first. Ordinary plugin, no bundled activation.
+# Requires an existing loopback Web listener, native connection auth, memoryIdentity and dshMemory.
+- insert:
+    - id: memory-inspector
+      name: dsh-memory-inspector
+      config:
+        enabled: true
+        writable: false

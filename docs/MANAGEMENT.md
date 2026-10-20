@@ -55,3 +55,9 @@ Character 构建保留官方 Creator 的 `tool-plugin-manager`。本机 DSH 0.2.
 ## 可选交互策略（test.10）
 
 test.10 提供独立 `dsh-interaction-policy`。普通 Agent 在自己的 Preset 配置；Character 可用 `DSH_CHARACTER_INTERACTION=on/off` 或私有构建配置选择。默认不增加交互条目，不改变运行中的 Agent。等待文案、阈值、流式节流与分段上限，以及安全修正和关闭方式见 [Interaction Policy](INTERACTION-POLICY.md)。
+
+## test.12 源码增量（未部署）
+
+新增原生分析 Worker 与可选 Memory Inspector；四个核心插件和空 Extras 保持。配置与权限边界见 [Worker](WORKERS.md)、[Inspector](MEMORY-INSPECTOR.md)，阶段状态及隔离测试见 [test.12](RELEASE-test12.md)。自动 Session 轮换仍关闭，旧 Schedule 不迁移。
+
+Inspector 的入口现为 DSH 网页/桌面的 **设置 → 记忆管理**。旧独立页面已移除，详细配置见 [Memory Inspector](MEMORY-INSPECTOR.md)。部署记录未变，源码候选不代表已上线。

@@ -51,3 +51,11 @@ test.7 的历史通用化验收见 [RELEASE-test7.md](RELEASE-test7.md)；下文
 ## 公开导出验证：2026-10-17
 
 历史公开副本曾重新运行 Node 单元测试。该检查不连接生产、不发送 QQ、不修改原部署。运行包源码和单元测试保持原样；脚本中的固定安装位置改为显式环境变量。当时集成/部署脚本仅做语法检查，没有在公开副本重新执行真实升级；后续实际验收见对应发布记录。
+
+## test.12 源码增量（未部署）
+
+新增原生分析 Worker 与可选 Memory Inspector；四个核心插件和空 Extras 保持。配置与权限边界见 [Worker](WORKERS.md)、[Inspector](MEMORY-INSPECTOR.md)，阶段状态及隔离测试见 [test.12](RELEASE-test12.md)。自动 Session 轮换仍关闭，旧 Schedule 不迁移。
+
+## 内嵌管理页补充验收
+
+Inspector 已替换为 DSH 原生 **设置 → 记忆管理**，不再提供独立页面。之前关于外置页面、缺少内嵌入口和浏览器操作未完成的记录，已由 [原生 UI 验收](INSPECTOR-NATIVE-UI.md) 更新。网页实际点击已通过；桌面模块装配与官方转发代码通过隔离验证，未操作生产桌面窗口。仍未部署。
