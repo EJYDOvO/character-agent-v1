@@ -46,3 +46,8 @@ test.9 的 [审计修复](AUDIT-FIXES.md) 保持 Schema 3，新增信息放在�
 ### Inspector 原生页面
 
 安装 `dsh-memory-inspector@0.1.0-test.2` 后保留同一条 Extras/Profile 声明，从网页或桌面 **设置 → 记忆管理** 使用。包必须包含 `client.js` 与 `dsh.client` 元数据；不需要新增地址、端口或 iframe。部署仍需审批和备份，默认先只读。禁用该声明可回滚 UI，不回滚 Schema 或生产数据。原生页面与桌面代理证据见 [内嵌验收](INSPECTOR-NATIVE-UI.md)。
+# test.12 候选回滚更新
+
+最新发布门禁见 [T01–T15](AUDIT-T01-T15.md)。`pack.cjs` 记录八个自有包的独立版本、源码摘要与哈希；旧打包清单必须重建。`prepare-deploy.cjs --inspector` 使用原生插入/覆盖语义并初始设为 `writable:false`。本轮没有执行真实 Profile 切换。
+
+回退 Core 时，`rollback-memory.cjs` 在一致副本上验证旧运行时能保留 Schema、记录、修订及遗忘屏障；成功后恢复旧 Profile，**当前记忆数据库及新增数据保留原位**。不兼容时拒绝自动回退，不直接恢复 checkpoint 覆盖新记忆。停机前预检失败不会停止 Host；实际异常重启分支仍需完整隔离安装演练。以下历史集成记录中的“恢复 checkpoint 数据库”不能作为当前自动回滚行为。

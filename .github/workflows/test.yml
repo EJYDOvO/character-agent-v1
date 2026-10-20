@@ -1,0 +1,32 @@
+name: Isolated regression
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Unit and security regression (no credentials or production services)
+        run: npm test
+      - name: Audit reproductions
+        if: ${{ !cancelled() }}
+        run: npm run test:audit
+      - name: Evidence metadata
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          echo "Commit: $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+          echo "Node: $(node --version)" >> "$GITHUB_STEP_SUMMARY"
+          echo "OS: $RUNNER_OS. Test counts are in the unmodified test output above." >> "$GITHUB_STEP_SUMMARY"
+          echo "DSH/SDK: not installed on hosted CI; native integration is a separate Windows gate." >> "$GITHUB_STEP_SUMMARY"

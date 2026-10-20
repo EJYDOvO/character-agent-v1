@@ -39,7 +39,7 @@ test('Inspector CAS, safe metadata restoration, correction and forget prevent hi
  assert(f.call('detail',{id:r.id}).revisions.filter(x=>x.revision<4).every(x=>x.redacted&&!x.statement&&x.source==='{}'));
  assert.throws(()=>f.call('restore',{id:r.id,revision:4,targetRevision:1}),/Retired/);
  f.call('forget',{id:r.id,revision:4});const detail=f.call('detail',{id:r.id});assert(detail.revisions.every(x=>!x.statement&&x.source==='{}'));assert(!detail.memory.statement);assert(detail.evidence.every(e=>!e.body));
- assert.equal(f.call('browse',{filter:{layer:'l3'}}).items[0].refs.length,0);
+ const empty=f.call('browse',{filter:{layer:'l3'}});assert.equal(empty.total,0);assert.deepEqual(empty.items,[]);assert.deepEqual(empty.refs,[]);
  assert.throws(()=>f.add(),/Retired|resurrect/);assert.throws(()=>f.call('confirm',{id:r.id,revision:5}),/Invalidated/);
  assert.throws(()=>controller(f.memory,f.identity)({operation:'forget',context:f.c.sessionId,id:r.id,revision:5}),/read only/);
  }finally{f.memory.close();}

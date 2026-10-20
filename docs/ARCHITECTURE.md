@@ -56,6 +56,8 @@ Core 提供 `dshMemory`，保留 `characterMemory` 服务别名。SQLite 原有 
 
 当前源码的读取先验证 Host、Agent 和形成模式，再排除退休证据，汇合可见用途做相关性排序与预算。冲突检查只在当前可见集合内进行，避免暴露另一 Agent 的私有条目。新形成的人格化来源带 `memoryPolicy`；Assistant 不读取 Character 或缺少模式标记的历史人格化记录。详细兼容边界见 [审计修复](AUDIT-FIXES.md)。
 
+test.12 审计进一步将内部可见性判断与公开脱敏分离，避免遗忘擦除公开 `source` 后反向影响内部授权。Inspector 使用授权 SQL 分页/统计，L3 Browse 按当前有效引用分页；L3 缓存只保存派生结果，每次仍授权，并按 SQLite 修改版本、外部连接变更、模式和时间失效。Schema 3 增加可重复创建索引，不新增记忆层或数据库。详见 [T01–T15](AUDIT-T01-T15.md)。
+
 身份句柄只在当前进程有效，Session 恢复后重新由 Host 确认。示例 Provider 用实际 Agent 对象、挂载的 Preset 和 WeakSet 颁发/验证句柄。它用于可信单用户本机入口，不是互联网登录或多租户认证系统。能够加载任意 Host 插件的代码属于可信计算基，插件同进程执行不构成恶意代码沙箱。
 
 ## 生命周期与单例

@@ -16,7 +16,7 @@ export function apply(ctx,config){
  ctx.llm.registerAdapter(['inspector-fixture'],new Fixture());
  let executed=0;ctx.tools.register(defineTool({name:'inspector_fixture_danger',description:'Synthetic side effect',parameters:{},output:{schema:{type:'string'},render:(_a,v)=>[{type:'text',text:v}]},execute(){executed++;return 'executed';}}));
  ctx.effect(()=>{const t=setTimeout(()=>void run(),1200);return()=>clearTimeout(t);});
- async function run(){const handles=[],report={ok:false,runId:config.runId,host:config.version,extras:config.extras,qqNetwork:false,model:'deterministic fixture',checks:[]};let release;
+ async function run(){const handles=[],report={ok:false,runId:config.runId,provenance:config.provenance,host:config.version,extras:config.extras,qqNetwork:false,model:'deterministic fixture',checks:[]};let release;
  try{
   const create=async preset=>{const h=await ctx.agents.create({sessionId:randomUUID(),agentOptions:{provider:'inspector-fixture',model:'fixture'},meta:{cwd:config.cwd,agentPreset:preset},setup:async c=>{await ctx.agentPresets.mount(c,preset);}});handles.push(h);return h.agent;};
   const parent=await create('qq-character'),base=await create('cordis');
@@ -94,6 +94,8 @@ export function apply(ctx,config){
   if(config.preview&&config.extras){
    // Disposable synthetic fixture only; never shipped in the runtime plugin.
    release=identity.attach({manager,config:{appId:'mock-app',preset:'qq-character',access:{c2cMode:'allowlist',c2cAllow:['mock-owner'],groupMode:'disabled'}},sender:{async sendMarkdown(){}}});await bind(parent);
+   const previewCapability=identity.forSession(parent.id);
+   for(let i=0;i<24;i++)memory.remember(previewCapability,{kind:'semantic',statement:'合成分页验收条目 '+String(i).padStart(2,'0')},{sessionId:parent.id,eventSeq:1000+i,messageId:'preview:'+i,origin:'direct_user',quote:'合成分页验收条目 '+i});
    ctx.webServer.register({kind:'exact',path:'/fixture-login',handler(req,res){req.url=new URL(ctx.connection.authenticatedUrl(origin+'/')).search;req.url='/'+req.url;ctx.connection.authorizeIndex(req,res);}});
    report.previewOrigin=origin;fs.writeFileSync(config.result,JSON.stringify(report,null,2));const until=Date.now()+180000;while(Date.now()<until&&!fs.existsSync(config.cwd+'/preview.done'))await sleep(250);
   }

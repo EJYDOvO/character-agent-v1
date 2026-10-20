@@ -5,6 +5,8 @@ for(const [f,h]of Object.entries(record.sealed))assert.equal(hash(record.candida
 const before=root+'/data/maintenance/character-profile-before-'+Date.now();assert(!fs.existsSync(before));
 fs.copyFileSync(root+'/data/qqbot/model-prefs.json',state+'/prefs-before.json');
 fs.copyFileSync(root+'/maintenance/plugin-policy.json',state+'/policy-before.json');
+const bindingPath=root+'/data/character/binding.json',hadBinding=fs.existsSync(bindingPath);
+if(hadBinding)fs.copyFileSync(bindingPath,state+'/binding-before.json');
 for(const target of [live,before,record.candidate])assert(path.resolve(target).startsWith(path.resolve(root+'/data')+path.sep),'Profile path outside installation data');
 record.previousProfile=before;fs.writeFileSync(state+'/candidate.json',JSON.stringify(record,null,2));
 fs.renameSync(live,before);
@@ -17,4 +19,4 @@ try{
  fs.writeFileSync(root+'/data/qqbot/model-prefs.json',JSON.stringify(prefs,null,2));
  const policy=JSON.parse(fs.readFileSync(state+'/policy-before.json','utf8'));policy.localPackages['dsh-remote-ops-local']=record.artifacts['dsh-remote-ops-local'];fs.writeFileSync(root+'/maintenance/plugin-policy.json',JSON.stringify(policy,null,2));
  record.switchedAt=new Date().toISOString();fs.writeFileSync(state+'/candidate.json',JSON.stringify(record,null,2));console.log(JSON.stringify({switched:true,previousProfile:before,oldSessionsRetained:true,newPreset:'qq-character'}));
-}catch(e){if(fs.existsSync(live))fs.renameSync(live,state+'/failed-profile-'+Date.now());fs.renameSync(before,live);fs.copyFileSync(state+'/prefs-before.json',root+'/data/qqbot/model-prefs.json');throw e;}
+}catch(e){if(fs.existsSync(live))fs.renameSync(live,state+'/failed-profile-'+Date.now());fs.renameSync(before,live);fs.copyFileSync(state+'/prefs-before.json',root+'/data/qqbot/model-prefs.json');fs.copyFileSync(state+'/policy-before.json',root+'/maintenance/plugin-policy.json');if(hadBinding)fs.copyFileSync(state+'/binding-before.json',bindingPath);else if(fs.existsSync(bindingPath))fs.renameSync(bindingPath,state+'/failed-binding-'+Date.now()+'.json');throw e;}

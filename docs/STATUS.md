@@ -1,5 +1,7 @@
 # 当前增量
 
+**2026-10-20 审计增量（未部署）**：test.12 候选的遗忘读取、过期证据脱敏、L3/Jobs/分层筛选、页面并发和回滚数据保留已修复；最新矩阵、真实模型小样本与发布缺口见 [T01–T15](AUDIT-T01-T15.md)。当前安装包读取得到 Character/Core test.11，Inspector 未安装；不能把源码验收写成上线。
+
 当前实例已部署 **test.11 / Interaction 0.1.0-test.2**，QQ 已连接、Agent 空闲，仍为 Character 人格化模式。详见 [本次发布与备份记录](RELEASE-test11.md)。下文历史验证保留原版本语境；源码默认仍不启用该可选策略。
 
 **此前 test.9 部署记录（2026-10-19）**：DSH **0.2.1-rc.2**、Character **0.1.0-test.9**、QQ Bot **0.5.2**、Remote Ops **1.1.0**。test.8 审计修复已纳入运行包，Schema 3 保持；人格化仍为 Character，单 Owner 私聊、群聊关闭。新启动的 Character/Identity/Memory/QQ/Remote Ops/Browser 健康，QQ ready，原 QQ 会话映射逐字节保持，watchdog 恢复 running。

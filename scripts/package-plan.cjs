@@ -1,0 +1,6 @@
+const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto'),assert=require('node:assert/strict');
+const folders=['packages/character-identity','packages/character-memory-core','packages/character-memory-tools','packages/character-qq-adapter','packages/interaction-policy','packages/memory-inspector','bundles/character-core','bundles/character-extras'];
+const hash=file=>crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+function inventory(project){return folders.map(folder=>{const pkg=JSON.parse(fs.readFileSync(path.join(project,folder,'package.json'))),filename=pkg.name+'-'+pkg.version+'.tgz',file=path.join(project,'artifacts/packages',filename);return {folder,name:pkg.name,version:pkg.version,filename,sha256:hash(file)};});}
+function verifiedPlan(project,sourceDigest){const manifest=JSON.parse(fs.readFileSync(path.join(project,'artifacts/package-source.json')));assert.equal(manifest.sourceDigest,sourceDigest,'Packages belong to different source; repack before deployment');const entries=inventory(project);assert.deepEqual(entries,manifest.artifacts,'Packed artifact manifest mismatch');return entries;}
+module.exports={folders,inventory,verifiedPlan};

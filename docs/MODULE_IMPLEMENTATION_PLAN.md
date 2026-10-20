@@ -1,5 +1,7 @@
 # 模块接口与维护入口
 
+最新接口细节、分层筛选语义、授权矩阵与回滚变更见 [T01–T15](AUDIT-T01-T15.md)。Inspector L3 Browse 现在返回逐条投影引用，不再返回单个投影容器；原 `projection()` 接口不变。
+
 | 模块 | 当前接口/位置 | 管理与停用 |
 |---|---|---|
 | Identity | `packages/character-identity`，memoryIdentity v1 / QQ binding / outbox；新增 `characterIdentity.route(handle)` | Core 管理；撤销绑定即撤销记忆访问 |

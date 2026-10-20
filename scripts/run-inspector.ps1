@@ -17,7 +17,8 @@ $exe=Join-Path $env:DSH_INSTALL_ROOT 'DeepSeek Harness.exe'
 $cli=Join-Path $env:DSH_INSTALL_ROOT 'resources/app.asar/dsh/node_modules/@deepseek-ai/dsh-desktop-host/lib/cli.js'
 $resolver=([Uri](Join-Path $project 'tests/inspector-sdk-resolver.mjs')).AbsoluteUri
 $p=Start-Process -FilePath $exe -ArgumentList @('--expose-internals','--import',$resolver,$cli,'--profile','inspector','--no-open','--port','0') -WorkingDirectory $run.home -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $run.home 'stdout.log') -RedirectStandardError (Join-Path $run.home 'stderr.log')
- $deadline=(Get-Date).AddSeconds(55)
+ $timeout=55;if($args -contains '--real-model-ab'){$timeout=360}
+ $deadline=(Get-Date).AddSeconds($timeout)
  while(!(Test-Path -LiteralPath $run.result) -and (Get-Date) -lt $deadline -and !$p.HasExited){Start-Sleep -Milliseconds 250;$p.Refresh()}
  if(!(Test-Path -LiteralPath $run.result)){throw 'Isolated probe timed out or failed to load; inspect private stderr.log'}
  $report=Get-Content -LiteralPath $run.result -Raw | ConvertFrom-Json

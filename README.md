@@ -2,7 +2,7 @@
 
 在 DeepSeek Harness 上运行的角色 Agent 扩展，提供私人 QQ 接入、可配置角色和带来源的长期记忆。Character 从官方 Creator Preset 构建派生，保留其工具能力；角色设定不会增加系统权限。
 
-这是测试版源码仓库，不包含 DSH 本体，也不是一键安装器。当前源码 **test.12** 新增原生分析 Worker 与可选 Memory Inspector，完成隔离验证，**尚未部署**，见 [test.12 验收与限制](docs/RELEASE-test12.md)。现有部署记录仍为 test.11，基线是 **Windows、Node.js 24.21.0、DSH 0.2.1-rc.2、QQ Bot 0.5.2 / SDK 1.0.5 及配套 QQTK 补丁**。其他版本和平台需要重新验证。
+这是测试版源码仓库，不包含 DSH 本体，也不是一键安装器。当前源码 **test.12 候选**包含原生分析 Worker 与可选 Memory Inspector；后续 [T01–T15 审计修复](docs/AUDIT-T01-T15.md)补齐遗忘读取、分层筛选、页面竞态和安全回滚，**发布门禁尚未全部完成，未部署**。现有部署记录仍为 test.11，基线是 **Windows、Node.js 24.21.0、DSH 0.2.1-rc.2、QQ Bot 0.5.2 / SDK 1.0.5 及配套 QQTK 补丁**。其他版本和平台需要重新验证。
 
 test.10 新增可选 [Interaction Policy V1](docs/INTERACTION-POLICY.md)：自然表达、等待提示、流式气泡与安全修正。源码默认构建不启用；当前实例已显式开启。该通用插件不要求安装 Character 或 QQ。
 
@@ -65,6 +65,7 @@ test.9 包含 [test.8 审计修复](docs/AUDIT-FIXES.md)：修正模式读取、
 
 ```sh
 npm test
+npm run test:audit
 ```
 
 宿主探针需要实际 DSH 环境，不能直接当作普通 Node 测试运行。真实模型、QQ 收发和审批验收也不包含在 `npm test` 中。
