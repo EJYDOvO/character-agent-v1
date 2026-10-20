@@ -22,6 +22,12 @@ export function apply(ctx,config){
   const parent=await create('qq-character'),base=await create('cordis');
   const deadline=Date.now()+5000;while(!ctx.tools.get('subagent',parent)&&Date.now()<deadline)await sleep(20);
   const baseNames=[...ctx.tools.view(base).visible.keys()],names=[...ctx.tools.view(parent).visible.keys()];assert.deepEqual(baseNames.filter(n=>!names.includes(n)),[]);assert(names.includes('character_recall'));report.checks.push('Native Creator tool/Skills/delegation parity');
+  if(config.extras){
+   assert(ctx.tools.get('extras_contract_fixture',parent),'Actual optional Bundle tool missing');
+   await ctx.get('moduleExtras').dispose();assert(!ctx.tools.get('extras_contract_fixture',parent));assert(ctx.tools.get('character_recall',parent));
+   const extra=await ctx.plugin(await import('./module-lifecycle-host.mjs'),{role:'extras'});assert(ctx.tools.get('extras_contract_fixture',parent));await extra.dispose();
+   report.checks.push('Actual Extras Bundle tool is visible to Character; disable/remount preserves Core tools');
+  }else assert(!ctx.tools.get('extras_contract_fixture',parent));
   const identity=ctx.characterIdentity,deliveries=[],manager={sessions:new Map(),async getOrCreate(){return this.record;}};
   release=identity.attach({manager,config:{appId:'mock-app',preset:'qq-character',access:{c2cMode:'allowlist',c2cAllow:['mock-owner'],groupMode:'disabled'}},sender:{async sendMarkdown(_t,text){deliveries.push(text);}}});
   const bind=async a=>{manager.record={sessionId:a.id,agent:a,agentPreset:'qq-character',scope:'c2c',peerId:'mock-owner',senderId:'mock-owner'};manager.sessions.set(a.id,manager.record);await manager.getOrCreate('c2c','mock-owner','mock-owner',{scope:'c2c',targetId:'mock-owner'});};await bind(parent);

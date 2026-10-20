@@ -1,7 +1,7 @@
 const fs=require('fs'),path=require('path'),{execFileSync}=require('child_process');const project=path.resolve(__dirname,'..'),root=require('./installation.cjs').install;
 require('./ensure-build.cjs');const output=project+'/artifacts/packages';fs.mkdirSync(output,{recursive:true});
-for(const folder of require('./package-plan.cjs').folders)execFileSync(process.execPath,[root+'/resources/runtime/pnpm/bin/pnpm.cjs','pack','--pack-destination',output],{cwd:project+'/'+folder,stdio:'inherit'});
-// Independent reviewed QQTK dependency, never a second bundled QQ gateway.
-const toolkit=process.env.DSH_QQTK_PROJECT?path.resolve(process.env.DSH_QQTK_PROJECT):root;
-execFileSync(process.execPath,[root+'/resources/runtime/pnpm/bin/pnpm.cjs','pack','--pack-destination',output],{cwd:toolkit+'/plugin-sources/dsh-remote-ops',stdio:'inherit'});
-fs.writeFileSync(project+'/artifacts/package-source.json',JSON.stringify({sourceDigest:require('./source-digest.cjs')(),artifacts:require('./package-plan.cjs').inventory(project),at:new Date().toISOString()}));
+const plan=require('./package-plan.cjs'),selected=process.argv.includes('--core-only')?plan.requiredFolders:plan.folders;
+for(const folder of selected)execFileSync(process.execPath,[root+'/resources/runtime/pnpm/bin/pnpm.cjs','pack','--pack-destination',output],{cwd:project+'/'+folder,stdio:'inherit'});
+// QQTK releases are independent. Candidate preparation retains its verified
+// installed version and hash instead of rebuilding or downgrading it implicitly.
+fs.writeFileSync(project+'/artifacts/package-source.json',JSON.stringify({sourceDigest:require('./source-digest.cjs')(),artifacts:plan.inventory(project,selected),at:new Date().toISOString()}));

@@ -6,7 +6,8 @@ class Expression{constructor(value){this.value=value;}}
 const schema=yaml.DEFAULT_SCHEMA.extend([new yaml.Type('tag:yaml.org,2002:js',{kind:'scalar',construct:v=>new Expression(v),instanceOf:Expression,represent:v=>v.value})]);
 (async()=>{
  const {workerPreset,configureWorkers}=await import('../packages/character-definition/workers.mjs');
- const home=path.join(root,'test-data','inspector-'+randomUUID()),dir=path.join(home,'profiles','inspector'),runId=randomUUID(),extras=process.argv.includes('--extras'),realModel=process.argv.includes('--real-model-ab');fs.mkdirSync(dir,{recursive:true});
+ const home=path.join(root,'test-data','inspector-'+randomUUID()),dir=path.join(home,'profiles','inspector'),runId=randomUUID(),extras=process.argv.includes('--extras'),realModel=process.argv.includes('--real-model-ab'),modules=process.argv.includes('--modules');fs.mkdirSync(dir,{recursive:true});
+ if(modules&&(extras||realModel))throw Error('--modules uses an independent ordinary Agent fixture');
  const local=p=>require('node:url').pathToFileURL(path.join(root,p)).href;
  const archive=require('./host-archive.cjs').openArchive();const version=JSON.parse(archive.read('dsh/package.json')).version;
  const creator=yaml.load(archive.read('dsh/node_modules/@deepseek-ai/dsh-web-app/presets/cordis.patch.yml'),{schema})[0].insert[0];archive.close();
@@ -22,7 +23,13 @@ const schema=yaml.DEFAULT_SCHEMA.extend([new yaml.Type('tag:yaml.org,2002:js',{k
   {id:'memory-core',name:local('packages/character-memory-core/index.mjs'),config:{database:home+'/memory.sqlite',autoCapture:true,idleMs:50,consolidation:false}},
   ...(extras?[{id:'memory-inspector',name:local('packages/memory-inspector/index.mjs'),config:{writable:true}}]:[]),
   {id:'inspector-probe',name:local(realModel?'tests/creator-ab-host.mjs':'tests/inspector-host.mjs'),config:{cwd:home,result:home+'/result.json',runId,extras,version,preview:process.argv.includes('--preview')}}];
- fs.writeFileSync(dir+'/package.json',JSON.stringify({name:'inspector-fixture',private:true,dsh:{profile:{bundles:['@deepseek-ai/dsh-base','@deepseek-ai/dsh-web-app']}}}));
+ if(modules)inserted.splice(0,inserted.length,{id:'module-contract',name:local('tests/module-lifecycle-host.mjs'),config:{cwd:home,result:home+'/result.json',runId,version}});
+ const bundles=['@deepseek-ai/dsh-base','@deepseek-ai/dsh-web-app'];
+ if(extras){
+  const extra=dir+'/node_modules/fixture-extras';fs.mkdirSync(extra,{recursive:true});fs.writeFileSync(extra+'/package.json',JSON.stringify({name:'fixture-extras',version:'1.0.0',dsh:{bundle:{patch:'./cordis.patch.yml'}}}));
+  fs.writeFileSync(extra+'/cordis.patch.yml',yaml.dump([{insert:[{id:'optional-fixture',name:local('tests/module-lifecycle-host.mjs'),config:{role:'extras'}}]}]));bundles.push('fixture-extras');
+ }
+ fs.writeFileSync(dir+'/package.json',JSON.stringify({name:'inspector-fixture',private:true,dsh:{profile:{bundles}}}));
  const rows=[{id:'session-title-llm',disabled:true},{id:'llm-pi-ai',disabled:true},{insert:inserted}];
  inserted.at(-1).config.provenance=require('./audit-evidence.cjs')();
  if(realModel){

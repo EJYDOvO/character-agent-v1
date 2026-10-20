@@ -1,7 +1,9 @@
 const fs=require('fs'),path=require('path'),crypto=require('crypto'),assert=require('assert/strict');
 const root=require('./installation.cjs').install,project=path.resolve(__dirname,'..'),state=root+'/data/maintenance/character-deploy';
 const record=JSON.parse(fs.readFileSync(state+'/candidate.json','utf8')),hash=f=>crypto.createHash('sha256').update(fs.readFileSync(f)).digest('hex');
-for(const [f,h]of Object.entries(record.baseline)){const target=f==='policy'?root+'/maintenance/plugin-policy.json':f==='prefs'?root+'/data/qqbot/model-prefs.json':f==='asar'?root+'/resources/app.asar':root+'/data/profiles/desktop/'+f;assert.equal(hash(target),h,'Baseline changed: '+f);}
+for(const [f,h]of Object.entries(record.baseline)){const target=f==='binding'?root+'/data/character/binding.json':f==='policy'?root+'/maintenance/plugin-policy.json':f==='prefs'?root+'/data/qqbot/model-prefs.json':f==='asar'?root+'/resources/app.asar':root+'/data/profiles/desktop/'+f;assert.equal(hash(target),h,'Baseline changed: '+f);}
+const yaml=require(require.resolve('js-yaml',{paths:[root+'/data/profiles/desktop']}));
+require('./deployment-plan.cjs').verifyCandidate(record.candidate,record,yaml);
 for(const p of Object.values(record.artifacts))assert.equal(hash(p.source.slice(5)),p.sha256,'Artifact changed');
 const probe=JSON.parse(fs.readFileSync(project+'/artifacts/host-probe.json','utf8'));assert(probe.ok);
 const digest=require('./source-digest.cjs')();assert.equal(digest,record.sourceDigest,'Source changed after packaging');assert.equal(probe.sourceDigest,digest,'Host probe belongs to other source');
@@ -15,6 +17,7 @@ const checkpoints=root+'/data/maintenance/character-checkpoints';const checkpoin
 for(const f of snapshot.files)assert.equal(hash(checkpoint+'/'+f.path).toUpperCase(),f.sha256,'Checkpoint integrity failure');
 assert.equal(hash(root+'/resources/app.asar').toUpperCase(),snapshot.officialAsarSha256);
 record.sealed={};for(const f of ['package.json','cordis.patch.yml','pnpm-lock.yaml','pnpm-workspace.yaml','character-artifacts.json'])record.sealed[f]=hash(record.candidate+'/'+f);
+for(const rel of Object.keys(record.patches??{}))record.sealed[rel]=hash(record.candidate+'/'+rel);
 record.checkpoint=checkpoint;record.verifiedAt=new Date().toISOString();fs.writeFileSync(state+'/candidate.json',JSON.stringify(record,null,2));
 console.log(JSON.stringify({gate:'passed',checkpointFiles:snapshot.files.length,pendingTurns:0,activeScheduleTasks:0,officialAsarUnchanged:true}));
 

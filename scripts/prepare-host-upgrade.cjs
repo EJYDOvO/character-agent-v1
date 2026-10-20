@@ -5,7 +5,7 @@ const install=require('./installation.cjs').install,project=path.resolve(__dirna
 const live=path.join(install,'data/profiles/desktop');
 const target=process.argv[2];
 assert(target&&/^[a-z][a-z0-9-]+$/.test(target)&&target!=='desktop','Supply a new candidate profile name');
-const candidate=path.join(install,'data/profiles',target),yaml=require(require.resolve('js-yaml',{paths:[live]}));
+const candidate=path.join(install,'data/profiles',target),yaml=require('./deployment-plan.cjs').entryYaml(require(require.resolve('js-yaml',{paths:[live]})));
 const hash=f=>crypto.createHash('sha256').update(fs.readFileSync(f)).digest('hex');
 assert(!fs.existsSync(candidate),'Candidate already exists');
 const archive=require('./host-archive.cjs').openArchive();let version,nativeSchedule;
@@ -14,36 +14,33 @@ require('node:child_process').execFileSync(process.execPath,[path.join(__dirname
 const release=JSON.parse(fs.readFileSync(project+'/package.json')).version;
 const manifest=JSON.parse(fs.readFileSync(live+'/package.json'));
 const rows=yaml.load(fs.readFileSync(live+'/cordis.patch.yml','utf8'));
+const plan=require('./deployment-plan.cjs'),sourceDigest=require('./source-digest.cjs')();
+const core=yaml.load(fs.readFileSync(project+'/bundles/character-core/cordis.patch.yml','utf8')),extras=yaml.load(fs.readFileSync(project+'/bundles/character-extras/cordis.patch.yml','utf8'))||[];
+const extrasEnabled=manifest.dsh.profile.bundles.includes('dsh-character-extras');
+if(process.argv.includes('--inspector'))require('./inspector-declaration.cjs')(rows,extrasEnabled?extras:[]);
+const artifacts=require('./package-plan.cjs').verifiedPlan(project,sourceDigest,plan.select({profile:rows,core,extras,extrasEnabled}));
+const remote=plan.verifiedRemote(live),patchPlan=plan.patchPlan(live,path.resolve(process.env.DSH_QQTK_PROJECT||install),yaml);
 const qq=rows.find(r=>r.id==='im-qqbot');
 assert.equal(qq?.config?.access?.c2cMode,'allowlist');assert.equal(qq.config.access.c2cAllow.length,1);assert.equal(qq.config.access.groupMode,'disabled');
-const record={at:new Date().toISOString(),runtime:version,release,candidate,baseline:{},artifacts:{}};
+const record={at:new Date().toISOString(),runtime:version,release,candidate,baseline:{},artifacts:{},sourceDigest,patches:patchPlan.patches};
 for(const f of ['package.json','pnpm-lock.yaml','pnpm-workspace.yaml','cordis.patch.yml'])record.baseline[f]=hash(live+'/'+f);
 record.officialBefore=hash(install+'/resources/app.asar');
 record.officialTarget=hash(require('./host-archive.cjs').runtimeRoot+'/resources/app.asar');
-for(const n of ['core','extras','identity','memory-core','memory-tools','qq-adapter']){
- const name='dsh-character-'+n,file=name+'-'+release+'.tgz',source=project+'/artifacts/packages/'+file,dest=install+'/plugin-packages/'+file;
+for(const pkg of artifacts){
+ const {name,filename:file,version}=pkg,source=project+'/artifacts/packages/'+file,dest=install+'/plugin-packages/'+file;
  assert(fs.existsSync(source),'Missing package '+name);
  if(fs.existsSync(dest))assert.equal(hash(source),hash(dest),'Immutable package differs');else fs.copyFileSync(source,dest);
- manifest.dependencies[name]='file:'+dest.replaceAll('\\','/');record.artifacts[name]=hash(dest);
+ manifest.dependencies[name]='file:'+dest.replaceAll('\\','/');record.artifacts[name]={source:manifest.dependencies[name],sha256:hash(dest),version};
 }
+manifest.dependencies[remote.name]=remote.source;record.artifacts[remote.name]=remote;
 if(nativeSchedule)manifest.dsh.profile.bundles=manifest.dsh.profile.bundles.filter(n=>n!=='@deepseek-ai/dsh-experimental-schedule-bundle');
-// Include the independently versioned optional policy when already installed.
-if(manifest.dependencies['dsh-interaction-policy']){
- const name='dsh-interaction-policy',v=JSON.parse(fs.readFileSync(project+'/packages/interaction-policy/package.json')).version;
- const file=name+'-'+v+'.tgz',source=project+'/artifacts/packages/'+file,dest=install+'/plugin-packages/'+file;
- if(fs.existsSync(dest))assert.equal(hash(source),hash(dest),'Immutable Interaction package differs');else fs.copyFileSync(source,dest);
- manifest.dependencies[name]='file:'+dest.replaceAll('\\','/');record.artifacts[name]=hash(dest);
-}
-const legacyMemory=rows.find(r=>r.id==='task-memory');
-if(legacyMemory?.disabled===true){
- manifest.dsh.profile.bundles=manifest.dsh.profile.bundles.filter(n=>n!=='dsh-task-memory-local');
- rows.splice(rows.indexOf(legacyMemory),1); // Retain installed dependency and all legacy data.
-}
+plan.disableLegacyMemory(rows);
+manifest.dsh.profile.bundles=manifest.dsh.profile.bundles.filter(n=>n!=='dsh-task-memory-local');
 // Retain the two existing optional capabilities through their native bundles
 // when replacing the former non-empty Extras with the user's empty template.
 const oldExtras=live+'/node_modules/dsh-character-extras/cordis.patch.yml';
 const newExtras=yaml.load(fs.readFileSync(project+'/bundles/character-extras/cordis.patch.yml','utf8'));
-if(newExtras.length===0&&fs.existsSync(oldExtras)){
+if(extrasEnabled&&newExtras.length===0&&fs.existsSync(oldExtras)){
  const old=yaml.load(fs.readFileSync(oldExtras,'utf8'));
  for(const row of old.flatMap(x=>x.insert??[])){
   assert(['dsh-free-search','dsh-plugin-bilibili'].includes(row.name),'Unrecognized old Extras entry requires review');
@@ -52,23 +49,14 @@ if(newExtras.length===0&&fs.existsSync(oldExtras)){
  }
 }
 fs.cpSync(live,candidate,{recursive:true,filter:s=>path.basename(s)!=='node_modules'});
-const toolkit=path.resolve(process.env.DSH_QQTK_PROJECT||install);
-const settings=yaml.load(fs.readFileSync(candidate+'/pnpm-workspace.yaml','utf8'));
-settings.patchedDependencies??={};record.patches={};
-for(const [name,v]of [['dsh-qqbot','0.5.2'],['qqbot-nodejs','1.0.5']]){
- const rel='patches/'+name+'@'+v+'.patch';fs.copyFileSync(toolkit+'/maintenance/'+rel,candidate+'/'+rel);
- settings.patchedDependencies['@tencent-connect/'+name+'@'+v]=rel;record.patches[rel]=hash(candidate+'/'+rel);
-}
-settings.overrides={...settings.overrides,'@tencent-connect/qqbot-nodejs':'1.0.5'};
-fs.writeFileSync(candidate+'/pnpm-workspace.yaml',yaml.dump(settings));
+fs.mkdirSync(candidate+'/patches',{recursive:true});
+for(const [rel,p]of Object.entries(patchPlan.patches))fs.copyFileSync(p.source,candidate+'/'+rel);
+fs.writeFileSync(candidate+'/pnpm-workspace.yaml',yaml.dump(patchPlan.workspace));
 fs.writeFileSync(candidate+'/package.json',JSON.stringify(manifest,null,2)+'\n');
 fs.writeFileSync(candidate+'/cordis.patch.yml',yaml.dump(rows,{noRefs:true,lineWidth:120}));
 // Rebuild pins from the exact candidate artifacts; copying an older profile's
 // manifest would make subsequent QQTK verification refer to the old release.
-const pins={};
-for(const [name,source]of Object.entries(manifest.dependencies))if((name.startsWith('dsh-character-')||['dsh-interaction-policy','dsh-remote-ops-local'].includes(name))&&source.startsWith('file:')){
- pins[name]={source,sha256:hash(source.slice(5))};
-}
+const pins={...JSON.parse(fs.readFileSync(live+'/character-artifacts.json')), ...record.artifacts};
 fs.writeFileSync(candidate+'/character-artifacts.json',JSON.stringify(pins,null,2)+'\n');
 fs.writeFileSync(candidate+'/host-upgrade.json',JSON.stringify(record,null,2)+'\n');
 console.log(JSON.stringify({prepared:true,candidate,version,release,ownerCount:1,groups:'disabled',optionalBundlesRetained:true}));
