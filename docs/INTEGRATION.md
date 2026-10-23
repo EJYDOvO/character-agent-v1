@@ -19,6 +19,8 @@
 
 构建参数中的角色与数据目录必须与现有绑定一致。常规准备保留原始项目/角色绑定，不把项目重写为 `personal`。切换前再次核对绑定、Profile、QQ prefs、维护策略和官方 ASAR 基线。
 
+切换时同步维护策略中本次全部已验证的包版本与哈希，包括新增 Inspector；未参与更新的包清单保留。只更新 Remote Ops 会使 Character 升级后的完整性检查失败。
+
 ## 验证与切换
 
 1. `npm test`、`npm run test:audit`；原生隔离入口为 `run-inspector.ps1`、`--extras`、`--modules` 和 `run-interaction.ps1`。测试数据与结果只在 `test-data/`。
