@@ -10,6 +10,16 @@ test.13 隔离验证：Character 单元/安全回归 **127 + 33 = 160**，QQTK �
 
 部署后发现并修复 Remote Ops 预热被误算为用户输入的问题：预热不改变路由、不更新用户计时，真实 QQ messageId 的入站才检查轮换。已补充单元、双进程及真实启动门禁；修正版启动验证通过。当前仅一套 QQ Gateway，插件/Preset 正常、Host 空闲、Inspector 认证访问与未登录拒绝通过；记忆完整性正常，官方 ASAR、绑定及启动前路由/计时保持不变。保留了一致性快照及旧 Profile，未执行生产回滚演练，也未发送 QQ 验收消息。
 
+### test.14 历史 Session 权限修复（已验证，待部署）
+
+完整身份只授予当前主路由，历史根仅做 Host 提醒桥接；原生工具、后挂载工具、模型请求、Memory 和长期任务创建保持拒绝。QQTK 补丁同时修复 rc.2 模型切换旧 `.events` API，并将路由/模型偏好原子持久化。只读审计可发现升级前缺失绑定；仅原生持久祖先链有证据时事务补写提醒绑定，不更改 Schedule、主路由、去重键或 Memory Schema。
+
+已完成真实 rc.2 双进程隔离验证：模型切换与重启、12h/并发轮换、缺失旧绑定恢复、合法旧提醒到达合成 Sender、历史根权限拒绝，以及未证明归属的冷恢复不消耗原任务。SQLite 补写失败/回滚、离线审计、撤销与同 Gateway 重挂载竞态有回归。模型和 Sender 为合成替身；没有真实 QQ、完整应用 HMR 或生产回滚验收。当前实例只读 Schedule 审计：2 个 inactive、0 个 active，均有可核实绑定，无补写建议；未读取生产 Memory，未修改生产数据或重新部署。
+
+本候选 Character **166/166** 单元/安全回归、QQTK **26/26** 轻量与 **34/34** 实际 SDK 边界通过，无跳过；两份补丁从上游快照干净应用并逐文件匹配。原生 Core-only、Core+Extras 的 Creator/Skills/Worker、Memory/Compaction、Schedule、Inspector/Web/桌面 relay 通过；已存活且归属不明的根也验证到期后不写收件箱、不记 lastDelivery、任务仍 active。未做真实手机投递、完整桌面 HMR 或旧运行时生产回退；模型切换写盘失败使用隔离故障注入验证。
+
+回退到未经修复的 test.13 会重新开放历史根权限，不能视为安全回滚；配套与保留数据的要求见 [回滚](INTEGRATION.md#回滚)。
+
 ### test.12 历史部署记录
 
 test.12 当时的实例：DSH **0.2.1-rc.2**，Character/Core/Extras **test.12**，Remote Ops **1.1.1-test.1**，Interaction 和 Inspector **0.1.0-test.2**，QQ Bot **0.5.2**、SDK **1.0.5**。当时完成一致性备份、冻结锁文件、切换和重启；本轮保留这些第三方版本。

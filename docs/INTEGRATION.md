@@ -43,3 +43,7 @@ Schema 相同也不代表行为安全等价：旧 Core 可能重新带回已经�
 test.13 已通过隔离验证并在本机部署，具体边界见 STATUS。QQ 生命周期开关需明确配置；备份包含 DSH_HOME/qqbot 的路由和生命周期状态、原生 Session/Schedule/storageDomain，以及 Character coordination.sqlite（含 WAL）和 Memory。原协调库新增 qq_bindings/identity_state 两张表，Memory Schema 不变。旧提醒仍绑定原 Session，不要删除旧 Session 或只复制当前主路由。
 
 长期任务必须另装可选包并启用 Extras 条目。停用/回滚前先取消不需执行的计划、等待当前工作结束并制作一致性备份；回滚不得用旧快照覆盖新增记忆或清空执行/通知账本。停用插件不自动删除计划；重新启用可能处理仍有效的逾期任务，详见 [恢复契约](../packages/long-tasks/README.md)。回滚 QQ 补丁时还须恢复匹配的 QQTK 维护源码、上游 manifest 和补丁文件，不能只切换 Profile；完整快照保留了这些文件。实际手机验收与生产回滚演练未完成。
+
+未部署的历史 Session 修复不更改数据库 Schema、任务 ID/规则或通知键，只补充可证的提醒绑定。Identity 与新增 `isCurrentSession/commitSession` 的 QQTK 补丁必须配套；旧补丁缺少契约时明确拒绝 attach，不静默降级。正式打包时分配新包版本和补丁哈希，不覆盖已发布 test.13 包。本轮只在隔离环境验证，不执行生产安装或补绑定。
+
+回退到原 test.13 会重新引入历史根完整授权缺陷，不能视为安全回滚。需保留这层安全修复，或停用 QQ 集成及相关冷恢复入口，复核后再开放；只关自动轮换不会撤销已有历史绑定。兼容性测试保留原表、Session/Schedule 与 Outbox，修复写入失败事务回滚；未验证整套旧版本的生产回滚。不可用旧 coordination/Memory 快照覆盖后续通知和记忆。

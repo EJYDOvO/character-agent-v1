@@ -1,5 +1,6 @@
 import fs from 'node:fs';import assert from 'node:assert/strict';import {randomUUID} from 'node:crypto';import {pathToFileURL} from 'node:url';
 import {verifyCompaction} from './probe-verification.mjs';
+import {managerFixture} from './qq-manager-fixture.mjs';
 const sdk=process.env.DSH_INSTALL_ROOT+'/resources/app.asar/dsh/node_modules/@deepseek-ai/';
 const {LlmAdapter,createUserMessage}=await import(pathToFileURL(sdk+'dsh-llm/lib/index.js').href);
 const {defineTool}=await import(pathToFileURL(sdk+'dsh-tools/lib/index.js').href);
@@ -28,12 +29,12 @@ export function apply(ctx,config){
    const extra=await ctx.plugin(await import('./module-lifecycle-host.mjs'),{role:'extras'});assert(ctx.tools.get('extras_contract_fixture',parent));await extra.dispose();
    report.checks.push('Actual Extras Bundle tool is visible to Character; disable/remount preserves Core tools');
   }else assert(!ctx.tools.get('extras_contract_fixture',parent));
-  const identity=ctx.characterIdentity,deliveries=[],manager={sessions:new Map(),async getOrCreate(){return this.record;}};
+  const identity=ctx.characterIdentity,deliveries=[],manager=managerFixture();
   release=identity.attach({manager,config:{appId:'mock-app',preset:'qq-character',access:{c2cMode:'allowlist',c2cAllow:['mock-owner'],groupMode:'disabled'}},sender:{async sendMarkdown(_t,text){deliveries.push(text);}}});
-  const bind=async a=>{manager.record={sessionId:a.id,agent:a,agentPreset:'qq-character',scope:'c2c',peerId:'mock-owner',senderId:'mock-owner'};manager.sessions.set(a.id,manager.record);await manager.getOrCreate('c2c','mock-owner','mock-owner',{scope:'c2c',targetId:'mock-owner'});};await bind(parent);
-  const trusted=ctx.memoryIdentity.forSession(parent.id),memory=ctx.dshMemory;
+  const bind=async a=>{manager.commit({sessionId:a.id,agent:a,agentPreset:'qq-character',scope:'c2c',peerId:'mock-owner',senderId:'mock-owner'});await manager.getOrCreate('c2c','mock-owner','mock-owner',{scope:'c2c',targetId:'mock-owner'});};await bind(parent);
+  let trusted=ctx.memoryIdentity.forSession(parent.id);const memory=ctx.dshMemory;
   const row=memory.remember(trusted,{kind:'semantic',statement:'隔离验收：优先保留错误栈并核对回滚记录。'},{sessionId:parent.id,eventSeq:1,messageId:'fixture-source',origin:'direct_user',quote:'隔离验收：优先保留错误栈并核对回滚记录。'});
-  const second=await create('qq-character');await bind(second);assert(memory.recall(ctx.memoryIdentity.forSession(second.id),'错误栈').some(r=>r.id===row.id));report.checks.push('Cross-session memory through actual Character Host capability');
+  const second=await create('qq-character');await bind(second);assert(memory.recall(ctx.memoryIdentity.forSession(second.id),'错误栈').some(r=>r.id===row.id));assert.throws(()=>memory.recall(trusted,''));await bind(parent);trusted=ctx.memoryIdentity.forSession(parent.id);report.checks.push('Cross-session memory through current Character Host capability; retired capability revoked');
   const spawn=ctx.tools.get('subagent',parent),exec={agent:parent,signal:new AbortController().signal};
   await assert.rejects(()=>spawn.execute({description:'forged',prompt:'test',agent_preset:'cordis'},exec),/agent_preset/);
   if(!config.extras)await assert.rejects(()=>spawn.execute({description:'disabled specialist',prompt:'test',agent_preset:'worker-review'},exec),/agent_preset/);
@@ -53,7 +54,7 @@ export function apply(ctx,config){
   await identity.notify(trusted,{eventId:'fixture-dedup',kind:'task_completed',text:'synthetic completion'});await identity.notify(trusted,{eventId:'fixture-dedup',kind:'task_completed',text:'synthetic completion'});assert.equal(deliveries.length,1);
   const schedule=await ctx.tools.get('schedule_create',parent).execute({title:'Isolated schedule',prompt:'fixture reminder',after_seconds:1},exec);
   const until=Date.now()+12000;while(deliveries.length<2&&Date.now()<until)await sleep(100);assert.equal(deliveries.length,2);assert(deliveries[1].startsWith('[提醒到期]'));report.checks.push('Native Schedule due → existing outbox, notification dedup');
-  assert.equal(identity.route(trusted).automaticRotation,false);assert.equal(identity.route(trusted).session,second.id);
+  assert.equal(identity.route(trusted).automaticRotation,false);assert.equal(identity.route(trusted).session,parent.id);
   await bind(parent);const inputId='extract:'+randomUUID(),inputText='每次排查故障时我都会先整理日志，再检查近期变更。';
   await manager.admitInteractionInput({message:{kind:'c2c',senderId:'mock-owner',messageId:inputId,content:inputText}});
   const extractUntil=Date.now()+12000;let extracted;while(Date.now()<extractUntil){extracted=memory.recall(trusted,'近期变更',16000).find(r=>JSON.parse(r.source).messageId===inputId);if(extracted)break;await sleep(100);}assert(extracted,'Current trusted ingress was not extracted');assert.equal(JSON.parse(extracted.source).inputOrigin,'direct_user');

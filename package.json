@@ -1,6 +1,6 @@
 {
   "name": "dsh-character-system-local",
-  "version": "0.1.0-test.13",
+  "version": "0.1.0-test.14",
   "private": true,
   "type": "module",
   "scripts": {

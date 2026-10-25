@@ -6,6 +6,8 @@
 
 可选 [Interaction Policy V1](docs/INTERACTION-POLICY.md) 提供自然表达、等待提示、流式气泡与安全修正。源码默认构建不启用；该通用插件不要求安装 Character 或 QQ。
 
+未部署的后续修复收紧历史 QQ Session：只有当前主路由获得完整身份；旧根仅由 Host 转发可信 Schedule 提醒，禁止模型、工具、Memory 与长期任务创建。提供[只读存量审计](docs/MANAGEMENT.md#历史-qq-session-与存量提醒审计源码候选)；必须配套更新 QQTK 补丁，不能单独部署 Identity。
+
 ## 能做什么
 
 - **角色配置**：通过 YAML 定义身份、表达方式、背景和边界，构建为完整 Character Preset。

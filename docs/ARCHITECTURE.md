@@ -1,4 +1,4 @@
-# 运行架构与复用边界（test.13 源码）
+# 运行架构与复用边界（test.14 源码）
 
 当前源码 test.13 在既有原生分析 Worker、Memory Inspector 上新增可选 QQ Session 生命周期和独立长期任务。隔离与当前实例部署的验收边界统一见 [STATUS](STATUS.md)。阶段对照见 [路线图](IMPLEMENTATION_ROADMAP.md)，任务契约见 [Long Tasks](../packages/long-tasks/README.md)。
 
@@ -63,6 +63,10 @@ Core 提供 `dshMemory`，保留 `characterMemory` 服务别名。SQLite 原有 
 test.12 审计进一步将内部可见性判断与公开脱敏分离，避免遗忘擦除公开 `source` 后反向影响内部授权。Inspector 使用授权 SQL 分页/统计，L3 Browse 按当前有效引用分页；L3 缓存只保存派生结果，每次仍授权，并按 SQLite 修改版本、外部连接变更、模式和时间失效。Schema 3 增加可重复创建索引，不新增记忆层或数据库。详见 [当前状态与验收边界](STATUS.md)。
 
 身份句柄只在当前进程有效，Session 恢复后重新由 Host 确认。示例 Provider 用实际 Agent 对象、挂载的 Preset 和 WeakSet 颁发/验证句柄。它用于可信单用户本机入口，不是互联网登录或多租户认证系统。能够加载任意 Host 插件的代码属于可信计算基，插件同进程执行不构成恶意代码沙箱。
+
+**历史 QQ 根修复（源码候选，尚未部署）**：`routes` 加 QQTK 当前偏好路由共同决定完整身份，`qq_bindings` 仅保存提醒归属。冷恢复不会颁发完整能力；实际 Agent plane 的原生 tool guard、pre-step/request 门禁动态查询当前 Identity，停用后保持拒绝，当前主 Agent 保留 Creator。`isCurrentSession(record)` 核对真实 manager record、持久路由的内存镜像和 Agent 注册表，异步旧请求不得把主路由改回历史根。
+
+存量审计只读原生 `schedule.catalog()` 与 `sessionPersistence.stat()`；仅从固定作用域的 `routes/qq_bindings`、QQ prefs 当前/previousSessionId 出发，沿原生持久 `parentSession` 向祖先查证，并核对 Preset 与非委派根。Preset/cwd/消息正文相同都不能单独证明归属。启动/冷恢复可事务补齐已核实的**提醒绑定**，不修改主路由、Schedule 或 Memory；并发证据变化拒绝补写。归属不明的冷恢复在原生投递确认前拒绝，保留任务；已存活的未绑定根在原生 `followup` 接入前拒绝 Schedule，避免消费 occurrence，工具及模型也被拒绝。重载扫描已有 Character 根，实际 Agent 上的门禁动态查询新 Provider；不增加 inbox、调度器或权限存储。此处不替代有权加载任意 Host 插件的可信计算基。
 
 ## 生命周期与单例
 

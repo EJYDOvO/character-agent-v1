@@ -63,3 +63,19 @@ QQ 条目可设置 `sessionLifecycle: {enabled: true, freshOnHostRestart: true, 
 独立长期任务的启用、工具/Skill、最小工具配置、状态查询和停用恢复见 [Long Tasks](../packages/long-tasks/README.md)。默认无执行工具、无主 QQ/Memory 身份；不提供主代审批。执行状态与发送状态分别查询，不能把 lastDelivery 当作完成。关闭 Extras 前先取消不需继续的长期任务；不得删除账本来强行重试。
 
 Inspector 的入口为 DSH 网页/桌面的 **设置 → 记忆管理**。详细配置见 [Memory Inspector](MEMORY-INSPECTOR.md)。部署记录未变，源码候选不代表已上线。
+
+## 历史 QQ Session 与存量提醒审计（源码候选）
+
+完整 Identity/Memory 只给当前主 QQ Session；换主根或切换模型后，旧句柄立即失效。旧根的原生提醒由 Host 按稳定 Conversation 经原 Outbox 通知，不运行模型或普通工具，不具备长期任务创建能力。历史聊天仍保留，不迁移、取消或重建原任务。无法核实归属的冷恢复明确报错并保持原任务；rc.2 不保证自动重试失败恢复，应在人工确认后使用原生管理方式处理，不能删除账本强制重发。
+
+`characterIdentity.auditSchedules()` 是 Host-only 只读检查，无 Agent 工具或浏览器入口。可离线执行 `scripts/audit-qq-schedules.mjs`：使用所选 DSH 0.2.1-rc.2 的 Electron，设置 `ELECTRON_RUN_AS_NODE=1`、绝对 `DSH_INSTALL_ROOT`，传入 `--expose-internals`，脚本参数必须显式给出：
+
+```text
+--binding <binding.json> --state <coordination.sqlite>
+--prefs <model-prefs.json> --schedule <storages/schedule.json>
+--sessions <原生sessions目录> --preset <Character-Preset-ID>
+```
+
+默认物理 Session 编码为 zstd；未压缩实例加 `--uncompressed`。脚本只装载独立的原生持久化读取后端，不启动 Profile、调度、QQ 或 Memory。输出仅含计数、任务/Session 哈希别名与异常码，不含正文、身份和凭据。退出码 0 表示一致且所有任务归属可证；2 表示存在未证明绑定、头部异常或读取期间状态变化，不是授权修复成功。其他独立任务也可能显示 `unproven`，含义仅是未证明属于本 QQ 作用域，不应因此删除或授权。
+
+离线脚本不补写任何绑定。运行时只对 Host 持久链可证明的祖先补写 `qq_bindings`，失败整批回滚；不恢复完整身份，不复投已停用任务，不更改任务 ID、规则、到期时间和通知去重 ID。审计和修复的真实启用边界见 STATUS。

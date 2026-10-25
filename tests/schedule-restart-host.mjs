@@ -1,4 +1,5 @@
 import fs from 'node:fs';import assert from 'node:assert/strict';import {randomUUID} from 'node:crypto';import {pathToFileURL} from 'node:url';
+import {managerFixture} from './qq-manager-fixture.mjs';
 const {LlmAdapter}=await import(pathToFileURL(process.env.DSH_INSTALL_ROOT+'/resources/app.asar/dsh/node_modules/@deepseek-ai/dsh-llm/lib/index.js').href);
 export const name='isolated-schedule-restart';export const inject=['agents','agentPresets','tools','llm','characterIdentity'];
 export function apply(ctx,config){
@@ -8,7 +9,7 @@ export function apply(ctx,config){
   try{const state=restart?JSON.parse(fs.readFileSync(stateFile)):null,setup=async c=>{await ctx.agentPresets.mount(c,'qq-character');};
    handle=restart?await ctx.agents.resume({resumeSessionId:state.session,setup}):await ctx.agents.create({sessionId:randomUUID(),agentOptions:{provider:'schedule-fixture',model:'fixture'},meta:{cwd:config.cwd,agentPreset:'qq-character'},setup});
    const agent=handle.agent;assert.equal(ctx.agentPresets.composedPreset(agent.ctx),'qq-character');if(state)assert.equal(agent.id,state.session);
-   const deliveries=[],record={sessionId:agent.id,agent,agentPreset:'qq-character',scope:'c2c',peerId:'mock-owner',senderId:'mock-owner'},manager={sessions:new Map([[agent.id,record]]),getOrCreate:async()=>record};
+   const deliveries=[],record={sessionId:agent.id,agent,agentPreset:'qq-character',scope:'c2c',peerId:'mock-owner',senderId:'mock-owner'},manager=managerFixture();manager.commit(record);
    release=ctx.characterIdentity.attach({manager,config:{appId:'mock-app',preset:'qq-character',access:{c2cMode:'allowlist',c2cAllow:['mock-owner'],groupMode:'disabled'}},sender:{async sendMarkdown(target,text){deliveries.push({target,text});}}});
    await manager.getOrCreate('c2c','mock-owner','mock-owner',{scope:'c2c',targetId:'mock-owner'});const capability=ctx.characterIdentity.forSession(agent.id);
    const exec={agent,signal:AbortSignal.timeout(30000)};

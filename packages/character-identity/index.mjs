@@ -1,6 +1,8 @@
 import { Identity } from './identity.mjs';
 import { scheduledEvents } from './schedule.mjs';
 import { confirmationEvidence } from './confirmation.mjs';
+import { auditBindings } from './bindings.mjs';
+import { protectSession } from './boundary.mjs';
 import { DatabaseSync } from 'node:sqlite';
 import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync } from 'node:fs';
@@ -25,19 +27,60 @@ export function apply(ctx,config) {
  db.prepare("INSERT OR IGNORE INTO identity_state VALUES('scope',?)").run(fingerprint);
  db.prepare('INSERT OR IGNORE INTO qq_bindings SELECT session,conversation,? FROM routes WHERE conversation=?').run(presetId,conversationScope.conversationId);
  db.prepare("UPDATE outbox SET status='unknown' WHERE status='sending'").run();
- let runtime,detach,closed=false,pumping=false;const listeners=new Set(),bound=new Set(),inputs=new Map();
+ let runtime,detach,closed=false,pumping=false,auditing,gatewayEpoch=0;const listeners=new Set(),bound=new Set(),inputs=new Map();
+ function isCurrentId(id){
+  if(closed||!runtime)return false;
+  const manager=runtime.manager,key=manager.sessionKey('c2c',binding.ownerId);
+  return manager.currentSessionId(key)===id&&db.prepare('SELECT session FROM routes WHERE conversation=?').get(conversationScope.conversationId)?.session===id;
+ }
+ function authorize(c,a){const trusted=identity.authorize(c,a);if(!isCurrentId(trusted.sessionId))throw Error('Historical QQ Session is not authorized');return trusted;}
+ function forSession(id){const trusted=identity.forSession(id);authorize(trusted,'read');return trusted;}
+ function hasReminderBinding(id){return !!db.prepare('SELECT 1 FROM qq_bindings WHERE session=? AND conversation=? AND preset=?').get(id,conversationScope.conversationId,presetId);}
+ function protect(agent){if(ctx.get?.('agentPresets')?.composedPreset(agent.ctx)===presetId)protectSession(agent);}
+ function evidence(){
+  const manager=runtime?.manager,key=manager?.sessionKey('c2c',binding.ownerId),prefs=manager?.modelResolver?.prefs;
+  // scope fingerprint pins routes/qq_bindings; QQ prefs and native parentSession
+  // are Host persistence. A matching Preset without this chain grants nothing.
+  if(prefs?.loadError)throw Error('QQ preferences unreadable; ownership audit blocked');
+  return {bindings:db.prepare('SELECT session FROM qq_bindings WHERE conversation=? AND preset=?').all(conversationScope.conversationId,presetId).map(r=>r.session),
+   roots:[db.prepare('SELECT session FROM routes WHERE conversation=?').get(conversationScope.conversationId)?.session,
+    manager?.currentSessionId(key),prefs?.getLifecycle(key)?.previousSessionId].filter(Boolean)};
+ }
+ async function auditSchedules(){
+  if(closed)throw Error('Identity disposed');
+  const state=evidence(),schedule=ctx.get?.('schedule'),persistence=ctx.get?.('sessionPersistence');
+  if(!schedule||!persistence)throw Error('Native Schedule/persistence audit unavailable');
+  const result=await auditBindings({...state,schedules:await schedule.catalog(),presetId,readHeader:async id=>(await persistence.stat(id))?.header});
+  return {...result,evidence:JSON.stringify(state)};
+ }
+ async function reconcile(){
+  if(auditing)return auditing;
+  auditing=(async()=>{
+   const value=runtime,epoch=gatewayEpoch,result=await auditSchedules();
+   // A concurrent rotation/reload invalidates the observation; never apply a
+   // stale audit or replace the main route. The next restore audits afresh.
+   if(closed||runtime!==value||gatewayEpoch!==epoch||JSON.stringify(evidence())!==result.evidence)throw Error('QQ ownership evidence changed during audit');
+   db.exec('BEGIN IMMEDIATE');try{for(const id of result.missing)db.prepare('INSERT OR IGNORE INTO qq_bindings VALUES(?,?,?)').run(id,conversationScope.conversationId,presetId);db.exec('COMMIT');}catch(e){db.exec('ROLLBACK');throw e;}
+   if(result.anomalies.length||result.issues.length)ctx.logger?.warn(`QQ Schedule ownership audit: ${result.rows.filter(r=>r.binding==='unproven'||r.binding==='unverifiable_binding').length} unproven tasks; ${result.missing.length} evidenced reminder bindings recovered; ${result.issues.length} header issues`);
+   return result;
+  })();try{return await auditing;}finally{auditing=undefined;}
+ }
   function validateGateway(c){if(c.appId!==binding.appId||c.preset!==presetId||c.access?.c2cMode!=='allowlist'||c.access.c2cAllow?.length!==1||c.access.c2cAllow[0]!==binding.ownerId||c.access.groupMode!=='disabled')throw Error('Owner gateway policy mismatch');}
  function bind(record){
-  const preset=record.agentPreset??ctx.get?.('agentPresets')?.composedPreset(record.agent.ctx)??record.agent.session.header?.agentPreset;
+  const preset=ctx.get?.('agentPresets')?.composedPreset(record.agent.ctx)??record.agentPreset??record.agent.session.header?.agentPreset;
    if(record.scope!=='c2c'||record.peerId!==binding.ownerId||record.senderId!==binding.ownerId||preset!==presetId)throw Error('Untrusted restored QQ record');
+  if(!runtime?.manager.isCurrentSession(record))throw Error('Superseded QQ Session admission');
+  protect(record.agent);
+  for(const id of bound)if(id!==record.sessionId){identity.revoke(id);bound.delete(id);inputs.delete(id);}
   const trusted=identity.bind({appId:binding.appId,scope:'c2c',peerId:binding.ownerId,senderId:binding.ownerId,sessionId:record.sessionId});bound.add(record.sessionId);
   db.prepare('INSERT OR IGNORE INTO qq_bindings VALUES(?,?,?)').run(record.sessionId,trusted.conversationId,presetId);
   db.prepare('INSERT INTO routes VALUES(?,?,1) ON CONFLICT(conversation) DO UPDATE SET generation=generation+CASE WHEN session!=excluded.session THEN 1 ELSE 0 END,session=excluded.session').run(trusted.conversationId,record.sessionId);return trusted;
  }
  function restoreBinding(agent){
-  if(closed||!db.prepare('SELECT 1 FROM qq_bindings WHERE session=? AND conversation=? AND preset=?').get(agent.id,conversationScope.conversationId,presetId))return;
-  if(ctx.get?.('agentPresets')?.composedPreset(agent.ctx)!==presetId)throw Error('Restored QQ Schedule preset mismatch');
-  identity.bind({appId:binding.appId,scope:'c2c',peerId:binding.ownerId,senderId:binding.ownerId,sessionId:agent.id});bound.add(agent.id);
+  if(closed)return;protect(agent);
+  // Persisted bindings authorize only the Host reminder bridge. Full identity
+  // must be issued by current, live QQ manager admission, never cold restore.
+  if(hasReminderBinding(agent.id)&&ctx.get?.('agentPresets')?.composedPreset(agent.ctx)!==presetId)throw Error('Restored QQ Schedule preset mismatch');
  }
  async function pump(){
   if(closed||!runtime||pumping)return;pumping=true;
@@ -56,35 +99,39 @@ export function apply(ctx,config) {
   db.prepare("INSERT OR IGNORE INTO outbox VALUES(?,?,?,?, 'pending',?)").run(eventId,kind,conversation,text,new Date().toISOString());
  }
  const service=Object.freeze({
-  authorize:(c,a)=>identity.authorize(c,a),forSession:id=>identity.forSession(id),validateGateway,
+  authorize,forSession,validateGateway,
+  isCurrentAgent(agent){return !!agent&&ctx.get?.('agents')?.get(agent.id)===agent&&isCurrentId(agent.id)&&!!forSession(agent.id);},
+  canDeliverReminder(agent){return !closed&&!!agent&&ctx.get?.('agents')?.get(agent.id)===agent&&ctx.get?.('agentPresets')?.composedPreset(agent.ctx)===presetId&&hasReminderBinding(agent.id);},
+  auditSchedules:async()=>{const {evidence:_,...report}=await auditSchedules();return report;},
   // Host-only stable scope descriptors are not Memory capabilities.
   conversationScope:()=>conversationScope,
   validateConversation(scope){if(closed||['principalId','characterId','projectId','conversationId'].some(k=>scope?.[k]!==conversationScope[k]))throw Error('Foreign task conversation');return conversationScope;},
-  current(){if(!runtime)throw Error('Gateway unavailable');for(const record of runtime.manager.sessions?.values()??[]){try{return identity.forSession(record.sessionId);}catch{}}throw Error('No active trusted owner session');},
-  latestInput(trusted){identity.authorize(trusted,'read');return inputs.get(trusted.sessionId);},
-  route(trusted){identity.authorize(trusted,'read');const row=db.prepare('SELECT session,generation FROM routes WHERE conversation=?').get(trusted.conversationId);return row?{conversation:trusted.conversationId,...row,automaticRotation:runtime?.config?.sessionLifecycle?.enabled===true,scheduleTarget:'original_session',blockers:[]}:null;},
+  current(){if(!runtime)throw Error('Gateway unavailable');for(const record of runtime.manager.sessions?.values()??[]){try{return forSession(record.sessionId);}catch{}}throw Error('No active trusted owner session');},
+  latestInput(trusted){authorize(trusted,'read');return inputs.get(trusted.sessionId);},
+  route(trusted){authorize(trusted,'read');const row=db.prepare('SELECT session,generation FROM routes WHERE conversation=?').get(trusted.conversationId);return row?{conversation:trusted.conversationId,...row,automaticRotation:runtime?.config?.sessionLifecycle?.enabled===true,scheduleTarget:'original_session',blockers:[]}:null;},
   onIngress(fn){listeners.add(fn);return()=>listeners.delete(fn);},
   attach(value){
    if(closed||runtime)throw Error('Duplicate Character QQ gateway');validateGateway(value.config);
-   runtime=value;const manager=value.manager,original=manager.getOrCreate,rebuild=manager.rebuildSession;
+   const manager=value.manager;if(!['sessionKey','currentSessionId','isCurrentSession'].every(k=>typeof manager[k]==='function'))throw Error('QQTK current-session admission patch required');
+   runtime=value;const epoch=++gatewayEpoch,original=manager.getOrCreate,rebuild=manager.rebuildSession;
    const wrap=async function(scope,peerId,senderId,target){
-    if(runtime!==value||scope!=='c2c'||peerId!==binding.ownerId||senderId!==binding.ownerId||target?.scope!=='c2c'||target.targetId!==binding.ownerId)throw Error('Owner-only gateway');
-    const record=await original.call(this,scope,peerId,senderId,target);if(runtime!==value)throw Error('Gateway detached during restore');bind(record);return record;
+    if(runtime!==value||gatewayEpoch!==epoch||scope!=='c2c'||peerId!==binding.ownerId||senderId!==binding.ownerId||target?.scope!=='c2c'||target.targetId!==binding.ownerId)throw Error('Owner-only gateway');
+    const record=await original.call(this,scope,peerId,senderId,target);if(runtime!==value||gatewayEpoch!==epoch)throw Error('Gateway detached during restore');bind(record);return record;
    };
    manager.getOrCreate=wrap;
-   if(rebuild)manager.rebuildSession=async function(record,options){const old=record.sessionId;const result=await rebuild.call(this,record,options);identity.revoke(old);bound.delete(old);if(runtime===value&&manager.sessions?.get(record.sessionKey)===record)bind(record);return result;};
+   if(rebuild)manager.rebuildSession=async function(record,options){const old=record.sessionId;const result=await rebuild.call(this,record,options);if(runtime!==value||gatewayEpoch!==epoch)throw Error('Gateway detached during model switch');identity.revoke(old);bound.delete(old);if(manager.sessions?.get(record.sessionKey)===record)bind(record);return result;};
    try{for(const record of manager.sessions?.values()??[])bind(record);for(const row of db.prepare('SELECT session FROM qq_bindings WHERE conversation=?').all(conversationScope.conversationId)){const agent=ctx.get?.('agents')?.get(row.session);if(agent)restoreBinding(agent);}}catch(e){manager.getOrCreate=original;manager.rebuildSession=rebuild;runtime=undefined;identity.clear();bound.clear();throw e;}
    // Shared trusted ingress for the ordinary pipeline and explicit correction.
    // The early correction adapter must not bypass Owner binding or L1 evidence.
    const previousAdmission=manager.admitInteractionInput,previousScheduleBridge=manager.preserveScheduledSession;
-   const preserve=id=>!!db.prepare('SELECT 1 FROM qq_bindings WHERE session=? AND conversation=? AND preset=?').get(id,conversationScope.conversationId,presetId);
+   const preserve=id=>!closed&&hasReminderBinding(id);
    manager.preserveScheduledSession=preserve;
    const admit=async m=>{
-    if(runtime!==value)throw Error('Gateway detached');
+    if(runtime!==value||gatewayEpoch!==epoch)throw Error('Gateway detached');
     const msg=m.message;
     if(msg.kind!=='c2c'||msg.senderId!==binding.ownerId)throw Error('Owner ingress required');
     const record=await manager.getOrCreate('c2c',binding.ownerId,binding.ownerId,{scope:'c2c',targetId:binding.ownerId,msgId:msg.messageId});
-    const trusted=identity.forSession(record.sessionId);
+    const trusted=forSession(record.sessionId);
     if(typeof msg.content==='string'&&msg.content.trim()&&msg.messageId){
      const evidence=Object.freeze({sessionId:record.sessionId,eventSeq:record.agent.session.seq,origin:'direct_user',receivedAt:Date.now(),messageId:msg.messageId,text:msg.content.slice(0,8000)});
      inputs.set(record.sessionId,evidence);
@@ -94,10 +141,10 @@ export function apply(ctx,config) {
    };
    manager.admitInteractionInput=admit;
    if(value.bot){let slot=ingressSlots.get(value.bot);if(!slot){slot={};ingressSlots.set(value.bot,slot);value.bot.use(async(m,next)=>{if(!slot.admit)throw Error('Character ingress detached');await slot.admit(m);return next();});}slot.admit=admit;}
-   detach=()=>{if(runtime!==value)return;runtime=undefined;const slot=value.bot&&ingressSlots.get(value.bot);if(slot?.admit===admit)slot.admit=null;if(manager.admitInteractionInput===admit){if(previousAdmission===undefined)delete manager.admitInteractionInput;else manager.admitInteractionInput=previousAdmission;}if(manager.preserveScheduledSession===preserve){if(previousScheduleBridge===undefined)delete manager.preserveScheduledSession;else manager.preserveScheduledSession=previousScheduleBridge;}if(manager.getOrCreate===wrap)manager.getOrCreate=original;if(rebuild)manager.rebuildSession=rebuild;identity.clear();bound.clear();inputs.clear();};
-   void pump();return detach;
+   detach=()=>{if(runtime!==value||gatewayEpoch!==epoch)return;runtime=undefined;gatewayEpoch++;const slot=value.bot&&ingressSlots.get(value.bot);if(slot?.admit===admit)slot.admit=null;if(manager.admitInteractionInput===admit){if(previousAdmission===undefined)delete manager.admitInteractionInput;else manager.admitInteractionInput=previousAdmission;}if(manager.preserveScheduledSession===preserve){if(previousScheduleBridge===undefined)delete manager.preserveScheduledSession;else manager.preserveScheduledSession=previousScheduleBridge;}if(manager.getOrCreate===wrap)manager.getOrCreate=original;if(rebuild)manager.rebuildSession=rebuild;identity.clear();bound.clear();inputs.clear();};
+   void reconcile().catch(()=>ctx.logger?.warn('QQ Schedule ownership audit blocked; unproven Sessions remain unauthorized'));void pump();return detach;
   },
-  async notify(trusted,event){identity.authorize(trusted,'send');enqueue({...event,conversation:trusted.conversationId});await pump();return db.prepare('SELECT status FROM outbox WHERE id=?').get(event.eventId);},
+  async notify(trusted,event){authorize(trusted,'send');enqueue({...event,conversation:trusted.conversationId});await pump();return db.prepare('SELECT status FROM outbox WHERE id=?').get(event.eventId);},
   async notifySystem({eventId,kind,text,target}){
    if(!runtime||target.scope!=='c2c'||target.targetId!==binding.ownerId)throw Error('Owner notification required');
    // Existing QQTK ledger provides stable event text (maintenance job id / task status).
@@ -107,25 +154,44 @@ export function apply(ctx,config) {
   },
   async notifyConversation(scope,event){service.validateConversation(scope);if(typeof event.eventId!=='string'||!event.eventId.startsWith('long-task:'))throw Error('Stable task event id required');enqueue({...event,conversation:conversationScope.conversationId});await pump();return db.prepare('SELECT status FROM outbox WHERE id=?').get(event.eventId);},
   notificationStatus(scope,id){service.validateConversation(scope);return db.prepare('SELECT status FROM outbox WHERE id=? AND conversation=?').get(id,conversationScope.conversationId)?.status??null;},
-  inspect(trusted){identity.authorize(trusted,'read');return db.prepare('SELECT id,kind,status,at FROM outbox WHERE conversation=? ORDER BY at DESC LIMIT 30').all(trusted.conversationId);},
-  cancel(trusted,eventId){identity.authorize(trusted,'write');return db.prepare("UPDATE outbox SET status='cancelled' WHERE id=? AND conversation=? AND status='pending'").run(eventId,trusted.conversationId).changes===1;}
+  inspect(trusted){authorize(trusted,'read');return db.prepare('SELECT id,kind,status,at FROM outbox WHERE conversation=? ORDER BY at DESC LIMIT 30').all(trusted.conversationId);},
+  cancel(trusted,eventId){authorize(trusted,'write');return db.prepare("UPDATE outbox SET status='cancelled' WHERE id=? AND conversation=? AND status='pending'").run(eventId,trusted.conversationId).changes===1;}
  });
- // Old reminder roots stay trusted but never replace the current main route.
- ctx.on?.('agent/created',({agent})=>restoreBinding(agent));
+ // Retired/unknown Character roots cannot run tools or an LLM, including Web
+ // followups. Cold Schedule recovery only installs the fail-closed boundary.
+ ctx.on?.('agent/created',async({agent,source})=>{
+  restoreBinding(agent);
+  if(!closed&&ctx.get?.('agentPresets')?.composedPreset(agent.ctx)===presetId&&!hasReminderBinding(agent.id)){
+   await reconcile().catch(()=>{});
+   // Native Schedule awaits resume before inbox/receipt publication. Refusing
+   // an unproven cold root preserves the original active task, rather than
+   // consuming its occurrence and merely rejecting the subsequent model step.
+   if(source==='resume'&&!hasReminderBinding(agent.id))throw Error('Unproven QQ reminder Session: cold recovery blocked; inspect ownership audit');
+  }
+ });
  ctx.on?.('agent/disposed',({agent})=>{identity.revoke(agent.id);bound.delete(agent.id);inputs.delete(agent.id);});
  ctx.on?.('session/event',(session,event)=>{
-  const messages=event.type==='user/message'?[event.data]:event.type==='agent/inbox/spliced'?event.data?.inserted??[]:[];
+  const messages=event.type==='user/message'?[event.data?.message??event.data]:event.type==='agent/inbox/spliced'?event.data?.inserted??[]:[];
   for(const message of messages){if(message?.source?.kind!=='schedule')continue;
-   try{const trusted=identity.forSession(session.header.id);for(const notification of scheduledEvents(message))void service.notify(trusted,notification).catch(()=>ctx.logger?.warn('Schedule notification deferred'));}catch{ctx.logger?.warn('Schedule notification requires a bound owner and supported host framing');}}
+   void (async()=>{try{
+    const id=session.header.id,agent=ctx.get?.('agents')?.get(id);
+    if(!agent||agent.session!==session||ctx.get?.('agentPresets')?.composedPreset(agent.ctx)!==presetId)throw Error('Untrusted reminder root');
+    if(!hasReminderBinding(id))await reconcile();
+    if(closed||!hasReminderBinding(id))throw Error('Unproven reminder ownership');
+    for(const notification of scheduledEvents(message))enqueue({...notification,conversation:conversationScope.conversationId});await pump();
+   }catch{ctx.logger?.warn('Schedule notification blocked: ownership or native framing not verified');}})();}
  });
  ctx.provide('characterIdentity',service);
+ // HMR may retain roots created by a previous provider, including legacy
+ // roots missing qq_bindings. Guard all actual Character roots, not just rows.
+ for(const agent of ctx.get?.('agents')?.list?.()??[])restoreBinding(agent);
   ctx.provide('memoryIdentity',Object.freeze({
    contractVersion:1,
-   authorize(c,a){const trusted=identity.authorize(c,a);return Object.freeze({...trusted,namespaceId:trusted.characterId,agentId:config.memoryAgentId??presetId,memoryMode:config.memoryMode??'off',l3Tokens:config.l3Tokens});},
-   forSession:id=>identity.forSession(id),
+   authorize(c,a){const trusted=authorize(c,a);return Object.freeze({...trusted,namespaceId:trusted.characterId,agentId:config.memoryAgentId??presetId,memoryMode:config.memoryMode??'off',l3Tokens:config.l3Tokens});},
+   forSession,
    current(scope){const trusted=service.current();if(scope&&JSON.stringify([trusted.principalId,trusted.characterId,trusted.projectId])!==JSON.stringify(scope))throw Error('No current session for memory scope');return trusted;},
    onEvidence:fn=>service.onIngress(fn),
-   confirmationEvidence(c,{memory,quote}){identity.authorize(c,'write');return confirmationEvidence(service.latestInput(c),memory,quote);}
+   confirmationEvidence(c,{memory,quote}){authorize(c,'write');return confirmationEvidence(service.latestInput(c),memory,quote);}
   }));
  ctx.effect(()=>{const timer=setInterval(()=>void pump(),5000);return()=>{clearInterval(timer);detach?.();closed=true;identity.clear();listeners.clear();db.close();};});
 }

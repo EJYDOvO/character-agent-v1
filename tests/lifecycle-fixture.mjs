@@ -7,7 +7,9 @@ export const inject=['llm',...Tasks.inject];
 export async function apply(ctx,config){
  const control={waiting:false,release(){}};
  globalThis[Symbol.for('fixture.tasks.read.calls')]=0;
+ globalThis[Symbol.for('fixture.tasks.llm.calls')]=0;
  class Fixture extends LlmAdapter{async *stream(request){
+  globalThis[Symbol.for('fixture.tasks.llm.calls')]++;
   const input=JSON.stringify(request.messages.filter(m=>m.role==='user')),tool=request.messages.some(m=>m.role==='tool');
   const name=input.includes('owner-busy-fixture')?'task_fixture_wait':input.includes('read-tool-fixture')?'task_fixture_read':null;
   if(name&&!tool){yield {type:'tool-call-delta',index:0,id:'fixture-call',name,argumentsDelta:'{}'};yield {type:'finish',reason:{kind:'stop'}};return;}
