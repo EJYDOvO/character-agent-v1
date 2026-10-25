@@ -4,9 +4,11 @@
 
 ## 安装与源码
 
-**当前实例 test.14 已部署**：Character 四插件及 Core/Extras 为 `0.1.0-test.14`，配套 QQTK 权限/模型切换补丁已安装，DSH 保持 `0.2.1-rc.2`。代码提交 Character `fca7b48`、QQTK `33d1216`；其后文档提交仅记录部署状态。已持维护锁完成空闲门禁、270 文件校验快照及候选切换，旧 Profile 与检查点保留本机。
+**当前实例 test.14 + Interaction test.3 已部署**：Character 四插件及 Core/Extras 保持 `0.1.0-test.14`，Interaction 为 `0.1.0-test.3`，配套 QQTK 补丁已更新，DSH 保持 `0.2.1-rc.2`。本次回复修复提交 Character `1c4f40e`、QQTK `72866b6`；test.14 权限修复继续保留。已持维护锁完成空闲门禁、273 文件校验快照及候选切换，旧 Profile 与检查点保留本机。
 
-启动检查：新宿主健康且空闲、单 QQ ready，Identity/Memory/QQ/Remote Ops/Inspector 活跃；10 条记忆及修订、绑定、官方 ASAR、无用户入站时的路由/计时保持不变。Inspector 继续 `writable:false`、人格化 Character；只读存量审计仍为 2 个 inactive、0 active，均有可信绑定。没有发送 QQ 测试消息，不等于手机收件验收。回退未经修复的 test.13 会恢复权限缺陷，须遵守下述安全回滚边界。
+启动检查：新宿主健康且空闲、单 QQ ready，Identity/Memory/QQ/Remote Ops/Inspector 活跃；记忆及修订、绑定、官方 ASAR、无用户入站时的路由/计时保持不变。Inspector 继续 `writable:false`、人格化 Character。本轮没有触发提醒或发送 QQ 测试消息，不等于手机收件验收。回退未经修复的 test.13 会恢复权限缺陷，须遵守下述安全回滚边界。
+
+2026-10-26 回复修复：原生 `time-context` / `agent-instructions` 不再被误当作其他渠道输入而关闭 QQ 输出；Interaction 和 QQ 适配器同步分类，后台、Web 与取消隔离仍保留。Character **169/169**、QQTK **27/27 + 30/30** 自动回归通过；实际候选包 Core-only/Core+Extras、模块启停、双进程生命周期及含原生时间投影的 Interaction 隔离验收通过。模型/Sender 为合成替身，实际手机收件待验收。补丁从上游快照应用后 15 文件与源码一致，部署后安装代码哈希一致；冻结锁文件校验通过。修复未涉及搜索策略或记忆 Schema。回滚须配套恢复 Interaction、QQ 补丁及维护快照，旧 test.14 组合会重新带回吞回复问题。
 
 ### test.13 历史部署记录
 
