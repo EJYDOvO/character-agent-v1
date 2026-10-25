@@ -141,7 +141,9 @@ export class Interaction {
     const d=event.data??{};
     if(event.type==='user/message'){
       const incoming=d.message??d;
-      if(['runtime-context','skill-catalog'].includes(incoming.source?.kind))return;
+      // Host projections do not change admission, consume an input ticket, or
+      // revive canceled/background output. Keep QQ's context classification in sync.
+      if(['runtime-context','skill-catalog','time-context','agent-instructions'].includes(incoming.source?.kind))return;
       if(this.transport?.requireIngress){
         const message=incoming,key=message?.id??message,admitted=this.inputs?.get(key);
         this.inputs?.delete(key);

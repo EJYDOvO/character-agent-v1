@@ -26,6 +26,8 @@ Host 适配器通过 `ctx.agentPresets.serviceFor(agent, 'interactionPolicy')` �
 
 输出适配器收到 `session/event` 时可调用 `policy.event(event)`，同一事件对象会去重。插件自身消费原生事件和 `agent/assistant-stream`；适配器接管 assistant 输出后须阻止原通道重复发送。不要同时保留两套出站处理器输出同一回复。
 
+`bind` 设置 `requireIngress: true` 时，可信平台入口必须先用 `admitInput(nativeUserMessage)` 登记输入。DSH 的 `runtime-context`、`skill-catalog`、`time-context`、`agent-instructions` 是上下文投影，不切换输入来源、不消耗登记，也不恢复后台或已取消的输出。适配器必须采用相同分类；这些来源本身不提供身份或 QQ 投递权限。
+
 明确用户修正由可信入口构建原生 UserMessage 后调用 `policy.revise(message)`。该方法不是模型工具：纯生成阶段调用原生 cancel（保留 Inbox）并 followup；已请求工具或阶段不确定时只 steer。`stopOutput()` 仅抑制未发送的显示内容，平台仍须调用原生 `/stop` 或 cancel。它不能回滚工具副作用。
 
 完整边界、配置、测试和 Character/QQ 接入见 [Interaction 文档](../../docs/INTERACTION-POLICY.md)。

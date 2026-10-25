@@ -10,7 +10,7 @@ const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 export function apply(ctx,config){
  let toolStarted=false,toolAborted=false,releaseTool;const toolGate=new Promise(r=>releaseTool=r);
  class Provider extends LlmAdapter{async *stream(request){
-  const users=request.messages.filter(m=>m.role==='user'),text=JSON.stringify(users.at(-1)?.content??[]);
+  const users=request.messages.filter(m=>m.role==='user'&&m.source?.kind==='user'),text=JSON.stringify(users.at(-1)?.content??[]);
   if(text.includes('tool-case')&&!request.messages.some(m=>m.role==='tool')){
    yield {type:'text-delta',index:0,text:'嗯，我先检查。'};
    yield {type:'tool-call-delta',index:1,id:'fixture-call',name:'interaction_fixture',argumentsDelta:'{}'};
@@ -58,6 +58,8 @@ export function apply(ctx,config){
    const input=text=>{const message=createUserMessage({content:[{type:'text',text}],source:{kind:'user'}});manager.registerInteractionInput(record,message);return message;};
    const send=async text=>{a.followup(input(text));await a.whenIdle();await p.idle();};
    await send('chat-case');assert.deepEqual(bubbles.map(b=>b.text),['嗯，今天还不错。','咖啡机终于修好了。']);assert(bubbles.every(b=>b.done));assert(!sent.length);
+   assert(Array.from({length:a.session.seq},(_,i)=>a.session.eventAt(i)).some(e=>e?.type==='user/message'&&(e.data?.message??e.data)?.source?.kind==='time-context'),'Native time-context projection must actually run');
+   report.checks.push('Official time-context projection preserves trusted QQ admission and reply delivery');
    report.checks.push('Actual native assistant-stream frames produce ordered bubbles, durable settlement does not duplicate');
    await send('slow-case');assert.equal(sent.filter(x=>x.t==='还在处理中，稍等一下。').length,1);
    assert(!JSON.stringify(Array.from({length:a.session.seq},(_,i)=>a.session.eventAt(i))).includes('还在处理中，稍等一下。'));

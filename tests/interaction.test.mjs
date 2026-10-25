@@ -81,3 +81,33 @@ test('plugin lifecycle does not consume serial Agent creation and revokes dispos
  assert.equal(listeners.get('agent/created')({agent}),undefined);assert(service.get(agent));assert.throws(()=>service.get({session:agent.session}));
  await listeners.get('agent/disposed')({agent});assert.throws(()=>service.get(agent));for(const fn of clean)await fn();
 });
+
+for(const requireIngress of [false,true])test(`native Host context preserves the current input and stream (requireIngress=${requireIngress})`,async()=>{
+ const f=fixture();f.transport.requireIngress=requireIngress;f.p.bind(f.transport);
+ try{
+  f.event('turn/start',{turn:1});const input={id:'qq-input',source:{kind:'user'}};
+  if(requireIngress)f.p.admitInput(input);f.event('user/message',input);
+  for(const kind of ['agent-instructions','runtime-context','skill-catalog','time-context']){
+   f.event('user/message',{message:{id:kind,source:{kind}}});assert.equal(f.p.background,false);
+  }
+  f.p.text('已经发送的前缀');await f.advance(11);
+  f.event('tool/call',{callId:'search'});
+  f.event('user/message',{id:'refreshed-time',source:{kind:'time-context'}});
+  f.event('tool/result',{message:{source:{callId:'search'}}});
+  f.message('已经发送的前缀，还有完整结果');f.event('turn/end',{reason:{kind:'completed'}});await f.p.idle();
+  assert.equal(f.bubbles.map(b=>b.text).join(''),'已经发送的前缀，还有完整结果');assert(f.bubbles.every(b=>b.closed));
+ }finally{await f.p.dispose();}
+});
+
+test('Host context cannot admit background/Web input or revive canceled output',async()=>{
+ for(const origin of ['none','web','schedule','user','unknown','cancel']){
+  const f=fixture();f.transport.requireIngress=true;f.p.bind(f.transport);
+  try{
+   f.event('turn/start');
+   if(origin==='cancel'){const input={id:'admitted',source:{kind:'user'}};f.p.admitInput(input);f.event('user/message',input);f.p.stopOutput();}
+   else if(origin!=='none')f.event('user/message',{id:'not-admitted',source:{kind:origin}});
+   for(const kind of ['agent-instructions','runtime-context','skill-catalog','time-context'])f.event('user/message',{source:{kind}});
+   f.chunk('不应发送');f.message('不应发送');await f.advance(100);assert.deepEqual(f.sent,[],origin);
+  }finally{await f.p.dispose();}
+ }
+});
