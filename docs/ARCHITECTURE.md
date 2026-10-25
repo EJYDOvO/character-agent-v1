@@ -1,6 +1,6 @@
 # 运行架构与复用边界（test.14 源码）
 
-当前源码 test.13 在既有原生分析 Worker、Memory Inspector 上新增可选 QQ Session 生命周期和独立长期任务。隔离与当前实例部署的验收边界统一见 [STATUS](STATUS.md)。阶段对照见 [路线图](IMPLEMENTATION_ROADMAP.md)，任务契约见 [Long Tasks](../packages/long-tasks/README.md)。
+test.13 在既有原生分析 Worker、Memory Inspector 上引入可选 QQ Session 生命周期和独立长期任务；test.14 收紧历史根权限并补充存量提醒审计。隔离与当前实例部署的验收边界统一见 [STATUS](STATUS.md)。阶段对照见 [路线图](IMPLEMENTATION_ROADMAP.md)，任务契约见 [Long Tasks](../packages/long-tasks/README.md)。
 
 新增 Worker 使用官方 `subagent` 的 `agentPreset / allowedAgentPresets` 和 `spawn`，Core 自带 `worker-general`；执行守卫位于现有 Memory Tools 包的独立入口，不增加自定义 Spawn 或 Agent Loop。主 Character 保留完整 Creator。Inspector 是额外可选双端插件：原生 `dsh.client` 将 React 页面注册到 `settings.section`，复用 DSH 导航、组件与主题；通过原生 Connection RPC 访问有界 Host API，Host 复用 `webServer` 与 `connection.admit()`，经认证后调用 Core 的授权 API，浏览器不能直连 SQLite 或指定可信主体。四个核心插件与可选 Extras 边界保持；详见 [Worker](WORKERS.md) 和 [Inspector](MEMORY-INSPECTOR.md)。
 
@@ -64,7 +64,7 @@ test.12 审计进一步将内部可见性判断与公开脱敏分离，避免遗
 
 身份句柄只在当前进程有效，Session 恢复后重新由 Host 确认。示例 Provider 用实际 Agent 对象、挂载的 Preset 和 WeakSet 颁发/验证句柄。它用于可信单用户本机入口，不是互联网登录或多租户认证系统。能够加载任意 Host 插件的代码属于可信计算基，插件同进程执行不构成恶意代码沙箱。
 
-**历史 QQ 根修复（源码候选，尚未部署）**：`routes` 加 QQTK 当前偏好路由共同决定完整身份，`qq_bindings` 仅保存提醒归属。冷恢复不会颁发完整能力；实际 Agent plane 的原生 tool guard、pre-step/request 门禁动态查询当前 Identity，停用后保持拒绝，当前主 Agent 保留 Creator。`isCurrentSession(record)` 核对真实 manager record、持久路由的内存镜像和 Agent 注册表，异步旧请求不得把主路由改回历史根。
+**历史 QQ 根修复（test.14，已部署）**：`routes` 加 QQTK 当前偏好路由共同决定完整身份，`qq_bindings` 仅保存提醒归属。冷恢复不会颁发完整能力；实际 Agent plane 的原生 tool guard、pre-step/request 门禁动态查询当前 Identity，停用后保持拒绝，当前主 Agent 保留 Creator。`isCurrentSession(record)` 核对真实 manager record、持久路由的内存镜像和 Agent 注册表，异步旧请求不得把主路由改回历史根。
 
 存量审计只读原生 `schedule.catalog()` 与 `sessionPersistence.stat()`；仅从固定作用域的 `routes/qq_bindings`、QQ prefs 当前/previousSessionId 出发，沿原生持久 `parentSession` 向祖先查证，并核对 Preset 与非委派根。Preset/cwd/消息正文相同都不能单独证明归属。启动/冷恢复可事务补齐已核实的**提醒绑定**，不修改主路由、Schedule 或 Memory；并发证据变化拒绝补写。归属不明的冷恢复在原生投递确认前拒绝，保留任务；已存活的未绑定根在原生 `followup` 接入前拒绝 Schedule，避免消费 occurrence，工具及模型也被拒绝。重载扫描已有 Character 根，实际 Agent 上的门禁动态查询新 Provider；不增加 inbox、调度器或权限存储。此处不替代有权加载任意 Host 插件的可信计算基。
 

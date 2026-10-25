@@ -64,7 +64,7 @@ QQ 条目可设置 `sessionLifecycle: {enabled: true, freshOnHostRestart: true, 
 
 Inspector 的入口为 DSH 网页/桌面的 **设置 → 记忆管理**。详细配置见 [Memory Inspector](MEMORY-INSPECTOR.md)。部署记录未变，源码候选不代表已上线。
 
-## 历史 QQ Session 与存量提醒审计（源码候选）
+## 历史 QQ Session 与存量提醒审计（test.14）
 
 完整 Identity/Memory 只给当前主 QQ Session；换主根或切换模型后，旧句柄立即失效。旧根的原生提醒由 Host 按稳定 Conversation 经原 Outbox 通知，不运行模型或普通工具，不具备长期任务创建能力。历史聊天仍保留，不迁移、取消或重建原任务。无法核实归属的冷恢复明确报错并保持原任务；rc.2 不保证自动重试失败恢复，应在人工确认后使用原生管理方式处理，不能删除账本强制重发。
 
