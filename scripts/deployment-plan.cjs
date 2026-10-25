@@ -23,10 +23,18 @@ function select({profile,core,extras,extrasEnabled=false}){
  const names=new Set(active(rows));
  const selected=[...requiredFolders];
  if(extrasEnabled)selected.push('bundles/character-extras');
- for(const [name,folder]of [['dsh-memory-inspector','packages/memory-inspector'],['dsh-interaction-policy','packages/interaction-policy']])if([...names].some(n=>n===name||n.startsWith(name+'/')))selected.push(folder);
+ for(const [name,folder]of [['dsh-memory-inspector','packages/memory-inspector'],['dsh-interaction-policy','packages/interaction-policy'],['dsh-character-long-tasks','packages/long-tasks']])if([...names].some(n=>n===name||n.startsWith(name+'/')))selected.push(folder);
  return selected;
 }
 function disableLegacyMemory(rows){for(const row of entries(rows))if(row.id==='task-memory')row.disabled=true;}
+function verifyTaskExtras(live,nextRows,enabled,yaml){
+ const file=path.join(live,'node_modules/dsh-character-extras/cordis.patch.yml');if(!enabled||!fs.existsSync(file))return;
+ for(const row of entries(yaml.load(fs.readFileSync(file,'utf8'))??[])){
+  if(row.name!=='dsh-character-long-tasks')continue;
+  const next=entries(nextRows).find(n=>n.id===row.id&&n.name===row.name);
+  assert(next&&next.disabled===row.disabled&&JSON.stringify(next.config??{})===JSON.stringify(row.config??{}),'Long task Extras policy changed; review explicitly before preparing upgrade');
+ }
+}
 function localFile(profile,source){assert(typeof source==='string'&&source.startsWith('file:'),'Reviewed local artifact required');return path.resolve(profile,source.slice(5));}
 function verifiedRemote(live){
  const name='dsh-remote-ops-local',manifest=JSON.parse(fs.readFileSync(path.join(live,'package.json'))),source=manifest.dependencies?.[name];
@@ -80,4 +88,4 @@ function entryYaml(yaml){
  const schema=yaml.JSON_SCHEMA.extend(type);
  return {load:(text,options)=>yaml.load(text,{...options,schema}),dump:(value,options)=>yaml.dump(value,{...options,schema})};
 }
-module.exports={select,disableLegacyMemory,verifiedRemote,patchPlan,verifyCandidate,entryYaml,hash};
+module.exports={select,disableLegacyMemory,verifyTaskExtras,verifiedRemote,patchPlan,verifyCandidate,entryYaml,hash};

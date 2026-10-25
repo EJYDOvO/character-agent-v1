@@ -6,8 +6,8 @@
 
 通过 `DSH_INSTALL_ROOT` / `DSH_CHARACTER_PROJECT` 指定安装与源码；`DSH_QQTK_PROJECT` 指定独立 QQTK 源码。官方 DSH 文件及内置 Bundle 不手工修改。Creator/SDK 从实际安装包读取，指纹变化后必须重新构建、测试。
 
-- `pack.cjs` 默认打包自有八包，分别记录版本、源码摘要和 SHA-256；`--core-only` 只打包四个核心插件及 Core Bundle。打包不等于启用，Extras 与可选组件按当前有效声明选择。
-- `prepare-deploy.cjs` / `prepare-host-upgrade.cjs` 共用依赖清单。Core 必需包必须存在；只有启用的 Inspector/Interaction 才要求本次对应产物，未启用的已安装依赖保留。启用状态按自有 Core/Extras 和 Profile 覆盖计算，不自动扫描第三方任意代码动态装配。
+- `pack.cjs` 默认打包自有九包，分别记录版本、源码摘要和 SHA-256；`--core-only` 只打包四个核心插件及 Core Bundle。打包不等于启用，Extras 与可选组件按当前有效声明选择。
+- `prepare-deploy.cjs` / `prepare-host-upgrade.cjs` 共用依赖清单。Core 必需包必须存在；只有启用的 Inspector/Interaction/Long Tasks 才要求本次对应产物，未启用的已安装依赖保留。启用状态按自有 Core/Extras 和 Profile 覆盖计算，不自动扫描第三方任意代码动态装配。
 - 配置选择遵循原生 patch 的替换语义，保留 `!!js` 条件但不执行。Preset 的 `config.plugins` 不能用全局子 ID 覆盖；需修改所属 Preset 声明。条件启停无法静态判定时保守保留产物，实际启停仍由 Host 决定。
 - Extras 是否启用沿用 Profile；常规准备支持 `--extras` 显式启用。第三方搜索等已有 Bundle 保留，不能因替换 Core 而被移除。专业分析 Worker 在 Core 显式声明，与 Extras 启停无关。
 - Remote Ops 不再由 Character 隐式重打包或写死版本。验证当前安装版本、Profile 的 pin、tarball 包元数据和 SHA-256 后保留相同版本；缺少 pin、哈希不符或版本不符直接失败。独立升级 QQTK 须先完成其受控升级及验收。
@@ -38,4 +38,8 @@
 
 Schema 相同也不代表行为安全等价：旧 Core 可能重新带回已经修复的读取缺陷。需要维持新隐私保证时，只禁用/回退 GUI，不回退修复后的 Core。
 
-失败 Profile 切换会恢复 Profile、Binding、QQ prefs 和策略；源码和合成安装测试覆盖该路径。完整生产切换、异常启动及实际 QQ 恢复仍需专门验收。脚本不自动迁移提醒、轮换 Session、导入旧记忆或放开 Worker 权限。
+失败 Profile 切换会恢复 Profile、Binding、QQ prefs 和策略；源码和合成安装测试覆盖该路径。完整生产切换、异常启动及实际 QQ 恢复仍需专门验收。部署脚本不自动启用轮换、迁移提醒、导入旧记忆或放开 Worker 权限。
+
+test.13 仅在隔离环境验证。QQ 生命周期开关需明确配置；备份包含 DSH_HOME/qqbot 的路由和生命周期状态、原生 Session/Schedule/storageDomain，以及 Character coordination.sqlite（含 WAL）和 Memory。原协调库新增 qq_bindings/identity_state 两张表，Memory Schema 不变。旧提醒仍绑定原 Session，不要删除旧 Session 或只复制当前主路由。
+
+长期任务必须另装可选包并启用 Extras 条目。停用/回滚前先取消不需执行的计划、等待当前工作结束并制作一致性备份；回滚不得用旧快照覆盖新增记忆或清空执行/通知账本。停用插件不自动删除计划；重新启用可能处理仍有效的逾期任务，详见 [恢复契约](../packages/long-tasks/README.md)。本轮未做生产安装、迁移或重启。

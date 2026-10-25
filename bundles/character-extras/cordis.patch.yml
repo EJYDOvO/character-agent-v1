@@ -1,4 +1,10 @@
 # Empty optional integration layer. Add reviewed project-owned declarations here.
 # Third-party bundles remain managed by the native Profile plugin manager.
 # Never declare another QQ Gateway or replace the Character core here.
-[]
+- insert:
+    - id: long-tasks
+      name: dsh-character-long-tasks
+      disabled: true
+      config:
+        presetId: long-task
+        allowTools: []

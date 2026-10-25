@@ -2,7 +2,7 @@
 
 在 DeepSeek Harness 上运行的角色 Agent 扩展，提供私人 QQ 接入、可配置角色和带来源的长期记忆。Character 从官方 Creator Preset 构建派生，保留其工具能力；角色设定不会增加系统权限。
 
-这是测试版源码仓库，不包含 DSH 本体，也不是一键安装器。当前实例已部署 **test.12**，Memory Inspector 初始为只读。验证基线是 **Windows、Node.js 24.21.0、DSH 0.2.1-rc.2、QQ Bot 0.5.2 / SDK 1.0.5 及配套 QQTK 补丁**。其他版本和平台需要重新验证。部署验收及未完成事项统一见[当前状态](docs/STATUS.md)。
+这是测试版源码仓库，不包含 DSH 本体，也不是一键安装器。当前源码 **test.13**；实例部署记录仍为 **test.12**，本轮不部署。验证基线是 **Windows、Node.js 24.21.0、DSH 0.2.1-rc.2、QQ Bot 0.5.2 / SDK 1.0.5 及配套 QQTK 补丁**。其他版本和平台需要重新验证。部署验收及未完成事项统一见[当前状态](docs/STATUS.md)。
 
 可选 [Interaction Policy V1](docs/INTERACTION-POLICY.md) 提供自然表达、等待提示、流式气泡与安全修正。源码默认构建不启用；该通用插件不要求安装 Character 或 QQ。
 
@@ -14,6 +14,7 @@
 - **分层整理**：L1 保存可信经历，L2 提取和巩固长期记忆，L3 为每轮对话提供少量核心记忆；L0 沿用 DSH Session 与 Compaction。
 - **可选人格化**：Off / Assistant / Character 三种模式，与通用记忆共用数据库，按 Agent 隔离；模式切换同时约束历史记录读取。形成带引用的用户画像、互动约定和自身经验，不修改固定角色设定；引用存在不代表推断一定正确。
 - **提醒与维护集成**：复用官方 Schedule 和独立 QQTK，记录明确任务通知的投递状态。
+- **可选独立长期任务**：Extras 中默认停用的 [Long Tasks](packages/long-tasks/README.md)，使用原生 Schedule、独立任务根 Session 和既有通知账本，附带管理工具与 Skill。QQTK 可选重启/12 小时无用户输入换新主 Session，默认关闭。
 - **独立分析 Worker**：原生 Spawn/Session，Core 默认 `worker-general`，可选 `worker-review`；无执行与 Memory 权限，操作提案交回主 Agent 核验。
 - **Memory Inspector**：可选的 DSH 原生「设置 → 记忆管理」页面，网页与桌面共用客户端插件，查看分层记忆、来源、修订与后台任务，按现有治理规则确认、纠错、遗忘和恢复有效元数据。
 
@@ -22,7 +23,7 @@
 ```text
 bundles/
   character-core/           # 身份、记忆、QQ 和 Character Preset 的核心装配
-  character-extras/         # 空的可选装配模板，留给项目自己的额外集成
+  character-extras/         # 自有可选装配，长期任务条目默认停用
 packages/
   character-identity/       # Host 身份授权、来源认证、Session 与通知衔接
   character-memory-core/    # 通用记忆引擎及可选人格化策略
@@ -31,6 +32,7 @@ packages/
   character-definition/    # 构建时角色加载器，不是运行时插件
   interaction-policy/      # 可选通用 Agent 交互策略，独立安装和关闭
   memory-inspector/        # 可选原生设置页，复用双端客户端、主题和 Host 认证
+  long-tasks/              # 可选独立长期任务、原生 Preset 与 runtime Skill
 characters/                # 可公开使用的示例角色
 examples/local-agent/      # 不依赖 Character Identity 的接入示例
 scripts/                   # 构建、验证、迁移与部署辅助脚本
@@ -83,7 +85,7 @@ node scripts/build.cjs
 ## 如何添加可选插件
 
 - **第三方包自带 Bundle**：由原生 `plugin_manager` 安装到当前 Profile，使用该包自己的声明；不要再复制到 Extras。
-- **普通插件包或自有可选集成**：安装对应依赖后，在 `bundles/character-extras/cordis.patch.yml` 维护装配声明。当前模板为 `[]`，不预装搜索或 Bilibili。
+- **普通插件包或自有可选集成**：安装对应依赖后，在 `bundles/character-extras/cordis.patch.yml` 维护装配声明。当前仅声明默认停用的自有长期任务，不预装搜索或 Bilibili；关闭 Extras 不影响 Core。
 - **角色基础能力**：仍由 Core 管理，不在 Extras 创建第二个 QQ Gateway 或替换身份授权。
 
 Character 保留 Creator 的插件管理工具，但安装仍受权限或审批控制。原生安装器没有“写入 Extras”的选项；Extras 是项目维护约定，不是自动转存机制。一个插件只应有一个装配来源。
@@ -94,7 +96,7 @@ Character 保留 Creator 的插件管理工具，但安装仍受权限或审批�
 
 - 人格化默认 Off，启用由可信 Host 配置决定。记忆内容不能改变角色基础设定、ACL 或审批规则。
 - L3 默认约 1200、上限约 1500 个**估算 Token**；它是有效 L2 的摘录，不是整轮上下文预算。
-- 自动提取依赖可信入口，不扫描全部历史聊天；没有向量检索、自动 Session 轮换或主动闲聊。Inspector V1 与独立分析 Worker 已在源码实现并隔离验证，尚未上线。
+- 自动提取依赖可信入口，不扫描全部历史聊天；没有向量检索或主动闲聊。test.13 的 QQ 主 Session 轮换需明确启用，正在进行的任务/审批会延后轮换；既有提醒保留原 Session，不迁移或 Fork 历史。使用前阅读 [配置与恢复](packages/long-tasks/README.md) 及 QQTK 的生命周期说明。
 - Self Model 的存储和策略已实现，真实多轮任务形成自身认知的端到端验收仍未完成。工具正常返回不等于任务目标成功。
 - 遗忘有来源和近似内容屏障，但原会话、修订和备份可能保留旧内容；不能承诺识别所有改写。
 - QQ ready 或发送 API 成功不代表手机实际收件；单元测试通过也不代表生产功能已经验证。

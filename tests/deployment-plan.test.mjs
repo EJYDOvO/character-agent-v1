@@ -47,6 +47,10 @@ test('Core selection does not require absent optional artifacts; active nested d
  assert(plan.select({profile:[],core:[],extras,extrasEnabled:true}).includes('packages/memory-inspector'));
  assert(!plan.select({profile:[{id:'memory-inspector',disabled:true}],core:[],extras,extrasEnabled:true}).includes('packages/memory-inspector'));
  assert.throws(()=>plan.select({profile:[],core:[],extras:[{id:'im-qqbot'}],extrasEnabled:true}),/authority/);
+ const tasks=[{insert:[{id:'long-tasks',name:'dsh-character-long-tasks'}]}];
+ assert(!plan.select({profile:[],core:[],extras:tasks}).includes('packages/long-tasks'));
+ assert(plan.select({profile:[],core:[],extras:tasks,extrasEnabled:true}).includes('packages/long-tasks'));
+ assert(!plan.select({profile:[{id:'long-tasks',disabled:true}],core:[],extras:tasks,extrasEnabled:true}).includes('packages/long-tasks'));
 });
 test('Remote Ops requires matching installed version, pinned artifact hash and tar metadata',()=>{
  const f=fixture();assert.equal(plan.verifiedRemote(f.live).version,'1.1.1-test.1');
@@ -84,4 +88,17 @@ test('Candidate gate requires matching lockfile, installed versions and both pat
  assert.throws(()=>plan.verifyCandidate(f.live,record,{load:JSON.parse}),/SDK override/);
  write(join(f.live,'pnpm-workspace.yaml'),patch.workspace);
  lock.patchedDependencies['@tencent-connect/qqbot-nodejs@1.0.5']='old-hash';write(join(f.live,'pnpm-lock.yaml'),lock);assert.throws(()=>plan.verifyCandidate(f.live,record,{load:JSON.parse}),/patch hash/);
+});
+test('disabled optional task template preserves legacy native Extras and refuses silent task-policy changes',()=>{
+ const task={id:'long-tasks',name:'dsh-character-long-tasks',disabled:true,config:{presetId:'long-task',allowTools:[]}};
+ for(const active of [false,true]){
+  const f=fixture(),manifest=JSON.parse(readFileSync(join(f.live,'package.json')));manifest.dsh.profile.bundles.push('dsh-character-extras');write(join(f.live,'package.json'),manifest);
+  write(join(f.project,'bundles/character-extras/package.json'),{name:'dsh-character-extras',version:'candidate'});write(join(f.project,'bundles/character-extras/cordis.patch.yml'),[{insert:[task]}]);
+  write(join(f.project,'artifacts/packages/dsh-character-extras-candidate.tgz'),'synthetic extras artifact');
+  write(join(f.project,'artifacts/package-source.json'),{sourceDigest:'fixture',artifacts:packages.inventory(f.project,[...packages.requiredFolders,'bundles/character-extras'])});
+  write(join(f.live,'node_modules/dsh-character-extras/cordis.patch.yml'),[{insert:[{...task,disabled:!active},{name:'dsh-plugin-bilibili'}]}]);
+  const prepare=()=>execFileSync(process.execPath,[join(f.project,'scripts/prepare-host-upgrade.cjs'),'upgrade-fixture'],{env:{...process.env,DSH_INSTALL_ROOT:f.root,DSH_QQTK_PROJECT:f.root},stdio:'pipe'});
+  if(active){assert.throws(prepare,error=>error.stderr.toString().includes('Long task Extras policy changed'));assert.throws(()=>execFileSync(process.execPath,[join(f.project,'scripts/prepare-deploy.cjs')],{env:{...process.env,DSH_INSTALL_ROOT:f.root,DSH_QQTK_PROJECT:f.root},stdio:'pipe'}),error=>error.stderr.toString().includes('Long task Extras policy changed'));}
+  else{prepare();const result=JSON.parse(readFileSync(join(f.root,'data/profiles/upgrade-fixture/package.json')));assert(result.dsh.profile.bundles.includes('dsh-plugin-bilibili'));assert(!result.dependencies['dsh-character-long-tasks']);}
+ }
 });

@@ -1,6 +1,6 @@
 # 在其他 DSH 项目中使用
 
-实例版本统一见 [当前状态](STATUS.md)；源码 test.12 候选不代表已部署。
+实例版本统一见 [当前状态](STATUS.md)；源码 test.13 不代表已部署。
 
 原通用化验收宿主：DSH 0.2.0-rc.2 / Node 24 / Windows。test.9 在 0.2.1-rc.2 上重新验证通用 Memory 独立身份接入及完整 Character，见 [最新记录](RELEASE-test9.md)；纯 QQ 无 Remote Ops 的独立连接组合本次未重跑。本文件不是跨版本安装保证。不要向 Profile 安装第二套 DSH 核心，保留 `autoInstallPeers: false`。所有示例路径与身份都是占位值。
 
@@ -104,6 +104,6 @@ test.9 审计修复保留契约 v1、Schema 3 和现有工具参数。Host 的 `
 
 `packages/interaction-policy` 可独立安装到普通 DSH Preset，不需要 Character、QQTK 或 Memory。它使用原生作用域服务、Session/流式事件与 Inbox，平台通过小型 Sender 接口接入。声明必须提供服务隔离域；详见 [安装及契约](../packages/interaction-policy/README.md)。已完成隔离与本机部署检查，Web 额外气泡/状态 UI 未实现。
 
-## test.12 源码增量（未部署）
+## 可选组件与 Session（test.13 源码，未部署）
 
-新增原生分析 Worker 与可选 Memory Inspector；四个核心插件和空 Extras 保持。配置与权限边界见 [Worker](WORKERS.md)、[Inspector](MEMORY-INSPECTOR.md)，阶段状态及隔离测试见 [test.12](RELEASE-test12.md)。自动 Session 轮换仍关闭，旧 Schedule 不迁移。
+四个核心插件保持。通用 QQ 的可选 Session 生命周期仅依赖原生 Host，默认关闭；没有 Character 的稳定会话桥接时，已有 Schedule 会阻止自动轮换以保护提醒。Character Identity 负责保留旧 QQ 根的可信绑定和稳定通知目标。Extras 的 [Long Tasks](../packages/long-tasks/README.md) 是 Character 专用可选集成，不是 Memory/Interaction/QQ 的依赖；默认停用且无工具权限。原生分析 Worker 与 Inspector 的边界分别见 [Worker](WORKERS.md)、[Inspector](MEMORY-INSPECTOR.md)。

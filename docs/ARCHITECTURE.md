@@ -1,12 +1,12 @@
-# 运行架构与复用边界（test.12 源码）
+# 运行架构与复用边界（test.13 源码）
 
-当前源码 test.12 已实现原生独立分析 Worker 和可选 Memory Inspector；本轮仅隔离验证，未部署。现有生产部署记录是 [test.11](RELEASE-test11.md)，不能将本页的新功能视为已上线。新的阶段对照见 [路线图](IMPLEMENTATION_ROADMAP.md)，接口与验收见 [test.12](RELEASE-test12.md)。
+当前源码 test.13 在既有原生分析 Worker、Memory Inspector 上新增可选 QQ Session 生命周期和独立长期任务。本轮仅隔离验证，未部署；实例部署统一见 [STATUS](STATUS.md)。阶段对照见 [路线图](IMPLEMENTATION_ROADMAP.md)，任务契约见 [Long Tasks](../packages/long-tasks/README.md)。
 
-新增 Worker 使用官方 `subagent` 的 `agentPreset / allowedAgentPresets` 和 `spawn`，Core 自带 `worker-general`；执行守卫位于现有 Memory Tools 包的独立入口，不增加自定义 Spawn 或 Agent Loop。主 Character 保留完整 Creator。Inspector 是额外可选双端插件：原生 `dsh.client` 将 React 页面注册到 `settings.section`，复用 DSH 导航、组件与主题；通过原生 Connection RPC 访问有界 Host API，Host 复用 `webServer` 与 `connection.admit()`，经认证后调用 Core 的授权 API，浏览器不能直连 SQLite 或指定可信主体。四个核心插件与空 Extras 模板保持；详见 [Worker](WORKERS.md) 和 [Inspector](MEMORY-INSPECTOR.md)。
+新增 Worker 使用官方 `subagent` 的 `agentPreset / allowedAgentPresets` 和 `spawn`，Core 自带 `worker-general`；执行守卫位于现有 Memory Tools 包的独立入口，不增加自定义 Spawn 或 Agent Loop。主 Character 保留完整 Creator。Inspector 是额外可选双端插件：原生 `dsh.client` 将 React 页面注册到 `settings.section`，复用 DSH 导航、组件与主题；通过原生 Connection RPC 访问有界 Host API，Host 复用 `webServer` 与 `connection.admit()`，经认证后调用 Core 的授权 API，浏览器不能直连 SQLite 或指定可信主体。四个核心插件与可选 Extras 边界保持；详见 [Worker](WORKERS.md) 和 [Inspector](MEMORY-INSPECTOR.md)。
 
 **test.10 交互增量**：独立可选 `dsh-interaction-policy` 通过原生 Agent-scoped 事件和 Preset 服务隔离管理表达与发送策略。QQTK 只接入 Sender 与可信修正入口；Character Identity 复用原入站校验和证据逻辑提供提前接入钩子。没有新数据库、Planner 或 Agent Loop，原四插件和 Core/Extras 保留。详细接口及当前验证见 [Interaction Policy](INTERACTION-POLICY.md)。下文为既有记忆架构。
 
-这是源码实现说明。test.8 增加分层记忆与可选人格化；部署和验收范围见 [发布记录](RELEASE-test8.md)，详细层次、生命周期和限制见 [分层记忆](MEMORY-LAYERS.md)。四个 Character 运行时包保留；Definition 是构建模块，Core/Extras 是项目 Bundle。当前源码 Extras 是空的可选装配模板，不代表旧部署包已同步替换。
+这是源码实现说明。test.8 增加分层记忆与可选人格化；部署和验收范围见 [发布记录](RELEASE-test8.md)，详细层次、生命周期和限制见 [分层记忆](MEMORY-LAYERS.md)。四个核心 Character 运行时包保留；Definition 是构建模块，Core/Extras 是项目 Bundle。Extras 仅含默认停用的自有长期任务声明，不是第二个 QQ Gateway。
 
 | 组件 | 之前 | 现在 |
 |---|---|---|
@@ -43,7 +43,7 @@ flowchart LR
 
 Inspector 可以直接依赖 Core 的管理 API；Core 不反向依赖 Inspector，不新增接口服务。Character Adapter 对 Identity、Memory、Remote Ops 的组合依赖是项目边界，不能据此推断基础 QQ 或通用 Memory 也必须安装它们。Worker guard 继续复用 Tools 包入口，不单独拆包。
 
-v0.7.8 的主体目标已有实现，但项目范围由可信 binding 固定配置；尚无任务级独立 grants 或项目管理 UI。Session Coordinator 的路由代次与 outbox 集成在 Identity，自动轮换和稳定 Schedule 目标未实现。旧 Task Memory 只有只读预览，未完成受控正式导入。
+v0.7.8 的主体目标已有实现，但项目范围由可信 binding 固定配置；尚无任务级独立 grants 或项目管理 UI。主 Session 生命周期在 QQTK，稳定 Conversation 及 Outbox 在 Identity；原生 Schedule 仍指向原 Session，使用持久 qq_bindings 冷恢复原根，不迁移提醒。独立长期任务通过原生 storageDomain 保存任务/执行账本，使用独立任务根 Session 和受限 Preset；不新增 Coordinator、调度器或 Memory 数据库。旧 Task Memory 只有只读预览，未完成受控正式导入。
 
 ## 可信契约
 
@@ -75,4 +75,4 @@ test.12 审计进一步将内部可见性判断与公开脱敏分离，避免遗
 
 ## 明确未改变的部分
 
-保留既有三类记忆、FTS5、CAS、近重复处理、时效、来源、遗忘防复活和提取队列。test.8 已新增 L1、跨事件 L2 巩固、L3 摘录投影及话题消费策略；不追溯改变 test.7 交付声明。test.12 增加受限分析 Worker，没有主动闲聊。冲突的完整语义判断、网络投递 exactly-once、自动 Session 轮换与跨机器认证仍不是已完成能力。
+保留既有三类记忆、FTS5、CAS、近重复处理、时效、来源、遗忘防复活和提取队列。test.8 已新增 L1、跨事件 L2 巩固、L3 摘录投影及话题消费策略；不追溯改变 test.7 交付声明。test.12 增加受限分析 Worker，没有主动闲聊。冲突的完整语义判断、网络投递 exactly-once、提醒目标迁移与跨机器认证仍不是已完成能力；test.13 的可选 QQ 轮换仅在隔离 Host 验证。

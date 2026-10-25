@@ -17,6 +17,7 @@ const rows=yaml.load(fs.readFileSync(live+'/cordis.patch.yml','utf8'));
 const plan=require('./deployment-plan.cjs'),sourceDigest=require('./source-digest.cjs')();
 const core=yaml.load(fs.readFileSync(project+'/bundles/character-core/cordis.patch.yml','utf8')),extras=yaml.load(fs.readFileSync(project+'/bundles/character-extras/cordis.patch.yml','utf8'))||[];
 const extrasEnabled=manifest.dsh.profile.bundles.includes('dsh-character-extras');
+plan.verifyTaskExtras(live,extras,extrasEnabled,yaml);
 if(process.argv.includes('--inspector'))require('./inspector-declaration.cjs')(rows,extrasEnabled?extras:[]);
 const artifacts=require('./package-plan.cjs').verifiedPlan(project,sourceDigest,plan.select({profile:rows,core,extras,extrasEnabled}));
 const remote=plan.verifiedRemote(live),patchPlan=plan.patchPlan(live,path.resolve(process.env.DSH_QQTK_PROJECT||install),yaml);
@@ -37,13 +38,15 @@ if(nativeSchedule)manifest.dsh.profile.bundles=manifest.dsh.profile.bundles.filt
 plan.disableLegacyMemory(rows);
 manifest.dsh.profile.bundles=manifest.dsh.profile.bundles.filter(n=>n!=='dsh-task-memory-local');
 // Retain the two existing optional capabilities through their native bundles
-// when replacing the former non-empty Extras with the user's empty template.
+// when replacing former third-party Extras with only our optional declarations.
 const oldExtras=live+'/node_modules/dsh-character-extras/cordis.patch.yml';
 const newExtras=yaml.load(fs.readFileSync(project+'/bundles/character-extras/cordis.patch.yml','utf8'));
-if(extrasEnabled&&newExtras.length===0&&fs.existsSync(oldExtras)){
+const retainsLegacy=newExtras.flatMap(r=>r.insert??[]).some(r=>['dsh-free-search','dsh-plugin-bilibili'].includes(r.name));
+if(extrasEnabled&&!retainsLegacy&&fs.existsSync(oldExtras)){
  const old=yaml.load(fs.readFileSync(oldExtras,'utf8'));
  for(const row of old.flatMap(x=>x.insert??[])){
-  assert(['dsh-free-search','dsh-plugin-bilibili'].includes(row.name),'Unrecognized old Extras entry requires review');
+   if(row.name==='dsh-character-long-tasks')continue;
+   assert(['dsh-free-search','dsh-plugin-bilibili'].includes(row.name),'Unrecognized old Extras entry requires review');
   assert(!row.disabled&&!row.config,'Custom Extras entry requires explicit migration');
   if(!manifest.dsh.profile.bundles.includes(row.name))manifest.dsh.profile.bundles.push(row.name);
  }

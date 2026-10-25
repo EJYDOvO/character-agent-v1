@@ -1,0 +1,9 @@
+# Install dsh-character-long-tasks first. Merge this into your own Extras.
+# No Gateway or main Preset replacement. Omit/disable it for Core-only.
+- insert:
+    - id: long-tasks
+      name: dsh-character-long-tasks
+      config:
+        enabled: true
+        presetId: long-task
+        allowTools: []

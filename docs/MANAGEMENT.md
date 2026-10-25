@@ -1,6 +1,6 @@
 # 功能管理与维护
 
-实例版本统一见 [当前状态](STATUS.md)；源码 test.12 候选不代表已部署。
+实例版本统一见 [当前状态](STATUS.md)；源码 test.13 不代表已部署。
 
 安装版本和验收范围以 [STATUS](STATUS.md) 为唯一当前入口。官方内置 Schedule 保持；旧项目记忆数据保留，但不自动导入新库。
 
@@ -32,7 +32,7 @@ test.9 已部署的审计修复调整了记忆管理行为：Assistant 只管理
 
 ## Extras 与后续插件声明
 
-当前源码的 `bundles/character-extras/cordis.patch.yml` 都是空 YAML 序列 `[]`。保留 Bundle 包清单，作为额外集成的入口；不再预置搜索或 Bilibili。本机原有这两项能力迁到各自原生 Bundle，保留现有配置。构建只在文件缺失时创建空模板，已有 Extras 声明原样保留，避免角色重建覆盖后续维护内容。
+当前源码的 `bundles/character-extras/cordis.patch.yml` 仅声明默认停用的 `dsh-character-long-tasks`。不预置搜索或 Bilibili，它们使用各自原生 Bundle。构建保留已有 Extras 声明，避免角色重建覆盖后续维护内容。长期任务需要另装可选包并明确启用条目；只开启 Extras 不会自动执行任务。
 
 默认维护约定：本项目自有的可选插件声明放 Extras，固定角色/Identity/Memory/QQ 归 Core，密钥和 Owner 参数只放私有 Profile。外部完整 Bundle 由原生管理器装入 Profile，不复制其插入项到 Extras，也不编辑已安装的 node_modules。普通插件包还需独立安装依赖，只有 YAML 声明并不等于已安装。
 
@@ -56,8 +56,10 @@ Character 构建保留官方 Creator 的 `tool-plugin-manager`。本机 DSH 0.2.
 
 test.10 提供独立 `dsh-interaction-policy`。普通 Agent 在自己的 Preset 配置；Character 可用 `DSH_CHARACTER_INTERACTION=on/off` 或私有构建配置选择。默认不增加交互条目，不改变运行中的 Agent。等待文案、阈值、流式节流与分段上限，以及安全修正和关闭方式见 [Interaction Policy](INTERACTION-POLICY.md)。
 
-## test.12 源码增量（未部署）
+## test.13 可选 Session 生命周期与长期任务（未部署）
 
-新增原生分析 Worker 与可选 Memory Inspector；四个核心插件和空 Extras 保持。配置与权限边界见 [Worker](WORKERS.md)、[Inspector](MEMORY-INSPECTOR.md)，阶段状态及隔离测试见 [test.12](RELEASE-test12.md)。自动 Session 轮换仍关闭，旧 Schedule 不迁移。
+QQ 条目可设置 `sessionLifecycle: {enabled: true, freshOnHostRestart: true, inactivityMs: 43200000}`，默认关闭。仅真实用户入站更新计时；回复、Schedule 和后台工作不刷新计时。Host 重启/到期后下次安全输入创建空白 Session；忙碌、待审批/问答和未完成收件箱延后。QQ manager `getStatus().lifecycle` 提供 pendingReason/blockedBy/generation。旧提醒保留原 Session 并冷恢复，长期 Memory 与固定 Persona 不清空。
 
-Inspector 的入口现为 DSH 网页/桌面的 **设置 → 记忆管理**。旧独立页面已移除，详细配置见 [Memory Inspector](MEMORY-INSPECTOR.md)。部署记录未变，源码候选不代表已上线。
+独立长期任务的启用、工具/Skill、最小工具配置、状态查询和停用恢复见 [Long Tasks](../packages/long-tasks/README.md)。默认无执行工具、无主 QQ/Memory 身份；不提供主代审批。执行状态与发送状态分别查询，不能把 lastDelivery 当作完成。关闭 Extras 前先取消不需继续的长期任务；不得删除账本来强行重试。
+
+Inspector 的入口为 DSH 网页/桌面的 **设置 → 记忆管理**。详细配置见 [Memory Inspector](MEMORY-INSPECTOR.md)。部署记录未变，源码候选不代表已上线。

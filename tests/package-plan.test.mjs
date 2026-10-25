@@ -5,7 +5,7 @@ test('T14 packaging includes independently versioned Inspector/Interaction and r
  const root=mkdtempSync(join(tmpdir(),'package-plan-'));mkdirSync(join(root,'artifacts/packages'),{recursive:true});
  folders.forEach((folder,i)=>{const name='fixture-'+i,version='0.1.0-test.'+(i+1);mkdirSync(join(root,folder),{recursive:true});writeFileSync(join(root,folder,'package.json'),JSON.stringify({name,version}));writeFileSync(join(root,'artifacts/packages',name+'-'+version+'.tgz'),'synthetic package '+i);});
  const entries=inventory(root);writeFileSync(join(root,'artifacts/package-source.json'),JSON.stringify({sourceDigest:'current-source',artifacts:entries}));
- assert.equal(verifiedPlan(root,'current-source').length,8);assert(entries.some(e=>e.folder==='packages/memory-inspector'));assert(entries.some(e=>e.folder==='packages/interaction-policy'));
+ assert.equal(verifiedPlan(root,'current-source').length,9);assert(entries.some(e=>e.folder==='packages/memory-inspector'));assert(entries.some(e=>e.folder==='packages/interaction-policy'));assert(entries.some(e=>e.folder==='packages/long-tasks'));
  assert.throws(()=>verifiedPlan(root,'new-source'),/different source/);writeFileSync(join(root,'artifacts/packages',entries[0].filename),'changed');assert.throws(()=>verifiedPlan(root,'current-source'),/mismatch/);
 });
 test('T14 Inspector uses native insert once or overrides its existing Bundle declaration, initially read-only',()=>{

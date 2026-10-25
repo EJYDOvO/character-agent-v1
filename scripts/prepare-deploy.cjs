@@ -13,6 +13,7 @@ const manifest=JSON.parse(fs.readFileSync(live+'/package.json','utf8'));
 const rows=yaml.load(fs.readFileSync(live+'/cordis.patch.yml','utf8'));
 const core=yaml.load(fs.readFileSync(project+'/bundles/character-core/cordis.patch.yml','utf8')),extras=yaml.load(fs.readFileSync(project+'/bundles/character-extras/cordis.patch.yml','utf8'))||[];
 const extrasEnabled=manifest.dsh.profile.bundles.includes('dsh-character-extras')||process.argv.includes('--extras');
+plan.verifyTaskExtras(live,extras,extrasEnabled,yaml);
 if(process.argv.includes('--inspector'))require('./inspector-declaration.cjs')(rows,extrasEnabled?extras:[]);
 const artifactPlan=require('./package-plan.cjs').verifiedPlan(project,sourceDigest,plan.select({profile:rows,core,extras,extrasEnabled}));
 const remote=plan.verifiedRemote(live),patches=plan.patchPlan(live,path.resolve(process.env.DSH_QQTK_PROJECT||root),yaml);
