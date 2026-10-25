@@ -15,7 +15,11 @@ export function apply(ctx,config){
    manager=new SessionManager(ctx,ctx.agents,{appId:'fixture-app',preset:'qq-character',cwd:config.cwd,provider:'task-fixture',model:'fixture',sessionIdleTimeout:600000,sessionLifecycle:{enabled:true,freshOnHostRestart:true,inactivityMs:43200000}},ctx.logger);
    detach=ctx.characterIdentity.attach({manager,config:{appId:'fixture-app',preset:'qq-character',sessionLifecycle:manager.config.sessionLifecycle,access:{c2cMode:'allowlist',c2cAllow:['fixture-owner'],groupMode:'disabled'}},sender:{async sendMarkdown(target,text){deliveries.push({target,text});}}});
    const get=id=>manager.getOrCreate('c2c','fixture-owner','fixture-owner',{scope:'c2c',targetId:'fixture-owner',msgId:id});
+   const warm=await manager.getOrCreate('c2c','fixture-owner','fixture-owner',{scope:'c2c',targetId:'fixture-owner'});
+   const warmState=manager.modelResolver.prefs.getLifecycle(warm.sessionKey);
+   if(restart){assert.equal(warm.sessionId,state.session,'Startup restore must preserve the route until QQ input');assert.equal(warmState.lastUserAt,state.lastUserAt,'Startup restore must not refresh user activity');}else assert.equal(warmState,undefined);
    let record=await get(restart?'after-restart':'first-input');
+   assert.notEqual(record.sessionId,warm.sessionId,'First actual user input creates the blank Session');
    assert.equal(ctx.agentPresets.composedPreset(record.agent.ctx),'qq-character');assert.equal(record.agent.options.provider,'task-fixture');assert.equal(record.agent.options.model,'fixture');
    if(!restart){
     record.agent.followup(createUserMessage({source:{kind:'user'},content:[{type:'text',text:'OLD_QQ_HISTORY_FIXTURE'}]}));await record.agent.whenIdle();
@@ -32,7 +36,7 @@ export function apply(ctx,config){
     const ownerTools=ctx.tools.view(record.agent).visible;assert(ownerTools.has('long_task_create'));assert(ownerTools.has('schedule_create'));
     assert.deepEqual([...ctx.tools.view(taskAgent).visible.keys()],['task_fixture_read']);
     assert((await ctx.skills.list({scope:record.agent,cwd:config.cwd})).some(s=>s.name==='long-tasks'));
-    await ctx.sessions.flush(record.agent.session);fs.writeFileSync(checkpoint,JSON.stringify({session:record.sessionId,fact:fact.id,oldReminder:oldReminder.id,once:once.id,error:error.id,periodic:periodic.id,cancelled:cancelled.id}));
+    await ctx.sessions.flush(record.agent.session);fs.writeFileSync(checkpoint,JSON.stringify({session:record.sessionId,lastUserAt:manager.modelResolver.prefs.getLifecycle(record.sessionKey).lastUserAt,fact:fact.id,oldReminder:oldReminder.id,once:once.id,error:error.id,periodic:periodic.id,cancelled:cancelled.id}));
     report.checks.push('Actual native Schedule create/update/cancel; independent roots, tool allowlist, Memory/Owner ACL and Skill');
    }else{
     assert.notEqual(record.sessionId,state.session);assert(!JSON.stringify(record.agent.session.snapshotEvents()).includes('OLD_QQ_HISTORY_FIXTURE'));assert(!record.agent.session.header.parentSession);

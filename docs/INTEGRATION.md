@@ -40,6 +40,6 @@ Schema 相同也不代表行为安全等价：旧 Core 可能重新带回已经�
 
 失败 Profile 切换会恢复 Profile、Binding、QQ prefs 和策略；源码和合成安装测试覆盖该路径。完整生产切换、异常启动及实际 QQ 恢复仍需专门验收。部署脚本不自动启用轮换、迁移提醒、导入旧记忆或放开 Worker 权限。
 
-test.13 仅在隔离环境验证。QQ 生命周期开关需明确配置；备份包含 DSH_HOME/qqbot 的路由和生命周期状态、原生 Session/Schedule/storageDomain，以及 Character coordination.sqlite（含 WAL）和 Memory。原协调库新增 qq_bindings/identity_state 两张表，Memory Schema 不变。旧提醒仍绑定原 Session，不要删除旧 Session 或只复制当前主路由。
+test.13 已通过隔离验证并在本机部署，具体边界见 STATUS。QQ 生命周期开关需明确配置；备份包含 DSH_HOME/qqbot 的路由和生命周期状态、原生 Session/Schedule/storageDomain，以及 Character coordination.sqlite（含 WAL）和 Memory。原协调库新增 qq_bindings/identity_state 两张表，Memory Schema 不变。旧提醒仍绑定原 Session，不要删除旧 Session 或只复制当前主路由。
 
-长期任务必须另装可选包并启用 Extras 条目。停用/回滚前先取消不需执行的计划、等待当前工作结束并制作一致性备份；回滚不得用旧快照覆盖新增记忆或清空执行/通知账本。停用插件不自动删除计划；重新启用可能处理仍有效的逾期任务，详见 [恢复契约](../packages/long-tasks/README.md)。本轮未做生产安装、迁移或重启。
+长期任务必须另装可选包并启用 Extras 条目。停用/回滚前先取消不需执行的计划、等待当前工作结束并制作一致性备份；回滚不得用旧快照覆盖新增记忆或清空执行/通知账本。停用插件不自动删除计划；重新启用可能处理仍有效的逾期任务，详见 [恢复契约](../packages/long-tasks/README.md)。回滚 QQ 补丁时还须恢复匹配的 QQTK 维护源码、上游 manifest 和补丁文件，不能只切换 Profile；完整快照保留了这些文件。实际手机验收与生产回滚演练未完成。

@@ -1,6 +1,6 @@
 # 当前实现决策
 
-本页接续归档 v0.7.8 设计；目标设计不等于已部署能力。当前源码 test.13，实例部署记录见 [STATUS](STATUS.md)，本轮未部署。
+本页接续归档 v0.7.8 设计；目标设计不等于已部署能力。当前源码 test.13，实例部署与验证记录见 [STATUS](STATUS.md)。
 
 1. 四个核心运行插件、Core/Extras、Creator 构建派生保留。QQTK 独立维护，一个 QQ Gateway 和审批处理器。
 2. 基础 Worker 使用 DSH 原生独立 Preset/Spawn；首版安全分析型，没有执行或 Memory 权限。专业 `worker-review` 按构建配置在自有 Core 同时声明 Preset 与 allowlist，避免 Extras 关闭产生悬空引用。

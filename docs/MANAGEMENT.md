@@ -1,6 +1,6 @@
 # 功能管理与维护
 
-实例版本统一见 [当前状态](STATUS.md)；源码 test.13 不代表已部署。
+实例版本统一见 [当前状态](STATUS.md)；源码默认与实例启用状态分开记录。
 
 安装版本和验收范围以 [STATUS](STATUS.md) 为唯一当前入口。官方内置 Schedule 保持；旧项目记忆数据保留，但不自动导入新库。
 
@@ -42,7 +42,7 @@ Character 构建保留官方 Creator 的 `tool-plugin-manager`。本机 DSH 0.2.
 
 生产依赖部署本机已经配置的 QQ/DSH/QQTK，脚本不是跨机器通用安装器。Node 依赖安装使用缓存和 `--ignore-scripts`；迁移机器前需要重新构建官方派生配置并核对路径。测试产物、配置、凭据和会话均被 Git 忽略。
 
-本次部署的 QQTK 独立源码提交为 `8b947d7`（本机依赖源码仓库）；公共 Character 仓库保存可审查补丁，不复制私有配置或安装产物。
+QQTK 使用独立仓库的版本化补丁和产物哈希核验，当前部署范围见 STATUS；不复制私有配置或安装产物到公开仓库。
 
 ## 本机角色试用配置（test.6）
 
@@ -56,7 +56,7 @@ Character 构建保留官方 Creator 的 `tool-plugin-manager`。本机 DSH 0.2.
 
 test.10 提供独立 `dsh-interaction-policy`。普通 Agent 在自己的 Preset 配置；Character 可用 `DSH_CHARACTER_INTERACTION=on/off` 或私有构建配置选择。默认不增加交互条目，不改变运行中的 Agent。等待文案、阈值、流式节流与分段上限，以及安全修正和关闭方式见 [Interaction Policy](INTERACTION-POLICY.md)。
 
-## test.13 可选 Session 生命周期与长期任务（未部署）
+## test.13 可选 Session 生命周期与长期任务（实例启用状态见 STATUS）
 
 QQ 条目可设置 `sessionLifecycle: {enabled: true, freshOnHostRestart: true, inactivityMs: 43200000}`，默认关闭。仅真实用户入站更新计时；回复、Schedule 和后台工作不刷新计时。Host 重启/到期后下次安全输入创建空白 Session；忙碌、待审批/问答和未完成收件箱延后。QQ manager `getStatus().lifecycle` 提供 pendingReason/blockedBy/generation。旧提醒保留原 Session 并冷恢复，长期 Memory 与固定 Persona 不清空。
 

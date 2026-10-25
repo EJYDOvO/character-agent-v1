@@ -1,6 +1,6 @@
 # 运行架构与复用边界（test.13 源码）
 
-当前源码 test.13 在既有原生分析 Worker、Memory Inspector 上新增可选 QQ Session 生命周期和独立长期任务。本轮仅隔离验证，未部署；实例部署统一见 [STATUS](STATUS.md)。阶段对照见 [路线图](IMPLEMENTATION_ROADMAP.md)，任务契约见 [Long Tasks](../packages/long-tasks/README.md)。
+当前源码 test.13 在既有原生分析 Worker、Memory Inspector 上新增可选 QQ Session 生命周期和独立长期任务。隔离与当前实例部署的验收边界统一见 [STATUS](STATUS.md)。阶段对照见 [路线图](IMPLEMENTATION_ROADMAP.md)，任务契约见 [Long Tasks](../packages/long-tasks/README.md)。
 
 新增 Worker 使用官方 `subagent` 的 `agentPreset / allowedAgentPresets` 和 `spawn`，Core 自带 `worker-general`；执行守卫位于现有 Memory Tools 包的独立入口，不增加自定义 Spawn 或 Agent Loop。主 Character 保留完整 Creator。Inspector 是额外可选双端插件：原生 `dsh.client` 将 React 页面注册到 `settings.section`，复用 DSH 导航、组件与主题；通过原生 Connection RPC 访问有界 Host API，Host 复用 `webServer` 与 `connection.admit()`，经认证后调用 Core 的授权 API，浏览器不能直连 SQLite 或指定可信主体。四个核心插件与可选 Extras 边界保持；详见 [Worker](WORKERS.md) 和 [Inspector](MEMORY-INSPECTOR.md)。
 
@@ -75,4 +75,4 @@ test.12 审计进一步将内部可见性判断与公开脱敏分离，避免遗
 
 ## 明确未改变的部分
 
-保留既有三类记忆、FTS5、CAS、近重复处理、时效、来源、遗忘防复活和提取队列。test.8 已新增 L1、跨事件 L2 巩固、L3 摘录投影及话题消费策略；不追溯改变 test.7 交付声明。test.12 增加受限分析 Worker，没有主动闲聊。冲突的完整语义判断、网络投递 exactly-once、提醒目标迁移与跨机器认证仍不是已完成能力；test.13 的可选 QQ 轮换仅在隔离 Host 验证。
+保留既有三类记忆、FTS5、CAS、近重复处理、时效、来源、遗忘防复活和提取队列。test.8 已新增 L1、跨事件 L2 巩固、L3 摘录投影及话题消费策略；不追溯改变 test.7 交付声明。test.12 增加受限分析 Worker，没有主动闲聊。冲突的完整语义判断、网络投递 exactly-once、提醒目标迁移与跨机器认证仍不是已完成能力；test.13 的可选 QQ 轮换已隔离验证并在本机启用，实际收件待验收。

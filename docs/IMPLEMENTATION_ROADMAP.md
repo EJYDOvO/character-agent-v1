@@ -11,7 +11,7 @@
 | S2 角色/Worker | 完整 Creator 工具基线、原生 worker-general、按需 worker-review、冷恢复及工具/Memory 越权测试 | 有执行权限的专业 Worker；超出既有两任务小样本的质量 A/B；真实 QQ 主代审批 |
 | S3 记忆 | L1/L2/L3、自动抽取、巩固、CAS、来源/遗忘屏障；授权分页/修订及跨 Session 检索 | 推断质量长测、大库冷重建；旧 Task Memory 只有预览，正式导入未开发；向量检索未开发 |
 | S4 通知 | Schedule→outbox，去重、unknown 不重放、稳定 Conversation 路由；可选独立长期任务、原生周期到期与进程重启恢复 | 手机送达/按钮；复杂业务目标验收、后台主代审批未实现 |
-| S5 UI/轮换 | Inspector 原生设置页；QQTK 默认关闭的重启/12h 空白 Session 轮换，Identity 保护旧 Schedule 根 | 轮换/长期任务未部署；真实 QQ 验收、离线 Agent 管理与实际桌面窗口验收待完成 |
+| S5 UI/轮换 | Inspector 原生设置页；QQTK 默认关闭的重启/12h 空白 Session 轮换，Identity 保护旧 Schedule 根 | 轮换/长期任务已在本机启用；真实 QQ 验收、离线 Agent 管理与实际桌面窗口验收待完成 |
 
 下一步补齐必要实机验收，再考虑更细粒度 Worker 授权和大库冷重建优化。不要将默认关闭的轮换或长期任务自动加入部署，也不开发主动闲聊。原生 Schedule 仍固定原 Session，本轮未实现提醒目标迁移。
 
