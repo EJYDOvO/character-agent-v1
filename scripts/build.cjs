@@ -10,6 +10,7 @@ const write=(rel,body)=>{fs.mkdirSync(path.dirname(root+'/'+rel),{recursive:true
 async function main(){
  const {loadDefinition}=await import('../packages/character-definition/loader.mjs');
  const {workerPreset,configureWorkers,selectedWorkerIds}=await import('../packages/character-definition/workers.mjs');
+ const {communityWorkerIds}=await import('../packages/character-memory-tools/worker-policy.mjs');
  const settings=require('./build-settings.cjs')();
  const definition=loadDefinition(settings.definitionPath,s=>yaml.load(s));
  const a=require('./host-archive.cjs').openArchive();
@@ -19,15 +20,16 @@ async function main(){
  const creator=yaml.load(creatorText,{schema})[0].insert[0];
  const character=yaml.load(creatorText,{schema})[0].insert[0];character.id='preset-qq-character';character.config.id=settings.presetId;character.config.name=`Character ${definition.definition.name} (V1 测试版)`;
  character.config.plugins.find(x=>x.id==='persona').config.prefix=definition.persona;
- const workerIds=selectedWorkerIds(settings.specialistWorkers,settings.communityWorkerPresets);
- character.config.plugins.push({id:'character-memory-tools',name:'dsh-character-memory-tools/character.mjs',config:{workerPresets:workerIds}});
+ const workerIds=selectedWorkerIds(settings.specialistWorkers,settings.communityWorkerPresets,{characterPresetId:settings.presetId,rootPresetIds:[creator.config.id]});
+ const externalIds=new Set(communityWorkerIds(settings.communityWorkerPresets,{characterPresetId:settings.presetId,rootPresetIds:[creator.config.id]}));
+ character.config.plugins.push({id:'character-memory-tools',name:'dsh-character-memory-tools/character.mjs',config:{workerPresets:workerIds,communityWorkerPresets:settings.communityWorkerPresets,characterPresetId:settings.presetId}});
  if(!workerSupported)throw Error('Installed DSH lacks independent native Worker presets');
  configureWorkers(character,settings.specialistWorkers,settings.communityWorkerPresets);
  if(settings.interaction){const {options}=await import('../packages/interaction-policy/policy.mjs');character.config.plugins.push({id:'interaction-policy',name:'dsh-interaction-policy',isolate:{interactionPolicy:true},config:options(settings.interaction)});}
  const host=[{id:'character-identity',name:'dsh-character-identity',config:{presetId:settings.presetId,bindingFile:settings.dataDirectory+'/binding.json',stateFile:settings.dataDirectory+'/coordination.sqlite'}},
  {id:'character-memory-core',name:'dsh-character-memory-core',config:{database:settings.dataDirectory+'/memory.sqlite',autoCapture:true}},
  {id:'qq-remote-ops',name:'dsh-remote-ops-local',config:{root:install.replaceAll('\\','/')}},
- {id:'im-qqbot',name:'dsh-character-qq-adapter',config:{preset:settings.presetId,access:{c2cMode:'allowlist',c2cAllow:[],groupMode:'disabled',groupAllow:[]}}},...workerIds.filter(id=>!settings.communityWorkerPresets.includes(id)).map(workerPreset),character];
+ {id:'im-qqbot',name:'dsh-character-qq-adapter',config:{preset:settings.presetId,access:{c2cMode:'allowlist',c2cAllow:[],groupMode:'disabled',groupAllow:[]}}},...workerIds.filter(id=>!externalIds.has(id)).map(workerPreset),character];
  write('bundles/character-core/cordis.patch.yml',dump([{insert:host}]));
  // Extras is maintained independently from generated Core. Rebuilding a persona
  // must neither restore former defaults nor erase reviewed optional declarations.

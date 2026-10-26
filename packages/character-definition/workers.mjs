@@ -8,7 +8,7 @@ export function workerPreset(id='worker-general'){
  ]}};
 }
 export function configureWorkers(character,specialists=[],community=[]){
- const ids=selectedWorkerIds(specialists,community);
+ const ids=selectedWorkerIds(specialists,community,{characterPresetId:character.config.id??'qq-character'});
  const delegation=character.config.plugins.find(p=>p.id==='delegation');
  const spawn=delegation?.config.find(p=>p.id==='tool-subagent'&&p.config?.provider==='spawn');
  if(!spawn)throw Error('Official Creator Spawn composition changed; review required');

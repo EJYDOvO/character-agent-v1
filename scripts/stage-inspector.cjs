@@ -15,11 +15,12 @@ const schema=yaml.DEFAULT_SCHEMA.extend([new yaml.Type('tag:yaml.org,2002:js',{k
  character.config.plugins.find(p=>p.id==='persona').config.prefix='Isolated Character fixture. Retain full assistant abilities.';
  if(realModel){const {loadDefinition}=await import('../packages/character-definition/loader.mjs');character.config.plugins.find(p=>p.id==='persona').config.prefix=loadDefinition(require('./definition-source.cjs')(),s=>yaml.load(s)).persona;}
  if(workerProbe&&(realModel||modules))throw Error('--workers uses its own deterministic native Host fixture');
- const specialists=extras||workerProbe?['worker-review']:[],community=workerProbe?['worker-community']:[];
+ const specialists=extras||workerProbe?['worker-review']:[],community=workerProbe?['worker-community',{id:'root-planner-worker',alias:'external-planner'}]:[];
  const workerIds=selectedWorkerIds(specialists,community);configureWorkers(character,specialists,community);
- character.config.plugins.push({id:'memory-tools',name:local('packages/character-memory-tools/character.mjs'),config:{workerPresets:workerIds}});
- const workers=workerIds.filter(id=>!community.includes(id)).map(workerPreset);
- if(workerProbe){const reviewed=workerPreset();reviewed.id='preset-worker-community';reviewed.config.id='worker-community';reviewed.config.name='Reviewed community fixture';reviewed.config.plugins[1].config.prefix=reviewed.config.plugins[1].config.prefix.replaceAll('worker-general','worker-community');workers.push(reviewed);}
+ character.config.plugins.push({id:'memory-tools',name:local('packages/character-memory-tools/character.mjs'),config:{workerPresets:workerIds,communityWorkerPresets:community}});
+ const {communityWorkerIds}=await import('../packages/character-memory-tools/worker-policy.mjs');
+ const external=communityWorkerIds(community),workers=workerIds.filter(id=>!external.includes(id)).map(workerPreset);
+ for(const id of external){const reviewed=workerPreset();reviewed.id='preset-'+id;reviewed.config.id=id;reviewed.config.name='Reviewed community fixture';reviewed.config.plugins[1].config.prefix=reviewed.config.plugins[1].config.prefix.replaceAll('worker-general',id);workers.push(reviewed);}
  for(const worker of workers)worker.config.plugins[0].name=local('packages/character-memory-tools/worker.mjs');
  const binding=home+'/binding.json';fs.writeFileSync(binding,JSON.stringify({appId:'mock-app',ownerId:'mock-owner',characterId:'fixture-character',projectId:'fixture-project'}));
  const inserted=[...workers,character,

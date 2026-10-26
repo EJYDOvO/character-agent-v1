@@ -1,6 +1,6 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import {workerPreset,configureWorkers,selectedWorkerIds} from '../packages/character-definition/workers.mjs';
-import {workerRoles,rootWorkerPolicy} from '../packages/character-memory-tools/worker-policy.mjs';
+import {workerRoles,rootWorkerPolicy,communityWorkers,communityWorkerIds} from '../packages/character-memory-tools/worker-policy.mjs';
 import {apply as boundary} from '../packages/character-memory-tools/worker.mjs';
 
 test('Every Worker is an independent analysis leaf with its own role and evidence contract',()=>{
@@ -26,10 +26,36 @@ test('Root retains Creator and model selection; only native Spawn gets the trust
 });
 test('Roster is trusted build configuration and rejects unsafe, duplicate or built-in community references',()=>{
  assert.equal(selectedWorkerIds().length,7);assert(!selectedWorkerIds().includes('worker-review'));
- for(const ids of [['cordis'],['worker-general'],['worker-explore'],['worker-a','worker-a'],['worker-../root'],['worker-'],[{}]])assert.throws(()=>selectedWorkerIds([],ids));
+ for(const ids of [['cordis'],['worker-general'],['worker-explore'],['worker-a','worker-a'],['worker-../root'],[''],[{}]])assert.throws(()=>selectedWorkerIds([],ids));
  assert.throws(()=>selectedWorkerIds(['worker-planner']));assert.throws(()=>selectedWorkerIds(['worker-review','worker-review']));
  const policy=rootWorkerPolicy(selectedWorkerIds());for(const token of ['唯一','简单任务','WorkerResult V1','低信任','worker-planner'])assert(policy.includes(token));
  assert.throws(()=>rootWorkerPolicy(['cordis']));
+});
+test('Community real IDs and display aliases remain distinct from the native Spawn whitelist',()=>{
+ const community=['legacy-worker',{id:'root-planner-worker',alias:'external-planner'}];
+ assert.deepEqual(communityWorkers(community),[{id:'legacy-worker'},{id:'root-planner-worker',alias:'external-planner'}]);
+ assert.deepEqual(communityWorkerIds(community),['legacy-worker','root-planner-worker']);
+ const parent={config:{id:'character-custom',plugins:[{id:'delegation',config:[{id:'tool-subagent',config:{provider:'spawn'}}]}]}};
+ configureWorkers(parent,[],community);const ids=parent.config.plugins[0].config[0].config.allowedAgentPresets;
+ assert(ids.includes('root-planner-worker'));assert(!ids.includes('external-planner'));assert.equal(ids.length,9);
+ const text=rootWorkerPolicy(ids,community,{characterPresetId:'character-custom'});
+ assert(text.includes('agent_preset 必须传 "root-planner-worker"'));assert(text.includes('展示别名 "external-planner"'));
+ assert.throws(()=>rootWorkerPolicy(selectedWorkerIds(),community),/absent/);
+});
+test('Duplicate IDs, alias collisions, protected Roots and custom Character self-reference fail closed',()=>{
+ for(const community of [
+  ['root'],['creator'],['cordis'],['qq-character'],['long-task'],['worker-review'],['character-custom'],
+  ['root-planner-worker',{id:'root-planner-worker',alias:'planner'}],
+  [{id:'one',alias:'label'},{id:'two',alias:'label'}],
+  [{id:'one',alias:'two'},'two'],[{id:'one',alias:'one'}],
+  [{id:'one',alias:'worker-general'}],[{id:'one',alias:'cordis'}],[{id:'one',alias:'character-custom'}],
+  [{id:'one',alias:''}],[{id:'one',alias:'a\nb'}],[{id:'one',alias:null}],
+  [{id:'one',allowTools:true}],[' a'],['a\u200bb'],['a/b'],['a\\b'],['x'.repeat(129)],['__proto__']
+ ])assert.throws(()=>communityWorkers(community,{characterPresetId:'character-custom'}));
+ assert.throws(()=>communityWorkerIds(['custom-admin'],{rootPresetIds:['custom-admin']}));
+ assert.throws(()=>rootWorkerPolicy(['character-custom'],[],{characterPresetId:'character-custom'}));
+ const self={config:{id:'character-custom',plugins:[]}};assert.throws(()=>configureWorkers(self,[],['character-custom']),/protected/);
+ assert.throws(()=>selectedWorkerIds([],[],{characterPresetId:'worker-general'}),/protected Root/);
 });
 test('Boundary hides inherited tools, overrides PTC presentation, and denies even explicit late tool grants',()=>{
  const calls=[];let guard;

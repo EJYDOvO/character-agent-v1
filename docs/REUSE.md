@@ -111,3 +111,5 @@ test.9 审计修复保留契约 v1、Schema 3 和现有工具参数。Host 的 `
 test.14 要求 QQTK 的 `isCurrentSession(record)` Host 契约：历史根只有提醒绑定，无完整 Identity/Memory/普通工具，不能以冷恢复或手填 Session 参数提升权限。通用 QQTK 不因此依赖 Character，也不自行提供身份授权。只读存量审计见 [管理说明](MANAGEMENT.md)，当前是否部署见 STATUS。
 
 Worker V2 是 Character 集成层的构建策略：`worker-policy.mjs` 仅含无状态角色/契约文本，`worker.mjs` 只依赖原生 tools 服务。它们不让通用 Memory/QQ/Interaction 依赖 Worker。第三方安全 Preset 可复用该守卫并经 Host 白名单接入；不会自动获得 Character Identity、Memory 或管理权限。Core 声明七个基础角色及可选 review，Extras 仍独立；实际装配与验收边界见 STATUS。
+
+社区 ID 限制修复目前仅在本地源码：支持真实 Preset ID 和可选展示别名，构建保留声明但只将真实 ID 交给原生 Spawn。不会复制外部声明或自动安装；身份、工具和权限审查边界不变，详见 [Worker](WORKERS.md)。
