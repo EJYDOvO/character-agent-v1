@@ -15,7 +15,7 @@ export function apply(ctx,config){
    yield {type:'text-delta',index:0,text:'嗯，我先检查。'};
    yield {type:'tool-call-delta',index:1,id:'fixture-call',name:'interaction_fixture',argumentsDelta:'{}'};
   }else{
-   if(text.includes('slow-case'))await sleep(100);
+   if(text.includes('slow-case'))await sleep(1000);
    yield {type:'text-delta',index:0,text:'嗯，今天还不错。'};await sleep(20);
    yield {type:'text-delta',index:0,text:'咖啡机终于修好了。'};
   }

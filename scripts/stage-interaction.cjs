@@ -3,7 +3,9 @@ const fs=require('node:fs'),path=require('node:path'),{randomUUID}=require('node
 const root=path.resolve(__dirname,'..'),home=path.join(root,'test-data','interaction-'+randomUUID()),dir=path.join(home,'profiles','interaction');
 fs.mkdirSync(dir,{recursive:true});
 const plugin=require('node:url').pathToFileURL(path.join(root,'packages/interaction-policy/index.mjs')).href;
-const preset=(id,enabled)=>({id:'preset-'+id,name:'@deepseek-ai/dsh-agent-preset',config:{id,name:id,plugins:[{id:'interaction',name:plugin,isolate:{interactionPolicy:true},config:{enabled,hangOnMs:60,throttleMs:5}},...(enabled?[{id:'time-context',name:'@deepseek-ai/dsh-time-context',config:{refreshIntervalMs:1}}]:[])]}});
+// Leave headroom for native startup/IO; the slow provider waits twice this limit.
+// The fast-no-status and slow-exactly-one-status assertions remain unchanged.
+const preset=(id,enabled)=>({id:'preset-'+id,name:'@deepseek-ai/dsh-agent-preset',config:{id,name:id,plugins:[{id:'interaction',name:plugin,isolate:{interactionPolicy:true},config:{enabled,hangOnMs:500,throttleMs:5}},...(enabled?[{id:'time-context',name:'@deepseek-ai/dsh-time-context',config:{refreshIntervalMs:1}}]:[])]}});
 const install=require('./installation.cjs').install,yaml=require(require.resolve('js-yaml',{paths:[install+'/data/profiles/desktop']}));
 class Expression{constructor(value){this.value=value;}}
 const schema=yaml.DEFAULT_SCHEMA.extend([new yaml.Type('tag:yaml.org,2002:js',{kind:'scalar',construct:v=>new Expression(v),instanceOf:Expression,represent:v=>v.value})]);

@@ -16,6 +16,9 @@ New-Item -ItemType Directory -Path $env:TEMP -Force | Out-Null
 $exe=Join-Path $env:DSH_INSTALL_ROOT 'DeepSeek Harness.exe'
 $cli=Join-Path $env:DSH_INSTALL_ROOT 'resources/app.asar/dsh/node_modules/@deepseek-ai/dsh-desktop-host/lib/cli.js'
 $resolver=([Uri](Join-Path $project 'tests/inspector-sdk-resolver.mjs')).AbsoluteUri
+$phases=1;if($args -contains '--workers'){$phases=2}
+for($phase=0;$phase -lt $phases;$phase++){
+if($phase -gt 0){Move-Item -LiteralPath $run.result -Destination (Join-Path $run.home 'phase0.json')}
 $p=Start-Process -FilePath $exe -ArgumentList @('--expose-internals','--import',$resolver,$cli,'--profile','inspector','--no-open','--port','0') -WorkingDirectory $run.home -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $run.home 'stdout.log') -RedirectStandardError (Join-Path $run.home 'stderr.log')
  $timeout=55;if($args -contains '--real-model-ab'){$timeout=360}
  $deadline=(Get-Date).AddSeconds($timeout)
@@ -25,10 +28,13 @@ $p=Start-Process -FilePath $exe -ArgumentList @('--expose-internals','--import',
  if($report.runId -ne $run.runId){throw 'Stale probe result'}
  $report | ConvertTo-Json -Depth 10
  if(!$report.ok){throw 'Isolated Inspector/Worker assertions failed'}
+ if($phases -gt 1 -and $report.restart -ne [bool]$phase){throw 'Worker restart phase mismatch'}
  if($args -contains '--preview'){
   $previewDeadline=(Get-Date).AddSeconds(180)
   while(!(Test-Path -LiteralPath (Join-Path $run.home 'preview.done')) -and (Get-Date) -lt $previewDeadline -and !$p.HasExited){Start-Sleep -Milliseconds 250;$p.Refresh()}
  }
+ $p.Refresh();if(!$p.HasExited){Stop-Process -Id $p.Id};if(!$p.WaitForExit(5000)){throw 'Isolated Host did not stop'};$p=$null
+}
 } finally {
  try {
   if($p){$p.Refresh();if(!$p.HasExited){Stop-Process -Id $p.Id};if(!$p.WaitForExit(5000)){throw 'Isolated test process did not exit'}}

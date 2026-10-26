@@ -32,7 +32,11 @@ test.9 已部署的审计修复调整了记忆管理行为：Assistant 只管理
 
 ## Extras 与后续插件声明
 
+Worker V2 候选源码的内置分析角色属于 Core，不需要启用 Extras；尚未部署。私有构建配置保留 `specialistWorkers:["worker-review"]`，新增 `communityWorkerPresets:["worker-example"]` 仅引用 Host 已审查并安装的独立 Preset。六个专业分析角色默认生成，Planner 按任务需要调用。名单、Persona 或官方 Creator 改变后须重新构建并隔离回归；不要直接编辑生成 Core 或运行中的 Profile。社区守卫、契约和限制见 [Worker](WORKERS.md)。
+
 当前源码的 `bundles/character-extras/cordis.patch.yml` 仅声明默认停用的 `dsh-character-long-tasks`。不预置搜索或 Bilibili，它们使用各自原生 Bundle。构建保留已有 Extras 声明，避免角色重建覆盖后续维护内容。长期任务需要另装可选包并明确启用条目；只开启 Extras 不会自动执行任务。
+
+当前实例的免费搜索为独立 `dsh-free-search@0.9.15` Bundle。使用插件管理中的 Free Search 配置卡管理，`/free-search-engine` 切换模式；中文/英文 Auto 池由 `web-search-free` 的 `zhPool` / `enPool` 管理，当前实例均优先 DuckDuckGo，其他引擎保留回退。此为实例选择，不是 Extras 或通用默认。新版本通过原生 Settings 接管 `web.searchProvider` / `fetchProvider`；停用或回滚前检查这些持久配置是否仍引用 `ddg` / `fs-quality-fetch`，避免指向已卸载 Provider。升级与恢复同时保留 Profile、锁文件及维护版本清单，不修改 Core 或官方 DSH。
 
 默认维护约定：本项目自有的可选插件声明放 Extras，固定角色/Identity/Memory/QQ 归 Core，密钥和 Owner 参数只放私有 Profile。外部完整 Bundle 由原生管理器装入 Profile，不复制其插入项到 Extras，也不编辑已安装的 node_modules。普通插件包还需独立安装依赖，只有 YAML 声明并不等于已安装。
 

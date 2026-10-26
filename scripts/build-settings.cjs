@@ -12,5 +12,6 @@ module.exports=()=>{
  const interaction=interactionFlag==='off'?undefined:interactionFlag==='on'?{...local.interaction,enabled:true}:local.interaction?.enabled?local.interaction:undefined;
  const specialistWorkers=local.specialistWorkers??[];
  if(!Array.isArray(specialistWorkers)||specialistWorkers.some(id=>id!=='worker-review')||new Set(specialistWorkers).size!==specialistWorkers.length)throw Error('Unsupported specialistWorkers');
- return {presetId,dataDirectory:path.normalize(dataDirectory).replaceAll('\\','/'),definitionPath:require('./definition-source.cjs')(),specialistWorkers,...(interaction?{interaction}: {})};
+ const communityWorkerPresets=require('../packages/character-memory-tools/worker-policy.mjs').communityWorkerIds(local.communityWorkerPresets??[]);
+ return {presetId,dataDirectory:path.normalize(dataDirectory).replaceAll('\\','/'),definitionPath:require('./definition-source.cjs')(),specialistWorkers,communityWorkerPresets,...(interaction?{interaction}: {})};
 };

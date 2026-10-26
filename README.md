@@ -6,6 +6,8 @@
 
 可选 [Interaction Policy V1](docs/INTERACTION-POLICY.md) 提供自然表达、等待提示、流式气泡与安全修正。源码默认构建不启用；该通用插件不要求安装 Character 或 QQ。
 
+当前源码候选 **test.15 / Worker V2** 已完成隔离验证，尚未部署；运行实例仍为上述 test.14。
+
 test.14 已收紧历史 QQ Session：只有当前主路由获得完整身份；旧根仅由 Host 转发可信 Schedule 提醒，禁止模型、工具、Memory 与长期任务创建。提供[只读存量审计](docs/MANAGEMENT.md)；必须配套更新 QQTK 补丁，不能单独部署 Identity。
 
 ## 能做什么
@@ -17,7 +19,7 @@ test.14 已收紧历史 QQ Session：只有当前主路由获得完整身份；�
 - **可选人格化**：Off / Assistant / Character 三种模式，与通用记忆共用数据库，按 Agent 隔离；模式切换同时约束历史记录读取。形成带引用的用户画像、互动约定和自身经验，不修改固定角色设定；引用存在不代表推断一定正确。
 - **提醒与维护集成**：复用官方 Schedule 和独立 QQTK，记录明确任务通知的投递状态。
 - **可选独立长期任务**：Extras 中默认停用的 [Long Tasks](packages/long-tasks/README.md)，使用原生 Schedule、独立任务根 Session 和既有通知账本，附带管理工具与 Skill。QQTK 可选重启/12 小时无用户输入换新主 Session，默认关闭。
-- **独立分析 Worker**：原生 Spawn/Session，Core 默认 `worker-general`，可选 `worker-review`；无执行与 Memory 权限，操作提案交回主 Agent 核验。
+- **独立分析 Worker**：Worker V2 源码新增 Explore、Librarian、Oracle、Metis、Momus 和按需 Planner；保留 general/review。Character 是唯一 Root，原生独立 Preset/Session、白名单与叶子守卫，无执行和 Memory 权限。尚未部署，能力边界见 [Worker](docs/WORKERS.md)。
 - **Memory Inspector**：可选的 DSH 原生「设置 → 记忆管理」页面，网页与桌面共用客户端插件，查看分层记忆、来源、修订与后台任务，按现有治理规则确认、纠错、遗忘和恢复有效元数据。
 
 ## 仓库结构

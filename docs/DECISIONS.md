@@ -1,9 +1,9 @@
 # 当前实现决策
 
-本页接续归档 v0.7.8 设计；目标设计不等于已部署能力。当前源码 test.13，实例部署与验证记录见 [STATUS](STATUS.md)。
+本页接续归档 v0.7.8 设计；目标设计不等于已部署能力。当前源码为 test.15 / Worker V2 候选，实例与验证记录见 [STATUS](STATUS.md)。
 
 1. 四个核心运行插件、Core/Extras、Creator 构建派生保留。QQTK 独立维护，一个 QQ Gateway 和审批处理器。
-2. 基础 Worker 使用 DSH 原生独立 Preset/Spawn；首版安全分析型，没有执行或 Memory 权限。专业 `worker-review` 按构建配置在自有 Core 同时声明 Preset 与 allowlist，避免 Extras 关闭产生悬空引用。
+2. Worker V2 使用原生独立 Preset/Spawn，Character 是唯一 Root。Core 声明 general 与六个专业分析角色；review 仍可选；声明、白名单和 Root 策略同源构建，`maxDepth:1`，无执行/Memory/QQ 身份。Planner 只是按需计划草案角色，不引入第二套调度。社区 Preset 先由 Host 审查安装再加入显式构建白名单；不采纳上游旧 toolFilter/persona 接口。
 3. Memory Inspector 是可选通用 Host 插件，复用原生 Web listener 和认证。使用原生 `dsh.client` 和 `settings.section` 内嵌到网页/桌面共用设置页，不提供外置 HTML 或 iframe；不新建管理服务。
 4. GUI 不颁发身份。Host 认证 Owner 只可选择可信 Provider 已授予 Core 的上下文，所有操作再次经过授权和 CAS。
 5. 版本恢复受现有屏障限制，只恢复仍有效的同内容元数据；不会恢复被纠正或遗忘的正文。

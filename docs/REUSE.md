@@ -109,3 +109,5 @@ test.9 审计修复保留契约 v1、Schema 3 和现有工具参数。Host 的 `
 四个核心插件保持。通用 QQ 的可选 Session 生命周期仅依赖原生 Host，默认关闭；没有 Character 的稳定会话桥接时，已有 Schedule 会阻止自动轮换以保护提醒。Character Identity 负责保留旧 QQ 根的可信绑定和稳定通知目标。Extras 的 [Long Tasks](../packages/long-tasks/README.md) 是 Character 专用可选集成，不是 Memory/Interaction/QQ 的依赖；默认停用且无工具权限。原生分析 Worker 与 Inspector 的边界分别见 [Worker](WORKERS.md)、[Inspector](MEMORY-INSPECTOR.md)。
 
 test.14 要求 QQTK 的 `isCurrentSession(record)` Host 契约：历史根只有提醒绑定，无完整 Identity/Memory/普通工具，不能以冷恢复或手填 Session 参数提升权限。通用 QQTK 不因此依赖 Character，也不自行提供身份授权。只读存量审计见 [管理说明](MANAGEMENT.md)，当前是否部署见 STATUS。
+
+Worker V2 是 Character 集成层的构建策略：`worker-policy.mjs` 仅含无状态角色/契约文本，`worker.mjs` 只依赖原生 tools 服务。它们不让通用 Memory/QQ/Interaction 依赖 Worker。第三方安全 Preset 可复用该守卫并经 Host 白名单接入；不会自动获得 Character Identity、Memory 或管理权限。Core 声明七个基础角色及可选 review，Extras 仍独立；此源码增量未部署。

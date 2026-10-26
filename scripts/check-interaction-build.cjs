@@ -3,7 +3,7 @@ const fs=require('node:fs'),path=require('node:path'),assert=require('node:asser
 const root=path.resolve(__dirname,'..');
 fs.mkdirSync(path.join(root,'test-data'),{recursive:true});
 const fixture=fs.mkdtempSync(path.join(root,'test-data','interaction-build-'));
-for(const file of ['package.json','scripts/build.cjs','scripts/build-settings.cjs','scripts/definition-source.cjs','scripts/installation.cjs','scripts/host-archive.cjs','packages/character-definition/loader.mjs','packages/interaction-policy/policy.mjs']){
+for(const file of ['package.json','scripts/build.cjs','scripts/build-settings.cjs','scripts/build-inputs.cjs','scripts/definition-source.cjs','scripts/installation.cjs','scripts/host-archive.cjs','packages/character-definition/loader.mjs','packages/character-definition/workers.mjs','packages/character-memory-tools/worker-policy.mjs','packages/interaction-policy/policy.mjs']){
  const dest=path.join(fixture,file);fs.mkdirSync(path.dirname(dest),{recursive:true});fs.copyFileSync(path.join(root,file),dest);
 }
 fs.writeFileSync(path.join(fixture,'fixture.yaml'),'id: fixture\nname: Fixture\ncharacter:\n  identity: Isolated build fixture.\n');
@@ -16,6 +16,8 @@ for(const mode of ['on','off']){
  assert.equal(result.status,0,result.stderr);
  const manifest=JSON.parse(fs.readFileSync(path.join(fixture,'artifacts/build-manifest.json'),'utf8'));
  const patch=fs.readFileSync(path.join(fixture,'bundles/character-core/cordis.patch.yml'),'utf8');
+ assert.equal(manifest.workerPolicyVersion,2);assert.equal(manifest.workerPresets.length,7);
+ for(const id of manifest.workerPresets)assert(patch.includes('id: preset-'+id),'Missing independent Worker declaration');
  assert.equal(manifest.characterPluginIds.includes('interaction-policy'),mode==='on');
  assert.equal(patch.includes('name: dsh-interaction-policy'),mode==='on');
  if(mode==='on')assert.match(patch,/interactionPolicy: true/);

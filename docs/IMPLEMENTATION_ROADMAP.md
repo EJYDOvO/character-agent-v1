@@ -1,6 +1,6 @@
 # 阶段状态与后续路线
 
-本页以 test.13 源码及隔离验证为准，对照归档 v0.7.8 的 S0–S5；部署情况统一见 STATUS，不继承旧文档中的部署授权。
+本页以 test.15 / Worker V2 候选源码及隔离验证为准，对照归档 v0.7.8 的 S0–S5；部署情况统一见 STATUS，不继承旧文档中的部署授权。
 
 2026-10-20 更新：见 [当前状态与验收边界](STATUS.md)。已补充 1 万条性能基线、原生 Schedule 完整进程重启、网页实际治理操作、同模型两任务对照和保留新增记忆的回滚。完整能力 A/B、Desktop 窗口、QQ 手机审批及完整 Profile 安装门禁仍待完成。
 
@@ -8,7 +8,7 @@
 |---|---|---|
 | S0 环境 | 读取安装 ASAR，确认 DSH 0.2.1-rc.2 / Node 24.21.0，重新审查原生 Worker、Web、认证及工具守卫 | 其他 DSH 构建、Mac、生产变更前快照 |
 | S1 身份/装配 | 单 Owner、可撤销 Host capability、固定可信项目绑定；Core/Extras 和通用模块原生启停回归 | 任务级 grants、项目管理；全组合生产 HMR、实机审批 |
-| S2 角色/Worker | 完整 Creator 工具基线、原生 worker-general、按需 worker-review、冷恢复及工具/Memory 越权测试 | 有执行权限的专业 Worker；超出既有两任务小样本的质量 A/B；真实 QQ 主代审批 |
+| S2 角色/Worker | 完整 Creator 工具基线；Worker V2 六个专业分析角色、general/可选 review、显式社区白名单；原生冷恢复/进程重启及工具/Memory/长期任务越权验证（未部署） | 有检索或执行权限的专业 Worker；真实模型质量/JSON 稳定性；完整任务质量 A/B；真实 QQ 主代审批 |
 | S3 记忆 | L1/L2/L3、自动抽取、巩固、CAS、来源/遗忘屏障；授权分页/修订及跨 Session 检索 | 推断质量长测、大库冷重建；旧 Task Memory 只有预览，正式导入未开发；向量检索未开发 |
 | S4 通知 | Schedule→outbox，去重、unknown 不重放、稳定 Conversation 路由；可选独立长期任务、原生周期到期与进程重启恢复 | 手机送达/按钮；复杂业务目标验收、后台主代审批未实现 |
 | S5 UI/轮换 | Inspector 原生设置页；QQTK 默认关闭的重启/12h 空白 Session 轮换，Identity 保护旧 Schedule 根 | 轮换/长期任务已在本机启用；真实 QQ 验收、离线 Agent 管理与实际桌面窗口验收待完成 |
