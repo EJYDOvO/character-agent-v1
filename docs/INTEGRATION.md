@@ -32,6 +32,8 @@
 
 ## 回滚
 
+test.15 / Worker V2 不更改 Memory Schema，不需要数据迁移。部署与恢复时按构建清单逐项核对 Worker Preset，不能将默认关闭的 review 或未配置的社区 Preset 当作启动必需项。本轮已实际回退到保留的 test.14 Profile 并再次上线，当前记忆始终保留；该回滚点包含 Interaction test.3、匹配 QQ 补丁和搜索 0.9.15，不能拿未经回复修复的同名 test.14 产物替代。验证范围统一见 STATUS。
+
 优先禁用可选 Inspector，保留 Core 与记忆库。回退 Core 必须停机并持锁；`rollback-memory.cjs` 创建当前数据库的一致副本，用旧运行时检查 Schema、记录、修订及遗忘屏障没有改变。
 
 兼容时恢复旧 Profile、Binding、QQ prefs 与维护策略，**当前记忆数据库和新增记录保留原位**。不兼容则拒绝自动降级；checkpoint 仅作灾难恢复资源，不能自动覆盖新版写入。历史文档中的“恢复旧快照记忆库”不再是当前流程。

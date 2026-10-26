@@ -7,7 +7,7 @@
 | Identity | `packages/character-identity`，memoryIdentity v1 / QQ binding / outbox；新增 `characterIdentity.route(handle)` | Core 管理；撤销绑定即撤销记忆访问 |
 | Memory Core | `LayeredMemory`；Inspector 接口在 `layered.mjs`，仍由 Core 强制 ACL/CAS/屏障 | 关闭 UI 不影响 Core；Schema 3，无本轮迁移 |
 | Memory Tools | 通用 `index.mjs` / Character `character.mjs` / 分析 Worker `worker.mjs` | 每个 Agent Preset 单独装配 |
-| Definition / Worker | `packages/character-definition` 构建派生 Creator；`worker-policy.mjs` 同源角色/白名单/Root 策略 | Core 七个分析角色、可选 review/审查社区引用；源码未部署 |
+| Definition / Worker | `packages/character-definition` 构建派生 Creator；`worker-policy.mjs` 同源角色/白名单/Root 策略 | Core 七个分析角色、可选 review/审查社区引用；部署状态见 STATUS |
 | QQ Adapter / QQTK | 现有专用 Adapter + 独立 QQTK | 本轮未改 QQTK；不额外连接 QQ |
 | Interaction | 独立可选 Agent 插件 | 原有配置与流式实现保持 |
 | Inspector | `packages/memory-inspector`，原生 `settings.section` 客户端、Connection RPC 和受控 Core API | 普通插件，Extras/Profile 声明一次；默认只读，可独立禁用 |

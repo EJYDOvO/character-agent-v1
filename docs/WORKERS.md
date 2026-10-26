@@ -2,7 +2,7 @@
 
 本机 `resources/app.asar` 中的 DSH 0.2.1-rc.2 已具备 `dsh-tool-subagent` 的 `agentPreset`、`allowedAgentPresets` 以及 `spawn` 的独立 Preset 能力。旧 0.2.0 审计中的版本限制不再适用于这个已验证构建；仍不保证其他构建同版本号下的全部接口不变。
 
-本轮是未部署的源码增量，实例仍为 test.14，见 [STATUS](STATUS.md)。Character 是唯一 Root/Orchestrator，保留完整 Creator 工具、Skills、原生委派、Fork 和 workflow。简单任务直接处理；复杂任务才按需使用 Planner 草案，所有结果由 Root 核验和决策。**Fork/workflow 是 Creator 原有通道，不具备此 Worker 的等价隔离边界。** 安全 Worker 使用 `subagent` 的 `spawn`，默认 `worker-general`，显式 `allowedAgentPresets`，`maxDepth:1`。
+Worker V2 已随 test.15 部署，当前实例启用七个默认角色，review 仍按需关闭；验收边界见 [STATUS](STATUS.md)。Character 是唯一 Root/Orchestrator，保留完整 Creator 工具、Skills、原生委派、Fork 和 workflow。简单任务直接处理；复杂任务才按需使用 Planner 草案，所有结果由 Root 核验和决策。**Fork/workflow 是 Creator 原有通道，不具备此 Worker 的等价隔离边界。** 安全 Worker 使用 `subagent` 的 `spawn`，默认 `worker-general`，显式 `allowedAgentPresets`，`maxDepth:1`。
 
 ## 权限与能力
 
@@ -46,6 +46,6 @@ Explore/Librarian 本版也没有读取文件或联网工具；Root 必须提供
 
 `node --test tests/workers.test.mjs` 验证角色、配置和构建契约；安装匹配 DSH 后设置 `DSH_INSTALL_ROOT`，执行 `scripts/run-inspector.ps1 --workers`，使用全新目录及两次独立 Host 进程。实际 Spawn 覆盖八个内置角色及一个审查过的社区夹具，验证独立 Session、无父历史/Persona、工具/QQ/Memory/Long Tasks 拒绝、后挂载工具与嵌套委派绕过、非父通信、释放后冷恢复和完整重启后恢复。结果按 runId 与阶段核验，不用旧报告代替本次验证。
 
-Core-only/Core+Extras 原生回归另覆盖 Creator 工具、跨 Session Memory、自动提取、Compaction、Schedule/Outbox 和 Inspector。模型与 Sender 是确定性合成替身；没有连接生产 QQ、读取生产记忆或部署。真实模型的角色质量、结构化输出稳定性及主代审批完整业务验收仍未验证。
+Core-only/Core+Extras 原生回归另覆盖 Creator 工具、跨 Session Memory、自动提取、Compaction、Schedule/Outbox 和 Inspector。模型与 Sender 是确定性合成替身；这些隔离测试没有连接生产 QQ 或读取生产记忆；其后授权部署的启动与数据校验见 STATUS。真实模型的角色质量、结构化输出稳定性及主代审批完整业务验收仍未验证。
 
 角色划分参考 [dsh-plugin-cluster-preset](https://github.com/hu568/dsh-plugin-cluster-preset)，只参考职责，未复制旧 `toolFilter`/委派 `persona`、Team Policy 或其生命周期插件。许可证及固定源码版本见 [第三方说明](../THIRD_PARTY_NOTICES.md)。

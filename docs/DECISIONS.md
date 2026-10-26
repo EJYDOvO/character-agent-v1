@@ -1,6 +1,6 @@
 # 当前实现决策
 
-本页接续归档 v0.7.8 设计；目标设计不等于已部署能力。当前源码为 test.15 / Worker V2 候选，实例与验证记录见 [STATUS](STATUS.md)。
+本页接续归档 v0.7.8 设计；目标设计不等于已部署能力。当前源码为 test.15 / Worker V2，实例与验证记录见 [STATUS](STATUS.md)。
 
 1. 四个核心运行插件、Core/Extras、Creator 构建派生保留。QQTK 独立维护，一个 QQ Gateway 和审批处理器。
 2. Worker V2 使用原生独立 Preset/Spawn，Character 是唯一 Root。Core 声明 general 与六个专业分析角色；review 仍可选；声明、白名单和 Root 策略同源构建，`maxDepth:1`，无执行/Memory/QQ 身份。Planner 只是按需计划草案角色，不引入第二套调度。社区 Preset 先由 Host 审查安装再加入显式构建白名单；不采纳上游旧 toolFilter/persona 接口。

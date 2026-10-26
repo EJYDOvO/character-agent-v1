@@ -32,7 +32,7 @@ test.9 已部署的审计修复调整了记忆管理行为：Assistant 只管理
 
 ## Extras 与后续插件声明
 
-Worker V2 候选源码的内置分析角色属于 Core，不需要启用 Extras；尚未部署。私有构建配置保留 `specialistWorkers:["worker-review"]`，新增 `communityWorkerPresets:["worker-example"]` 仅引用 Host 已审查并安装的独立 Preset。六个专业分析角色默认生成，Planner 按任务需要调用。名单、Persona 或官方 Creator 改变后须重新构建并隔离回归；不要直接编辑生成 Core 或运行中的 Profile。社区守卫、契约和限制见 [Worker](WORKERS.md)。
+Worker V2 的内置分析角色属于 Core，不需要启用 Extras；部署状态见 STATUS。私有构建配置保留 `specialistWorkers:["worker-review"]`，新增 `communityWorkerPresets:["worker-example"]` 仅引用 Host 已审查并安装的独立 Preset。六个专业分析角色默认生成，Planner 按任务需要调用。名单、Persona 或官方 Creator 改变后须重新构建并隔离回归；不要直接编辑生成 Core 或运行中的 Profile。社区守卫、契约和限制见 [Worker](WORKERS.md)。
 
 当前源码的 `bundles/character-extras/cordis.patch.yml` 仅声明默认停用的 `dsh-character-long-tasks`。不预置搜索或 Bilibili，它们使用各自原生 Bundle。构建保留已有 Extras 声明，避免角色重建覆盖后续维护内容。长期任务需要另装可选包并明确启用条目；只开启 Extras 不会自动执行任务。
 

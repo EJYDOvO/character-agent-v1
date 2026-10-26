@@ -4,11 +4,17 @@
 
 ## 安装与源码
 
-**Worker V2 候选源码为 `0.1.0-test.15`，未部署**（2026-10-26）：Character 保持唯一 Root；Core 新增 explore/librarian/oracle/metis/momus/planner 六个独立分析 Preset，保留 general 与可选 review。通过原生 Spawn 白名单和叶子工具守卫装配；没有额外 Agent Manager、执行型 Worker、Memory Schema 或 QQTK 改动。社区 Preset 只支持 Host 审查安装后的显式引用，不自动安装。详细配置、结果契约及零工具限制见 [Worker](WORKERS.md)。下述实例 test.14 状态不变。
+**当前实例已部署 Worker V2 / `0.1.0-test.15`**（2026-10-26）：Character 保持唯一 Root；Core 新增 explore/librarian/oracle/metis/momus/planner 六个独立分析 Preset，保留 general 与可选 review。通过原生 Spawn 白名单和叶子工具守卫装配；没有额外 Agent Manager、执行型 Worker、Memory Schema 或 QQTK 改动。社区 Preset 只支持 Host 审查安装后的显式引用，不自动安装。详细配置、结果契约及零工具限制见 [Worker](WORKERS.md)。代码提交 `981ce79`；其余依赖版本与 QQTK 补丁保持不变。
 
-本轮隔离验证：Character **139 单元 + 33 安全回归 = 172**、QQTK **27 轻量 + 30 实际 SDK 边界 = 57** 全通过、无跳过；真实 DSH 0.2.1-rc.2 上九种 Preset（八个内置角色与一个受审社区夹具）独立委派、无父历史/Persona、工具/Memory/长期任务权限拒绝、后挂载工具/嵌套调用攻击、非父通信、释放后恢复及两个完整 Host 进程重启恢复通过。攻击夹具按当前输入触发，以确切 assistant/tool-call 记录断言实际尝试，不能用上下文出现工具名当作执行证据。Core-only/Core+Extras 原生回归覆盖 Creator 工具保留、跨 Session Memory、自动提取、Compaction、Schedule/通知去重、Inspector；普通 Agent 模块启停、双进程 QQ 生命周期/Long Tasks 及 Interaction 回归通过。Interaction 夹具原先 60ms/100ms 的间隔触发快慢响应断言不稳定，改为 500ms/1000ms，保留所有原断言，未更改运行插件。模型/QQ Sender 为合成替身；没有生产 QQ、生产 Memory、实际模型角色质量或手机审批验收；没有部署或变更生产 Profile。详细原始结果只保留本机忽略目录。
+隔离验收：Character **172/172**、QQTK **57/57** 自动回归通过，无跳过。实际安装候选包的 Core-only/Core+Extras、普通 Agent 模块启停、九种 Worker Preset 的原生委派/权限攻击/冷恢复及完整 Host 重启恢复通过；Memory 提取与 Compaction、Schedule/通知去重、QQ 生命周期/Long Tasks 和 Interaction 回归通过。攻击测试按本次输入和真实 tool-call 记录断言；Interaction 只调整测试计时间隔，未改运行插件。
 
-**当前实例 test.14 + Interaction test.3 已部署**：Character 四插件及 Core/Extras 保持 `0.1.0-test.14`，Interaction 为 `0.1.0-test.3`，配套 QQTK 补丁已更新，DSH 保持 `0.2.1-rc.2`。本次回复修复提交 Character `1c4f40e`、QQTK `72866b6`；test.14 权限修复继续保留。已持维护锁完成空闲门禁、273 文件校验快照及候选切换，旧 Profile 与检查点保留本机。
+2026-10-26 授权部署：空闲门禁、维护锁、283 文件一致性快照及单活切换通过。启动健康且空闲，七个默认 Worker Preset 正常、单 QQ ready；review 没有配置启用。Memory 及修订/治理表、绑定、路由/模型偏好、Schedule 内容和官方 ASAR 校验保持一致，Inspector 只读、人格化 Character，Interaction test.3、搜索 0.9.15 保持。本轮启动检查曾误将可选 review 当作必需项，实际回退到保留的 test.14 并保留当前数据；按构建清单修正本地门禁后重新上线成功。旧 Profile、快照和详细证据仅保留本机。
+
+未发送真实 QQ 测试消息，也未验证真实模型的 Worker 分工质量、JSON 稳定性或手机审批完整链路；合成模型/Sender 通过不代表这些能力已验收。
+
+### test.14 历史部署记录
+
+**test.14 当时的实例 + Interaction test.3**：Character 四插件及 Core/Extras 保持 `0.1.0-test.14`，Interaction 为 `0.1.0-test.3`，配套 QQTK 补丁已更新，DSH 保持 `0.2.1-rc.2`。本次回复修复提交 Character `1c4f40e`、QQTK `72866b6`；test.14 权限修复继续保留。已持维护锁完成空闲门禁、273 文件校验快照及候选切换，旧 Profile 与检查点保留本机。
 
 启动检查：新宿主健康且空闲、单 QQ ready，Identity/Memory/QQ/Remote Ops/Inspector 活跃；记忆及修订、绑定、官方 ASAR、无用户入站时的路由/计时保持不变。Inspector 继续 `writable:false`、人格化 Character。本轮没有触发提醒或发送 QQ 测试消息，不等于手机收件验收。回退未经修复的 test.13 会恢复权限缺陷，须遵守下述安全回滚边界。
 

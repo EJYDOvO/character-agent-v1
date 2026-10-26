@@ -1,8 +1,8 @@
-# 运行架构与复用边界（test.15 / Worker V2 候选源码）
+# 运行架构与复用边界（test.15 / Worker V2）
 
 test.13 在既有原生分析 Worker、Memory Inspector 上引入可选 QQ Session 生命周期和独立长期任务；test.14 收紧历史根权限并补充存量提醒审计。隔离与当前实例部署的验收边界统一见 [STATUS](STATUS.md)。阶段对照见 [路线图](IMPLEMENTATION_ROADMAP.md)，任务契约见 [Long Tasks](../packages/long-tasks/README.md)。
 
-Worker V2 使用官方 `subagent` 的 `agentPreset / allowedAgentPresets` 和 `spawn`。Core 声明 general、explore、librarian、oracle、metis、momus、planner；review 仍可选，社区引用经可信构建配置审查。Character 唯一 Root 保留完整 Creator，按需向 Planner 请求草案；全部 Worker 是无工具的独立分析叶子，不继承 QQ/Memory 或父历史，`maxDepth:1`。角色/白名单/Root 策略共用词表，原生执行守卫仍在现有 Memory Tools 包，不增加 Manager、Spawn Provider 或 Agent Loop；当前仅隔离验证、未部署。Inspector 是额外可选双端插件：原生 `dsh.client` 将 React 页面注册到 `settings.section`，复用 DSH 导航、组件与主题；通过 Connection RPC 与受控 Core API 访问记忆。四个核心插件与可选 Extras 边界保持；详见 [Worker](WORKERS.md) 和 [Inspector](MEMORY-INSPECTOR.md)。
+Worker V2 使用官方 `subagent` 的 `agentPreset / allowedAgentPresets` 和 `spawn`。Core 声明 general、explore、librarian、oracle、metis、momus、planner；review 仍可选，社区引用经可信构建配置审查。Character 唯一 Root 保留完整 Creator，按需向 Planner 请求草案；全部 Worker 是无工具的独立分析叶子，不继承 QQ/Memory 或父历史，`maxDepth:1`。角色/白名单/Root 策略共用词表，原生执行守卫仍在现有 Memory Tools 包，不增加 Manager、Spawn Provider 或 Agent Loop；隔离验收及部署边界见 STATUS。Inspector 是额外可选双端插件：原生 `dsh.client` 将 React 页面注册到 `settings.section`，复用 DSH 导航、组件与主题；通过 Connection RPC 与受控 Core API 访问记忆。四个核心插件与可选 Extras 边界保持；详见 [Worker](WORKERS.md) 和 [Inspector](MEMORY-INSPECTOR.md)。
 
 **test.10 交互增量**：独立可选 `dsh-interaction-policy` 通过原生 Agent-scoped 事件和 Preset 服务隔离管理表达与发送策略。QQTK 只接入 Sender 与可信修正入口；Character Identity 复用原入站校验和证据逻辑提供提前接入钩子。没有新数据库、Planner 或 Agent Loop，原四插件和 Core/Extras 保留。详细接口及当前验证见 [Interaction Policy](INTERACTION-POLICY.md)。下文为既有记忆架构。
 
