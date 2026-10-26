@@ -6,11 +6,17 @@
 
 **当前实例已部署 test.16 / 社区 Preset ID 修复**，代码提交 `1c587f2`。兼容字符串真实 ID，支持 `{id,alias?}`；原生白名单、Spawn 和持久恢复只使用真实 ID。配置冲突、已知受保护 Root、Character 自引用均拒绝，不自动安装或授权。当前实例仍只有七个默认 Worker，没有新增或启用社区目标。
 
-验证：Character **174/174**、QQTK **57/57** 自动回归通过，无跳过。实际安装候选包的 Core-only/Core+Extras、普通 Agent 模块启停、十个 Preset 的原生委派/权限隔离/双进程恢复，以及缺失、实际装配失败、卸载后恢复拒绝均通过，无 Creator 回退；Session/Long Tasks、Memory/Compaction、Schedule/通知和 Interaction 回归通过。第三方样例为合成夹具，未审查或验证任何真实第三方插件的安全性与质量。
+test.16 原发布验证：Character **174/174**、QQTK **57/57** 自动回归通过，无跳过。实际安装候选包的 Core-only/Core+Extras、普通 Agent 模块启停、十个 Preset 的原生委派/权限隔离/双进程恢复，以及缺失、实际装配失败、卸载后恢复拒绝均通过，无 Creator 回退；Session/Long Tasks、Memory/Compaction、Schedule/通知和 Interaction 回归通过。第三方样例为合成夹具，未审查或验证任何真实第三方插件的安全性与质量。
 
 授权部署时发现原 Host 已停止，旧 QQ 健康记录不作为在线证明。离线确认无未完成 Turn、无未决审批和 active Schedule，持维护锁制作 289 文件一致性快照后单活切换。新 Host 健康且空闲，七个默认 Worker 均正常，QQ connected 且单次 ready；Memory/修订/治理表、绑定、路由/模型偏好、Schedule 内容和官方 ASAR 校验保持一致。保留 test.15 Profile 与快照；DSH 0.2.1-rc.2、QQ Bot 0.5.2 / SDK 1.0.5 及原补丁、Interaction test.3、搜索 0.9.15 保持不变，Inspector 只读、人格化 Character。详细日志、凭据、数据和备份只留本机。
 
 未发送真实 QQ 测试消息，手机收件和真实模型的第三方 Worker 质量不属于已验证项。用法与限制见 [Worker](WORKERS.md)。
+
+### 可选 Preset Manager
+
+当前 test.16 Profile 另装独立 `dsh-preset-manager@0.1.0-test.1` Bundle，运行产物对应其仓库 `f82ccac`；Core/Extras、QQTK、Interaction、Memory 及其版本未变。安装后 13 个 Preset 无装配失败，七个 Worker 与单 QQ Gateway 正常；Owner API、Schema 和原生前端图公布的版本化客户端资源通过，未登录/跨来源请求拒绝。Memory/治理表、Session 路由、绑定、Schedule 和官方 ASAR 的重启前后校验保持一致。
+
+首次切换被错误的固定客户端资源地址检查拦截，已实际回退并验证数据保留；按实际 SDK 改用原生图中的版本 URL，补充隔离回归后重新部署通过。既有 Profile 与一致性快照保留本机。Character 新增 Profile 切换保留插件状态目录的回归后 **175/175** 通过；管理器独立 **103 通过、1 项上游 Windows 平台跳过**，打包产物两进程原生验收通过。管理页实际点击/布局/桌面窗口未验收，未发送真实 QQ 测试消息。详细过程、配置和日志不公开。
 
 ### test.15 历史部署记录
 

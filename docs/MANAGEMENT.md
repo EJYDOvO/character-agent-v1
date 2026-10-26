@@ -36,11 +36,13 @@ Worker V2 的内置分析角色属于 Core，不需要启用 Extras；部署状�
 
 当前源码的 `bundles/character-extras/cordis.patch.yml` 仅声明默认停用的 `dsh-character-long-tasks`。不预置搜索或 Bilibili，它们使用各自原生 Bundle。构建保留已有 Extras 声明，避免角色重建覆盖后续维护内容。长期任务需要另装可选包并明确启用条目；只开启 Extras 不会自动执行任务。
 
+独立 [Preset Manager](https://github.com/EJYDOvO/dsh-preset-manager) 也由 Profile 装配，不加入 Core/Extras。安装后在「设置 → Preset 管理」管理已安装组件及 Preset Override；它不自动增加 Worker 工具权限或 Character 的原生委派白名单。当前实例版本与验收范围见 STATUS；真实页面交互尚未验收。
+
 当前实例的免费搜索为独立 `dsh-free-search@0.9.15` Bundle。使用插件管理中的 Free Search 配置卡管理，`/free-search-engine` 切换模式；中文/英文 Auto 池由 `web-search-free` 的 `zhPool` / `enPool` 管理，当前实例均优先 DuckDuckGo，其他引擎保留回退。此为实例选择，不是 Extras 或通用默认。新版本通过原生 Settings 接管 `web.searchProvider` / `fetchProvider`；停用或回滚前检查这些持久配置是否仍引用 `ddg` / `fs-quality-fetch`，避免指向已卸载 Provider。升级与恢复同时保留 Profile、锁文件及维护版本清单，不修改 Core 或官方 DSH。
 
 默认维护约定：本项目自有的可选插件声明放 Extras，固定角色/Identity/Memory/QQ 归 Core，密钥和 Owner 参数只放私有 Profile。外部完整 Bundle 由原生管理器装入 Profile，不复制其插入项到 Extras，也不编辑已安装的 node_modules。普通插件包还需独立安装依赖，只有 YAML 声明并不等于已安装。
 
-Character 构建保留官方 Creator 的 `tool-plugin-manager`。本机 DSH 0.2.0-rc.2 的 `plugin_manager` 支持列举、开关、安装/移除 Bundle 等操作；每次需满足 `danger-full-access` 或当前调用审批，不授予 Character 无条件安装权。安装写入当前 Profile 的依赖/锁文件及 Bundle 列表，开关写入 Profile patch；接口没有目标 Bundle/Extras 参数。
+Character 构建保留官方 Creator 的 `tool-plugin-manager`。当前验证基线 DSH 0.2.1-rc.2 的 `plugin_manager` 支持列举、开关、安装/移除 Bundle 等操作；每次需满足 `danger-full-access` 或当前调用审批，不授予 Character 无条件安装权。安装写入当前 Profile 的依赖/锁文件及 Bundle 列表，开关写入 Profile patch；接口没有目标 Bundle/Extras 参数。
 
 因此，上述约定不是“原生安装后自动转存 Extras”的已实现机制，也不是权限隔离。如果需要严格强制所有扩展经过 Extras，需要另行实现自有安装适配与声明迁移、重复加载检查、失败恢复，并保留原生审批；不能仅靠提示词承诺这些保证。目前未修改官方插件管理器或安装链路。
 

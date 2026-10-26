@@ -21,6 +21,8 @@
 
 切换时同步维护策略中本次全部已验证的包版本与哈希，包括新增 Inspector；未参与更新的包清单保留。只更新 Remote Ops 会使 Character 升级后的完整性检查失败。
 
+独立 [Preset Manager](https://github.com/EJYDOvO/dsh-preset-manager) 使用自己的原生 Profile Bundle，不复制到 Core/Extras。切换脚本保留 Profile 内 `.dsh-preset-manager/` 的自定义配置、合并基线及 Skills 版本；更新前仍需随 Profile 一致备份。回滚时较新状态随失败 Profile 保留；重新安装该插件前核对并恢复对应目录，不以空状态覆盖它。
+
 ## 验证与切换
 
 1. `npm test`、`npm run test:audit`；原生隔离入口为 `run-inspector.ps1`、`--extras`、`--modules` 和 `run-interaction.ps1`。测试数据与结果只在 `test-data/`。

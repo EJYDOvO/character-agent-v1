@@ -6,6 +6,8 @@
 
 可选 [Interaction Policy V1](docs/INTERACTION-POLICY.md) 提供自然表达、等待提示、流式气泡与安全修正。源码默认构建不启用；该通用插件不要求安装 Character 或 QQ。
 
+可选 [Preset Manager](https://github.com/EJYDOvO/dsh-preset-manager) 在原生设置页管理已安装 Plugins、Skills 和 Preset Override。它独立安装到 Profile，不复制进 Core/Extras，也不自动修改 Worker 权限或 Character 委派白名单；当前验收边界见 STATUS。
+
 Worker V2 及社区真实 ID/展示别名修复已完成隔离验收和授权部署；真实模型的任务质量与手机审批完整链路仍需实机验收。
 
 test.14 已收紧历史 QQ Session：只有当前主路由获得完整身份；旧根仅由 Host 转发可信 Schedule 提醒，禁止模型、工具、Memory 与长期任务创建。提供[只读存量审计](docs/MANAGEMENT.md)；必须配套更新 QQTK 补丁，不能单独部署 Identity。

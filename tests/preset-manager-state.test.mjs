@@ -1,0 +1,22 @@
+import assert from 'node:assert/strict';
+import {test} from 'node:test';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import {execFileSync} from 'node:child_process';
+import {fileURLToPath} from 'node:url';
+test('Profile cutover preserves optional Preset Manager state and custom skill versions',()=>{
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),'character-manager-cutover-')),live=path.join(root,'data/profiles/desktop'),candidate=path.join(root,'data/profiles/candidate'),state=path.join(root,'data/maintenance/character-deploy');
+ for(const dir of [live,candidate,state,path.join(root,'data/qqbot'),path.join(root,'data/character'),path.join(root,'maintenance'),path.join(live,'.dsh-preset-manager/skill-versions/fixture/v1/files')])fs.mkdirSync(dir,{recursive:true});
+ const binding={appId:'fixture',ownerId:'owner',characterId:'fixture'},prefs={sessionIds:{'qqbot:fixture:c2c:owner':'existing-session'},presets:{'qqbot:fixture:c2c:owner':'qq-character'}};
+ fs.writeFileSync(path.join(root,'data/qqbot/model-prefs.json'),JSON.stringify(prefs));fs.writeFileSync(path.join(root,'maintenance/plugin-policy.json'),JSON.stringify({localPackages:{}}));
+ fs.writeFileSync(path.join(root,'data/character/binding.json'),JSON.stringify(binding));fs.writeFileSync(path.join(state,'binding.json'),JSON.stringify(binding));
+ fs.writeFileSync(path.join(state,'candidate.json'),JSON.stringify({candidate,verifiedAt:new Date().toISOString(),sealed:{},artifacts:{}}));
+ const settings='{"version":1,"presets":{"custom":{"base":[]}}}',skill='Synthetic saved version';
+ fs.writeFileSync(path.join(live,'.dsh-preset-manager/state.json'),settings);fs.writeFileSync(path.join(live,'.dsh-preset-manager/skill-versions/fixture/v1/files/SKILL.md'),skill);
+ execFileSync(process.execPath,[fileURLToPath(new URL('../scripts/switch-profile.cjs',import.meta.url))],{env:{...process.env,DSH_INSTALL_ROOT:root},windowsHide:true,stdio:'pipe'});
+ assert.equal(fs.readFileSync(path.join(live,'.dsh-preset-manager/state.json'),'utf8'),settings);
+ assert.equal(fs.readFileSync(path.join(live,'.dsh-preset-manager/skill-versions/fixture/v1/files/SKILL.md'),'utf8'),skill);
+ assert.deepEqual(JSON.parse(fs.readFileSync(path.join(root,'data/qqbot/model-prefs.json'))),prefs);
+ assert(fs.existsSync(JSON.parse(fs.readFileSync(path.join(state,'candidate.json'))).previousProfile));
+});

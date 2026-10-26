@@ -12,7 +12,7 @@ record.previousProfile=before;fs.writeFileSync(state+'/candidate.json',JSON.stri
 fs.renameSync(live,before);
 try{
  fs.renameSync(record.candidate,live);
- for(const name of ['.plugin-manager','cordis.yml'])if(fs.existsSync(before+'/'+name))fs.cpSync(before+'/'+name,live+'/'+name,{recursive:true});
+ for(const name of ['.plugin-manager','.dsh-preset-manager','cordis.yml'])if(fs.existsSync(before+'/'+name))fs.cpSync(before+'/'+name,live+'/'+name,{recursive:true});
  fs.mkdirSync(root+'/data/character',{recursive:true});fs.copyFileSync(state+'/binding.json',root+'/data/character/binding.json');
  const binding=JSON.parse(fs.readFileSync(state+'/binding.json','utf8')),prefs=JSON.parse(fs.readFileSync(state+'/prefs-before.json','utf8'));
  const key=`qqbot:${binding.appId}:c2c:${binding.ownerId}`;prefs.sessionIds??={};prefs.presets??={};if(prefs.presets[key]!=='qq-character'||!prefs.sessionIds[key])prefs.sessionIds[key]=crypto.randomUUID();prefs.presets[key]='qq-character';
