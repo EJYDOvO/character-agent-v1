@@ -2,7 +2,7 @@
 
 本机 `resources/app.asar` 中的 DSH 0.2.1-rc.2 已具备 `dsh-tool-subagent` 的 `agentPreset`、`allowedAgentPresets` 以及 `spawn` 的独立 Preset 能力。旧 0.2.0 审计中的版本限制不再适用于这个已验证构建；仍不保证其他构建同版本号下的全部接口不变。
 
-Worker V2 已随 test.15 部署，当前实例启用七个默认角色，review 仍按需关闭；验收边界见 [STATUS](STATUS.md)。Character 是唯一 Root/Orchestrator，保留完整 Creator 工具、Skills、原生委派、Fork 和 workflow。简单任务直接处理；复杂任务才按需使用 Planner 草案，所有结果由 Root 核验和决策。**Fork/workflow 是 Creator 原有通道，不具备此 Worker 的等价隔离边界。** 安全 Worker 使用 `subagent` 的 `spawn`，默认 `worker-general`，显式 `allowedAgentPresets`，`maxDepth:1`。
+Worker V2 在 test.15 引入，社区真实 ID/展示别名修复随 test.16 部署；当前实例启用七个默认角色，review 仍按需关闭；验收边界见 [STATUS](STATUS.md)。Character 是唯一 Root/Orchestrator，保留完整 Creator 工具、Skills、原生委派、Fork 和 workflow。简单任务直接处理；复杂任务才按需使用 Planner 草案，所有结果由 Root 核验和决策。**Fork/workflow 是 Creator 原有通道，不具备此 Worker 的等价隔离边界。** 安全 Worker 使用 `subagent` 的 `spawn`，默认 `worker-general`，显式 `allowedAgentPresets`，`maxDepth:1`。
 
 ## 权限与能力
 
@@ -38,7 +38,7 @@ Explore/Librarian 本版也没有读取文件或联网工具；Root 必须提供
 
 构建同时生成内置 Preset、Spawn 白名单及 Root 角色说明；删除可选配置会同时移除 review 的声明和引用。Extras 内容保持原样，关闭 Extras 不影响内置分析 Worker。官方 Creator 指纹、构建源、角色词表和配置变化触发重建；构建清单记录 `workerPolicyVersion:2` 与实际白名单。
 
-### 社区真实 ID 与可选别名（本轮源码修复，尚未部署）
+### 社区真实 ID 与可选别名（test.16）
 
 `communityWorkerPresets` 在可信 `private/build-config.json` 中显式声明；兼容原字符串数组，不再强制 `worker-*` 前缀：
 

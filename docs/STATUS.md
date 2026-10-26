@@ -4,9 +4,17 @@
 
 ## 安装与源码
 
-**test.16 候选源码：社区 Preset 真实 ID/别名修复，未部署。** 兼容字符串 ID，支持 `{id,alias?}`；白名单、Spawn 和持久恢复只使用真实 ID。配置冲突、已知受保护 Root、Character 自引用均拒绝，不自动安装或授权。174 项单元/安全回归、合成构建、Core-only/Core+Extras 原生回归及十个 Preset 的双进程隔离恢复通过；缺失/实际装配失败/卸载后恢复均拒绝且无 Creator 回退。模型与 QQ Sender 是合成替身，未验证任何真实第三方插件的安全性或质量。本轮未打包发布、未改变下述运行实例；配置和限制见 [Worker](WORKERS.md)。
+**当前实例已部署 test.16 / 社区 Preset ID 修复**，代码提交 `1c587f2`。兼容字符串真实 ID，支持 `{id,alias?}`；原生白名单、Spawn 和持久恢复只使用真实 ID。配置冲突、已知受保护 Root、Character 自引用均拒绝，不自动安装或授权。当前实例仍只有七个默认 Worker，没有新增或启用社区目标。
 
-**当前实例已部署 Worker V2 / `0.1.0-test.15`**（2026-10-26）：Character 保持唯一 Root；Core 新增 explore/librarian/oracle/metis/momus/planner 六个独立分析 Preset，保留 general 与可选 review。通过原生 Spawn 白名单和叶子工具守卫装配；没有额外 Agent Manager、执行型 Worker、Memory Schema 或 QQTK 改动。社区 Preset 只支持 Host 审查安装后的显式引用，不自动安装。详细配置、结果契约及零工具限制见 [Worker](WORKERS.md)。代码提交 `981ce79`；其余依赖版本与 QQTK 补丁保持不变。
+验证：Character **174/174**、QQTK **57/57** 自动回归通过，无跳过。实际安装候选包的 Core-only/Core+Extras、普通 Agent 模块启停、十个 Preset 的原生委派/权限隔离/双进程恢复，以及缺失、实际装配失败、卸载后恢复拒绝均通过，无 Creator 回退；Session/Long Tasks、Memory/Compaction、Schedule/通知和 Interaction 回归通过。第三方样例为合成夹具，未审查或验证任何真实第三方插件的安全性与质量。
+
+授权部署时发现原 Host 已停止，旧 QQ 健康记录不作为在线证明。离线确认无未完成 Turn、无未决审批和 active Schedule，持维护锁制作 289 文件一致性快照后单活切换。新 Host 健康且空闲，七个默认 Worker 均正常，QQ connected 且单次 ready；Memory/修订/治理表、绑定、路由/模型偏好、Schedule 内容和官方 ASAR 校验保持一致。保留 test.15 Profile 与快照；DSH 0.2.1-rc.2、QQ Bot 0.5.2 / SDK 1.0.5 及原补丁、Interaction test.3、搜索 0.9.15 保持不变，Inspector 只读、人格化 Character。详细日志、凭据、数据和备份只留本机。
+
+未发送真实 QQ 测试消息，手机收件和真实模型的第三方 Worker 质量不属于已验证项。用法与限制见 [Worker](WORKERS.md)。
+
+### test.15 历史部署记录
+
+**test.15 当时的实例：Worker V2 / `0.1.0-test.15`**（2026-10-26）：Character 保持唯一 Root；Core 新增 explore/librarian/oracle/metis/momus/planner 六个独立分析 Preset，保留 general 与可选 review。通过原生 Spawn 白名单和叶子工具守卫装配；没有额外 Agent Manager、执行型 Worker、Memory Schema 或 QQTK 改动。社区 Preset 只支持 Host 审查安装后的显式引用，不自动安装。详细配置、结果契约及零工具限制见 [Worker](WORKERS.md)。代码提交 `981ce79`；其余依赖版本与 QQTK 补丁保持不变。
 
 隔离验收：Character **172/172**、QQTK **57/57** 自动回归通过，无跳过。实际安装候选包的 Core-only/Core+Extras、普通 Agent 模块启停、九种 Worker Preset 的原生委派/权限攻击/冷恢复及完整 Host 重启恢复通过；Memory 提取与 Compaction、Schedule/通知去重、QQ 生命周期/Long Tasks 和 Interaction 回归通过。攻击测试按本次输入和真实 tool-call 记录断言；Interaction 只调整测试计时间隔，未改运行插件。
 

@@ -32,6 +32,8 @@
 
 ## 回滚
 
+test.16 的社区 ID/别名修复没有数据迁移；本次保留 test.15 Profile 与一致性快照。回退仍须停机持锁、验证当前 Memory 的一致副本并保留新增数据，不能覆盖旧快照。若以后启用了社区目标，回退前还要核查已有子 Session 对真实 Preset ID 的依赖；别名不能替代缺失的目标。test.16 本轮未执行生产回滚演练。
+
 test.15 / Worker V2 不更改 Memory Schema，不需要数据迁移。部署与恢复时按构建清单逐项核对 Worker Preset，不能将默认关闭的 review 或未配置的社区 Preset 当作启动必需项。本轮已实际回退到保留的 test.14 Profile 并再次上线，当前记忆始终保留；该回滚点包含 Interaction test.3、匹配 QQ 补丁和搜索 0.9.15，不能拿未经回复修复的同名 test.14 产物替代。验证范围统一见 STATUS。
 
 优先禁用可选 Inspector，保留 Core 与记忆库。回退 Core 必须停机并持锁；`rollback-memory.cjs` 创建当前数据库的一致副本，用旧运行时检查 Schema、记录、修订及遗忘屏障没有改变。
