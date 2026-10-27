@@ -1,6 +1,6 @@
 // Small real-provider comparison, not a general intelligence/approval benchmark.
 import fs from 'node:fs';import assert from 'node:assert/strict';import {randomUUID} from 'node:crypto';import {pathToFileURL} from 'node:url';
-const sdk=process.env.DSH_INSTALL_ROOT+'/resources/app.asar/dsh/node_modules/@deepseek-ai/';
+const sdk=(process.env.DSH_CHARACTER_HOST_ROOT||process.env.DSH_INSTALL_ROOT)+'/resources/app.asar/dsh/node_modules/@deepseek-ai/';
 const {createUserMessage}=await import(pathToFileURL(sdk+'dsh-llm/lib/index.js').href);
 const {defineTool}=await import(pathToFileURL(sdk+'dsh-tools/lib/index.js').href);
 export const name='real-creator-character-ab';export const inject=['agents','agentPresets','tools'];

@@ -1,4 +1,5 @@
 $ErrorActionPreference='Stop'
+$runtime=$env:DSH_CHARACTER_HOST_ROOT;if(!$runtime){$runtime=$env:DSH_INSTALL_ROOT}
 if(!$env:DSH_INSTALL_ROOT -or !$env:DSH_CHARACTER_PROJECT){throw 'Explicit install/project roots required'}
 $project=$env:DSH_CHARACTER_PROJECT
 foreach($kind in @('core','tools')) {
@@ -13,6 +14,6 @@ $env:ELECTRON_RUN_AS_NODE='1'
 $run=Get-Content -Raw (Join-Path $env:DSH_HOME 'run.json') | ConvertFrom-Json
 $result=Join-Path $project "artifacts/layered-host-$($run.mode).json"
 if(Test-Path -LiteralPath $result){Remove-Item -LiteralPath $result}
-$exe=Join-Path $env:DSH_INSTALL_ROOT 'DeepSeek Harness.exe'
-$p=Start-Process -FilePath $exe -ArgumentList @('--expose-internals',(Join-Path $env:DSH_INSTALL_ROOT 'resources/app.asar/dsh/node_modules/@deepseek-ai/dsh-desktop-host/lib/cli.js'),'--profile','layered-memory','--no-open','--port','0') -WorkingDirectory $project -WindowStyle Hidden -PassThru -RedirectStandardOutput "$project/artifacts/layered-$($run.mode).stdout.log" -RedirectStandardError "$project/artifacts/layered-$($run.mode).stderr.log"
+$exe=Join-Path $runtime 'DeepSeek Harness.exe'
+$p=Start-Process -FilePath $exe -ArgumentList @('--expose-internals',('"{0}"' -f (Join-Path $runtime 'resources/app.asar/dsh/node_modules/@deepseek-ai/dsh-desktop-host/lib/cli.js')),'--profile','layered-memory','--no-open','--port','0') -WorkingDirectory $project -WindowStyle Hidden -PassThru -RedirectStandardOutput "$project/artifacts/layered-$($run.mode).stdout.log" -RedirectStandardError "$project/artifacts/layered-$($run.mode).stderr.log"
 Write-Output "Isolated layered probe PID=$($p.Id) run=$($run.runId)"

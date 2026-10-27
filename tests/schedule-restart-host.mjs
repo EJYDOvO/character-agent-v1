@@ -1,6 +1,6 @@
 import fs from 'node:fs';import assert from 'node:assert/strict';import {randomUUID} from 'node:crypto';import {pathToFileURL} from 'node:url';
 import {managerFixture} from './qq-manager-fixture.mjs';
-const {LlmAdapter}=await import(pathToFileURL(process.env.DSH_INSTALL_ROOT+'/resources/app.asar/dsh/node_modules/@deepseek-ai/dsh-llm/lib/index.js').href);
+const {LlmAdapter}=await import(pathToFileURL((process.env.DSH_CHARACTER_HOST_ROOT||process.env.DSH_INSTALL_ROOT)+'/resources/app.asar/dsh/node_modules/@deepseek-ai/dsh-llm/lib/index.js').href);
 export const name='isolated-schedule-restart';export const inject=['agents','agentPresets','tools','llm','characterIdentity'];
 export function apply(ctx,config){
  class Fixture extends LlmAdapter{async *stream(){yield {type:'text-delta',index:0,text:'Synthetic scheduled task completed.'};yield {type:'finish',reason:{kind:'stop'}};}}

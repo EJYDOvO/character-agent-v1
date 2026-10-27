@@ -27,7 +27,7 @@ export function apply(ctx,config){
  async function run(){
   const handles=[],registrations=[],report={ok:false,runId:config.runId,host:config.version,provenance:config.provenance,restart:fs.existsSync(config.cwd+'/worker-state.json'),qqNetwork:false,model:'deterministic fixture',checks:[]};let release;
   try{
-   assert.equal(config.version,'0.2.1-rc.2');
+   assert.match(config.version,/^0\.2\.1-rc\.[23]$/);
    const create=async(preset,sessionId=randomUUID(),resume=false)=>{
     const options={agentOptions:{provider:'worker-v2-fixture',model:'fixture'},setup:async c=>{await ctx.agentPresets.mount(c,preset);}};
     const h=await (resume?ctx.agents.resume({...options,resumeSessionId:sessionId}):ctx.agents.create({...options,sessionId,meta:{cwd:config.cwd,agentPreset:preset}}));handles.push(h);return h.agent;

@@ -1,6 +1,6 @@
 # Worker V2：原生 Preset 权限
 
-Character 是唯一面向用户的 Root，保留完整 Creator 工具、Skills、原生委派和模型偏好。Worker 使用 DSH 0.2.1-rc.2 原生 `subagent` / `spawn`、独立 Preset 和独立 Session；默认目标 `worker-general`，可信 `allowedAgentPresets` 白名单，`maxDepth:1`。Fork/workflow 是 Creator 的其他通道，不具有相同隔离语义。
+Character 是唯一面向用户的 Root，保留完整 Creator 工具、Skills、原生委派和模型偏好。Worker 使用 DSH 0.2.1-rc.2 / rc.3 原生 `subagent` / `spawn`、独立 Preset 和独立 Session；默认目标 `worker-general`，可信 `allowedAgentPresets` 白名单，`maxDepth:1`。Fork/workflow 是 Creator 的其他通道，不具有相同隔离语义。
 
 ## test.17 的权限变化
 

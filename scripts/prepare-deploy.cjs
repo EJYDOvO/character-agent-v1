@@ -24,6 +24,7 @@ const qq=rows.find(x=>x.id==='im-qqbot');assert.equal(qq.config.access.c2cMode,'
 const owner=JSON.parse(fs.readFileSync(root+'/data/maintenance/owner.json','utf8'));assert.equal(owner.openid,qq.config.access.c2cAllow[0]);
 const binding=JSON.parse(fs.readFileSync(root+'/data/character/binding.json','utf8'));assert.equal(binding.appId,qq.config.appId);assert.equal(binding.ownerId,owner.openid);
 const record={createdAt:new Date().toISOString(),baseline:{},artifacts:{},patches:patches.patches,candidate,version};
+record.runtime={root:require('./host-archive.cjs').runtimeRoot,sha256:hash(require('./host-archive.cjs').runtimeRoot+'/resources/app.asar')};
 for(const f of ['package.json','cordis.patch.yml','pnpm-lock.yaml','pnpm-workspace.yaml'])record.baseline[f]=hash(live+'/'+f);
 record.baseline.prefs=hash(root+'/data/qqbot/model-prefs.json');record.baseline.asar=hash(root+'/resources/app.asar');
 record.baseline.policy=hash(root+'/maintenance/plugin-policy.json');record.sourceDigest=sourceDigest;

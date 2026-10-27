@@ -1,4 +1,5 @@
 $ErrorActionPreference='Stop'
+$runtime=$env:DSH_CHARACTER_HOST_ROOT;if(!$runtime){$runtime=$env:DSH_INSTALL_ROOT}
 if(!$env:DSH_INSTALL_ROOT){throw 'Set DSH_INSTALL_ROOT explicitly'}
 $project=Split-Path $PSScriptRoot -Parent
 $node=Join-Path $env:DSH_INSTALL_ROOT 'resources/runtime/primary-runtime/dependencies/node/bin/node.exe'
@@ -14,10 +15,10 @@ try {
  New-Item -ItemType Directory -Path $env:TEMP -Force | Out-Null
  for($phase=0;$phase -lt 2;$phase++){
   if(Test-Path -LiteralPath $run.result){Move-Item -LiteralPath $run.result -Destination (Join-Path $run.home 'phase1.json')}
-  $exe=Join-Path $env:DSH_INSTALL_ROOT 'DeepSeek Harness.exe'
-  $cli=Join-Path $env:DSH_INSTALL_ROOT 'resources/app.asar/dsh/node_modules/@deepseek-ai/dsh-desktop-host/lib/cli.js'
+  $exe=Join-Path $runtime 'DeepSeek Harness.exe'
+  $cli=Join-Path $runtime 'resources/app.asar/dsh/node_modules/@deepseek-ai/dsh-desktop-host/lib/cli.js'
   $resolver=([Uri](Join-Path $project 'tests/inspector-sdk-resolver.mjs')).AbsoluteUri
-  $p=Start-Process -FilePath $exe -ArgumentList @('--expose-internals','--import',$resolver,$cli,'--profile','inspector','--no-open','--port','0') -WorkingDirectory $run.home -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $run.home "phase-$phase.stdout.log") -RedirectStandardError (Join-Path $run.home "phase-$phase.stderr.log")
+  $p=Start-Process -FilePath $exe -ArgumentList @('--expose-internals','--import',$resolver,('"{0}"' -f $cli),'--profile','inspector','--no-open','--port','0') -WorkingDirectory $run.home -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $run.home "phase-$phase.stdout.log") -RedirectStandardError (Join-Path $run.home "phase-$phase.stderr.log")
   $deadline=(Get-Date).AddSeconds(40)
   while(!(Test-Path -LiteralPath $run.result) -and (Get-Date) -lt $deadline -and !$p.HasExited){Start-Sleep -Milliseconds 250;$p.Refresh()}
   if(!(Test-Path -LiteralPath $run.result)){throw 'Native restart probe failed to report'}

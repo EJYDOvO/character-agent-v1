@@ -57,3 +57,7 @@ test.14 历史 Session 修复不更改数据库 Schema、任务 ID/规则或通�
 ### test.17 Worker 配置兼容
 
 候选准备脚本递归清理精确的旧 Worker Boundary 行，并迁移独立 Preset Manager 合并基线；仅刷新未被用户修改的旧默认 Persona。自定义工具、Skills 及版本/历史保留。切换前验证 Manager 源状态和候选状态哈希，过期拒绝切换。旧模块保持无权限行为的兼容入口，冷恢复不会因该路径缺失而回退其他 Agent。失败切换恢复旧 Profile、prefs、binding 和策略，不覆盖 Session/Memory。回滚 Core/Tools 时一并恢复匹配 Profile 和 Manager base；test.16 会重新施加其旧零工具策略。Preset Manager 仍是独立原生 Bundle，不加入 Core 或 Extras。
+
+### 官方安装目录变化（rc.3）
+
+数据目录仍由 `DSH_INSTALL_ROOT` / DSH_HOME 选择；官方可执行文件与 SDK 可通过 `DSH_CHARACTER_HOST_ROOT` 指向另一绝对目录。隔离测试、SDK resolver、部署/回滚进程选择和离线备份均使用所选宿主，含空格的 Windows CLI 路径会显式引用。候选记录并检查所选 ASAR 的路径/哈希，不能测试新版却启动旧目录。原生启动/数据不需要迁移；本次 rc.3 Creator 定义与关键插件 SDK 实现未变。QQTK 的 `host-runtime.json` 为独立维护入口选择同一宿主，不应启动两套实例。官方文件保持只读。

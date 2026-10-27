@@ -1,7 +1,7 @@
 import fs from 'node:fs';import assert from 'node:assert/strict';import {randomUUID} from 'node:crypto';import {pathToFileURL} from 'node:url';
 import {verifyCompaction} from './probe-verification.mjs';
 import {managerFixture} from './qq-manager-fixture.mjs';
-const sdk=process.env.DSH_INSTALL_ROOT+'/resources/app.asar/dsh/node_modules/@deepseek-ai/';
+const sdk=(process.env.DSH_CHARACTER_HOST_ROOT||process.env.DSH_INSTALL_ROOT)+'/resources/app.asar/dsh/node_modules/@deepseek-ai/';
 const {LlmAdapter,createUserMessage}=await import(pathToFileURL(sdk+'dsh-llm/lib/index.js').href);
 const {defineTool}=await import(pathToFileURL(sdk+'dsh-tools/lib/index.js').href);
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
@@ -84,7 +84,7 @@ export function apply(ctx,config){
    assert(envelope.result.value.contexts.some(c=>c.id===parent.id));
    // Execute the exact installed Desktop relay in isolation, with this fixture's
    // cookie only. No production process, credentials or desktop config is read.
-   const desktopSource=fs.readFileSync(process.env.DSH_INSTALL_ROOT+'/resources/app.asar/lib/main.js','utf8');
+   const desktopSource=fs.readFileSync((process.env.DSH_CHARACTER_HOST_ROOT||process.env.DSH_INSTALL_ROOT)+'/resources/app.asar/lib/main.js','utf8');
    const start=desktopSource.indexOf('//#region lib/types/web-document.js'),end=desktopSource.indexOf('//#endregion',start);
    assert(start>=0&&end>start,'Installed Desktop relay seam changed');
    const relay=await import('data:text/javascript;base64,'+Buffer.from(desktopSource.slice(start,end)+'\nexport { forwardWebRequest };').toString('base64'));

@@ -1,6 +1,7 @@
 if (!$env:DSH_INSTALL_ROOT -or !$env:DSH_CHARACTER_PROJECT) { throw 'Set DSH_INSTALL_ROOT and DSH_CHARACTER_PROJECT explicitly before running integration scripts.' }
 $ErrorActionPreference='Stop'
-$root=$env:DSH_INSTALL_ROOT;$project=$env:DSH_CHARACTER_PROJECT;$exe="$root\DeepSeek Harness.exe"
+$root=$env:DSH_INSTALL_ROOT;$project=$env:DSH_CHARACTER_PROJECT;$runtime=$env:DSH_CHARACTER_HOST_ROOT;if(!$runtime){$runtime=$root}
+$exe=Join-Path $runtime 'DeepSeek Harness.exe'
 $lock=[IO.File]::Open("$root\data\maintenance\maintenance.lock",[IO.FileMode]::OpenOrCreate,[IO.FileAccess]::ReadWrite,[IO.FileShare]::None)
 try {
  $record=Get-Content "$root\data\maintenance\character-deploy\candidate.json" -Raw | ConvertFrom-Json

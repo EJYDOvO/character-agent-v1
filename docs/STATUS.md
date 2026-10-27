@@ -2,6 +2,14 @@
 
 本页是版本与验收状态的统一入口。历史发布记录说明当时结果，不代表最新运行状态。
 
+## DSH 0.2.1-rc.3 适配
+
+官方更新改为用户安装目录，数据继续沿用原目录。关键 Preset/Subagent/Tools/Config SDK 与 Creator 定义逐文件比对未变；Client registry 的变化为发行提交标识。修复验证/维护脚本误指向旧二进制和含空格路径的引用，保留旧版测试能力；没有修改官方 DSH 或更换插件运行包。
+
+rc.3 隔离验证：Character 178/178、Preset Manager 107 通过 + 1 项原有平台跳过、QQTK 28 轻量 + 30 SDK 边界通过。十个 Worker/Manager 配置及两进程恢复、Core+Extras、Memory/Compaction、Interaction、Session 轮换与长期任务/提醒恢复均通过，模型和 Sender 为合成替身。Desktop 已只读验证设置入口与 Worker 列表，未验证桌面写操作/HMR 或真实手机收件。
+
+当前 rc.3 实例健康、QQ 单连接、13 个 Preset 无装配失败；自有维护入口已选择新安装目录，数据/Profile/模型偏好保持。切换保留一致性快照，实际维护失败恢复后校验用户数据不变。没有发送真实 QQ 测试消息。详细路径、备份及临时日志仅留本机。
+
 ## test.17 当前版本
 
 Worker 默认 Boundary 已移除，权限完全沿用原生 Preset/Scope；旧模块为无操作兼容入口。候选迁移覆盖嵌套 Override、自定义 Preset 与 Manager 合并 base，保留用户工具、Skills/版本和历史，拒绝过期状态切换。
@@ -10,13 +18,13 @@ Worker 默认 Boundary 已移除，权限完全沿用原生 Preset/Scope；旧�
 
 Preset Manager test.2：107 通过，1 项原有 Windows 符号链接跳过；实际打包产物两进程 Host、Profile 替换、Schema/依赖/Scope/CAS、版本和失败回退通过。Web 原生设置已实测配置表单、搜索、添加、排序、停用/移除、错误提示、Skills 分配/启停和刷新；Desktop 实际窗口与视觉 HMR 未验证。运行验证与历史实例记录如下。
 
-### 当前运行（已验证）
+### test.17 首次部署（rc.2 历史记录）
 
 已单活部署 Character **0.1.0-test.17**（运行代码 `5c23b75`）和独立 Preset Manager **0.1.0-test.2**（运行代码 `34db4a1`）。新 Host 健康、Agent 空闲、13 个 Preset 无失败、七个默认 Worker 均只有 Persona，单一 QQ Gateway connected/ready。Owner API、Schema、原生版本化客户端资源及未登录/跨来源拒绝通过；现场未改 Worker 工具配置，工具执行验收使用隔离 Profile。
 
 切换前保留旧 Profile 及 297 文件校验快照。Memory/治理表、绑定、QQ prefs、Schedule 和官方 ASAR 的前后校验一致；未进行生产数据迁移、未发送真实 QQ 测试消息。隔离切换失败回滚通过，生产实例本轮未执行回滚演练。后续迁移脚本额外收窄为只刷新内置 Worker Persona，明确不改变 Root Persona；此维护脚本不改变已部署运行包。
 
-Character 运行代码的 GitHub Actions 已通过；Manager 本提交未查到远端 Actions 运行，不将本地通过写成远端 CI 已验收。Desktop 当前没有可操作窗口，实际 Desktop GUI/HMR 和手机审批收件仍未验证。
+Character 运行代码的 GitHub Actions 已通过；Manager 本提交未查到远端 Actions 运行，不将本地通过写成远端 CI 已验收。Desktop 当时没有可操作窗口，实际 Desktop GUI/HMR 和手机审批收件仍未验证。
 
 ## test.16 实例记录
 

@@ -5,7 +5,7 @@ for(const [name,version]of [['dsh-qqbot','0.5.2'],['qqbot-nodejs','1.0.5']])if(J
 for(const args of [[],['--sdk']])require('node:child_process').execFileSync(process.execPath,[toolkit+'/maintenance/build-qqbot-patch.cjs',...args,'--check'],{stdio:'pipe',windowsHide:true});
 const provenance={...require('./audit-evidence.cjs')(),qqPatches:Object.fromEntries(['dsh-qqbot@0.5.2.patch','qqbot-nodejs@1.0.5.patch'].map(file=>[file,createHash('sha256').update(fs.readFileSync(toolkit+'/maintenance/patches/'+file)).digest('hex')]))};
 const yaml=require(require.resolve('js-yaml',{paths:[install+'/data/profiles/desktop']})),dialect=require('./deployment-plan.cjs').entryYaml(yaml),archive=require('./host-archive.cjs').openArchive();
-const version=JSON.parse(archive.read('dsh/package.json')).version;if(version!=='0.2.1-rc.2')throw Error('Revalidate lifecycle SDK fixture for this Host');
+const version=JSON.parse(archive.read('dsh/package.json')).version;if(!['0.2.1-rc.2','0.2.1-rc.3'].includes(version))throw Error('Revalidate lifecycle SDK fixture for this Host');
 const creator=dialect.load(archive.read('dsh/node_modules/@deepseek-ai/dsh-web-app/presets/cordis.patch.yml'))[0].insert[0];archive.close();
 const home=path.join(project,'test-data','lifecycle-'+randomUUID()),dir=home+'/profiles/lifecycle',runId=randomUUID(),local=rel=>pathToFileURL(path.join(project,rel)).href;
 fs.mkdirSync(dir,{recursive:true});fs.mkdirSync(home+'/tmp');

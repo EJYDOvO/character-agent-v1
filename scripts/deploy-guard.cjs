@@ -1,6 +1,7 @@
 const fs=require('fs'),path=require('path'),crypto=require('crypto'),assert=require('assert/strict');
 const root=require('./installation.cjs').install,project=path.resolve(__dirname,'..'),state=root+'/data/maintenance/character-deploy';
 const record=JSON.parse(fs.readFileSync(state+'/candidate.json','utf8')),hash=f=>crypto.createHash('sha256').update(fs.readFileSync(f)).digest('hex');
+if(record.runtime){assert.equal(path.resolve(record.runtime.root),path.resolve(require('./host-archive.cjs').runtimeRoot),'Selected Host changed');assert.equal(hash(record.runtime.root+'/resources/app.asar'),record.runtime.sha256,'Selected Host archive changed');}
 for(const [f,h]of Object.entries(record.baseline)){const target=f==='binding'?root+'/data/character/binding.json':f==='policy'?root+'/maintenance/plugin-policy.json':f==='prefs'?root+'/data/qqbot/model-prefs.json':f==='asar'?root+'/resources/app.asar':root+'/data/profiles/desktop/'+f;assert.equal(hash(target),h,'Baseline changed: '+f);}
 const yaml=require(require.resolve('js-yaml',{paths:[root+'/data/profiles/desktop']}));
 require('./deployment-plan.cjs').verifyCandidate(record.candidate,record,yaml);

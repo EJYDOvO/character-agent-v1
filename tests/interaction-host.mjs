@@ -2,7 +2,7 @@
 import fs from 'node:fs';import assert from 'node:assert/strict';import {randomUUID} from 'node:crypto';
 import {pathToFileURL} from 'node:url';
 import {registerHooks} from 'node:module';
-const sdk=process.env.DSH_INSTALL_ROOT+'/resources/app.asar/dsh/node_modules/@deepseek-ai/';
+const sdk=(process.env.DSH_CHARACTER_HOST_ROOT||process.env.DSH_INSTALL_ROOT)+'/resources/app.asar/dsh/node_modules/@deepseek-ai/';
 const {LlmAdapter,createUserMessage}=await import(pathToFileURL(sdk+'dsh-llm/lib/index.js').href);
 const {defineTool}=await import(pathToFileURL(sdk+'dsh-tools/lib/index.js').href);
 export const name='interaction-host-probe';export const inject=['agents','agentPresets','llm','tools'];
@@ -24,7 +24,7 @@ export function apply(ctx,config){
  ctx.llm.registerAdapter(['interaction-fixture'],new Provider());
  ctx.tools.register(defineTool({name:'interaction_fixture',description:'Isolated synthetic tool',parameters:{},output:{schema:{type:'string'},render:(_a,v)=>[{type:'text',text:v}]},async execute(_a,{signal}){toolStarted=true;signal.addEventListener('abort',()=>toolAborted=true,{once:true});await toolGate;return 'fixture-result';}}));
  ctx.effect(()=>{const timer=setTimeout(()=>void run(),700);return()=>clearTimeout(timer);});
- async function run(){const handles=[],report={ok:false,runId:config.runId,host:'0.2.1-rc.2',provider:'deterministic-fixture',qqNetwork:false,checks:[]};let resolver,releaseOutbound;
+ async function run(){const handles=[],report={ok:false,runId:config.runId,host:config.version,provider:'deterministic-fixture',qqNetwork:false,checks:[]};let resolver,releaseOutbound;
   try{
    assert(!ctx.get('qqGateway'));assert(!ctx.get('characterMemory'));
    const create=async preset=>{const h=await ctx.agents.create({sessionId:randomUUID(),agentOptions:{provider:'interaction-fixture',model:'fixture'},meta:{cwd:config.cwd,agentPreset:preset},setup:async c=>{await ctx.agentPresets.mount(c,preset);}});handles.push(h);return h.agent;};
@@ -43,7 +43,7 @@ export function apply(ctx,config){
    report.checks.push('Actual Creator tool parity and two enabled Preset services remain isolated');
    // Resolve only the copied QQ fixture against read-only installed dependencies.
    // No official file or installed node_modules is changed by these local hooks.
-   const fixtureUrl=pathToFileURL(config.qqFixture+'/').href,official=pathToFileURL(process.env.DSH_INSTALL_ROOT+'/resources/app.asar/dsh/package.json').href,installed=pathToFileURL(process.env.DSH_INSTALL_ROOT+'/data/profiles/desktop/package.json').href;
+   const fixtureUrl=pathToFileURL(config.qqFixture+'/').href,official=pathToFileURL((process.env.DSH_CHARACTER_HOST_ROOT||process.env.DSH_INSTALL_ROOT)+'/resources/app.asar/dsh/package.json').href,installed=pathToFileURL(process.env.DSH_INSTALL_ROOT+'/data/profiles/desktop/package.json').href;
    resolver=registerHooks({resolve(specifier,context,next){if(context.parentURL?.startsWith(fixtureUrl)&&!specifier.startsWith('.')&&!specifier.startsWith('node:')&&!specifier.startsWith('file:'))return next(specifier,{...context,parentURL:specifier.startsWith('@deepseek-ai/')?official:installed});return next(specifier,context);}});
    const {createInteractionOutbound}=await import(pathToFileURL(config.qqFixture+'/dist/gateway/bootstrap.js').href);
    const {setupMiddlewares}=await import(pathToFileURL(config.qqFixture+'/dist/gateway/middleware-setup.js').href);

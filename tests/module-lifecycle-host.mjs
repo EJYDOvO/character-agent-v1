@@ -22,7 +22,7 @@ export function apply(ctx,config){
   const report={ok:false,runId:config.runId,host:config.version,provenance:config.provenance,qqNetwork:false,model:'none',checks:[]},fibers=[];let handle;
   try{
    {
-   const yaml=createRequire(import.meta.url)(process.env.DSH_INSTALL_ROOT+'/resources/app.asar/dsh/node_modules/js-yaml');
+   const yaml=createRequire(import.meta.url)((process.env.DSH_CHARACTER_HOST_ROOT||process.env.DSH_INSTALL_ROOT)+'/resources/app.asar/dsh/node_modules/js-yaml');
    const expression='- insert:\n    - id: conditional\n      name: dsh-interaction-policy\n      disabled: !!js process.platform !== "win32"\n';
    const dialect=deployment.entryYaml(yaml),parsed=dialect.load(expression);
    const fixturePath=config.cwd+'/expression.patch.yml';fs.writeFileSync(fixturePath,expression);

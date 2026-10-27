@@ -2,7 +2,8 @@ if (!$env:DSH_INSTALL_ROOT -or !$env:DSH_CHARACTER_PROJECT) { throw 'Set DSH_INS
 $ErrorActionPreference='Stop'
 $root=$env:DSH_INSTALL_ROOT
 $project=$env:DSH_CHARACTER_PROJECT
-$exe="$root\DeepSeek Harness.exe"
+$runtime=$env:DSH_CHARACTER_HOST_ROOT;if(!$runtime){$runtime=$root}
+$exe=Join-Path $runtime 'DeepSeek Harness.exe'
 $lock=[IO.File]::Open("$root\data\maintenance\maintenance.lock",[IO.FileMode]::OpenOrCreate,[IO.FileAccess]::ReadWrite,[IO.FileShare]::None)
 $stopped=$false;$switched=$false;$started=$false;$hadHost=$false
 try {
