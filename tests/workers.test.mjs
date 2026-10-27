@@ -7,8 +7,8 @@ test('Every Worker is an independent analysis leaf with its own role and evidenc
  const prompts=new Set();
  for(const id of Object.keys(workerRoles)){
   const preset=workerPreset(id);assert.equal(preset.config.id,id);
-  assert.deepEqual(preset.config.plugins.map(p=>p.id),['worker-boundary','persona']);
-  const prompt=preset.config.plugins[1].config.prefix;prompts.add(prompt);
+  assert.deepEqual(preset.config.plugins.map(p=>p.id),['persona']);
+  const prompt=preset.config.plugins[0].config.prefix;prompts.add(prompt);
   for(const text of [id,'WorkerResult V1','evidence','needs_input','不继承父会话历史','最终决策'])assert(prompt.includes(text));
  }
  assert.equal(prompts.size,8);assert.throws(()=>workerPreset('cordis'),/Unknown/);
@@ -57,9 +57,7 @@ test('Duplicate IDs, alias collisions, protected Roots and custom Character self
  const self={config:{id:'character-custom',plugins:[]}};assert.throws(()=>configureWorkers(self,[],['character-custom']),/protected/);
  assert.throws(()=>selectedWorkerIds([],[],{characterPresetId:'worker-general'}),/protected Root/);
 });
-test('Boundary hides inherited tools, overrides PTC presentation, and denies even explicit late tool grants',()=>{
- const calls=[];let guard;
- boundary({tools:{presentAs(v){calls.push(['presentation',v]);},restrict(v){calls.push(['restriction',v]);},guard(f){guard=f;}}});
- assert.deepEqual(calls,[['presentation','native'],['restriction',{allow:[]}]]);
- for(const name of ['run_code','subagent','character_recall','remember','late_scoped_write'])assert.match(guard({name,arguments:{allow:true}}),/cannot execute/);
+test('Legacy boundary entry point remains loadable without restricting native tools',()=>{
+ const calls=[];boundary({tools:{presentAs(){calls.push('presentation');},restrict(){calls.push('restriction');},guard(){calls.push('guard');}}});
+ assert.deepEqual(calls,[]);
 });

@@ -1,70 +1,56 @@
-# Worker V2：Character Root 与独立专业 Preset
+# Worker V2：原生 Preset 权限
 
-本机 `resources/app.asar` 中的 DSH 0.2.1-rc.2 已具备 `dsh-tool-subagent` 的 `agentPreset`、`allowedAgentPresets` 以及 `spawn` 的独立 Preset 能力。旧 0.2.0 审计中的版本限制不再适用于这个已验证构建；仍不保证其他构建同版本号下的全部接口不变。
+Character 是唯一面向用户的 Root，保留完整 Creator 工具、Skills、原生委派和模型偏好。Worker 使用 DSH 0.2.1-rc.2 原生 `subagent` / `spawn`、独立 Preset 和独立 Session；默认目标 `worker-general`，可信 `allowedAgentPresets` 白名单，`maxDepth:1`。Fork/workflow 是 Creator 的其他通道，不具有相同隔离语义。
 
-Worker V2 在 test.15 引入，社区真实 ID/展示别名修复随 test.16 部署；当前实例启用七个默认角色，review 仍按需关闭；验收边界见 [STATUS](STATUS.md)。Character 是唯一 Root/Orchestrator，保留完整 Creator 工具、Skills、原生委派、Fork 和 workflow。简单任务直接处理；复杂任务才按需使用 Planner 草案，所有结果由 Root 核验和决策。**Fork/workflow 是 Creator 原有通道，不具备此 Worker 的等价隔离边界。** 安全 Worker 使用 `subagent` 的 `spawn`，默认 `worker-general`，显式 `allowedAgentPresets`，`maxDepth:1`。
+## test.17 的权限变化
 
-## 权限与能力
+内置 Worker 默认只装配 Persona，**不再装配 worker-boundary，不使用 Character 的 restrict/guard 或额外工具名单**。工具、Skills、审批和 Scope 均以原生 Preset 实际装配为准。用户可以通过独立 Preset Manager 修改 Worker 的 Profile Override，添加已安装的 Plugins 和分配 Skills；不修改 Core 源定义。添加 Skill 不会自动授予终端、文件或网络工具；需要读取 Skill 时显式装配原生 `dsh-tool-skill` 等所需能力。
 
-本版 Worker 是安全分析型：仅分析父 Agent 明确提供的材料，不具有文件、网络、执行、记忆或继续委派工具。它能返回分析和操作提案；主 Agent 独立核验后使用自己的工具、授权和审批。没有复制父 Agent 的 Memory handle，也没有自动批准子任务的机制。
+独立 Spawn 不复制 Root 的 Preset 工具、历史、Persona、QQ Identity 或 Memory capability。Host 全局工具可能按 DSH 原生规则对 Worker 可见；可见性不等于 QQ/Memory/Long Tasks 授权，这些服务仍验证可信身份。不要把 Root capability、凭据或身份字段传给 Worker，也不要把 Worker 结果当成审批或授权。
 
-`character-memory-tools/worker.mjs` 复用原生 Agent-scoped `tools.restrict({allow:[]})` 隐藏继承工具，`presentAs('native')` 避免 PTC 暴露执行入口，`tools.guard()` 在可扩展 pre-execute 之后单调拒绝所有执行，包括后挂载 scoped 工具和显式 allow。不是只靠提示词限制，也不以 `approvalPolicy: never` 冒充沙箱。四个核心插件不变，共用 `worker-policy.mjs` 存放构建和 Root 的角色词表，没有新增 Manager、Spawn Provider 或 Agent Loop。
+Root 的白名单/一级深度不变。Worker 默认没有委派插件；即使为它装配原生 subagent，仍应配置 `maxDepth:1`，由原生 Host 拒绝第二级委派。本项目没有新增管理器、Spawn Provider 或第二套 Worker 权限系统。可信 Host 插件可运行进程代码，原生 Scope 校验不是恶意插件沙箱。
 
-独立 Session、父子通信、邻接授权和冷恢复由 DSH 原生 Subagent 管理。恢复继续挂载保存的 Worker Preset；不存在 Preset 失效后退回 Creator 的项目补偿路径。可信 Host 插件本身仍能执行进程代码，此机制不是对恶意 Host 插件的隔离沙箱。
+## 角色与结果
 
-## 角色与结果契约
-
-以下七个独立 Preset 由 Core 构建声明，不依赖 Extras：
-
-| Preset | 职责 |
+| Preset | 用途 |
 |---|---|
-| `worker-general` | 兼容通用分析，仍是默认目标 |
-| `worker-explore` | 梳理给定代码片段、索引与调用关系 |
-| `worker-librarian` | 比较给定文档、来源、版本与许可证 |
-| `worker-oracle` | 复杂故障和架构取舍建议 |
-| `worker-metis` | 规划前的需求、歧义、风险澄清 |
-| `worker-momus` | 计划的可执行性、回滚及验收评审 |
-| `worker-planner` | 复杂任务的计划草案，不调度或执行 |
+| worker-general | 默认通用分析 |
+| worker-explore | 代码、索引与调用关系 |
+| worker-librarian | 资料、版本、来源与许可证 |
+| worker-oracle | 复杂故障与架构取舍 |
+| worker-metis | 需求、约束与风险澄清 |
+| worker-momus | 计划、回滚与验收评审 |
+| worker-planner | 复杂任务的计划草案；不接管 Root 调度 |
+| worker-review | 可选兼容审阅角色 |
 
-Explore/Librarian 本版也没有读取文件或联网工具；Root 必须提供材料及来源。缺材料时返回 `blocked`/`needs_input`。没有偷偷开启执行型 Worker、多级委派或额外 Planner LLM。
+前七项由 Core 构建声明。`private/build-config.json` 的 `specialistWorkers:["worker-review"]` 按需增加 review，不需要 Extras。Persona 允许使用真实装配的能力补充证据，缺材料或能力时报告 blocked/needs_input，不假装已搜索或执行。
 
-各角色独立 Persona 要求返回 **WorkerResult V1**：`worker`、`status`（`ok/blocked/needs_input`）、`summary`、`findings[{claim,evidence[{reference,quote}]}]`、`uncertainties`、`proposals`。Root 的策略提示要求检查格式、来源和不确定性；它是提示与核验契约，**不是运行时强制 JSON Schema**。模型不遵守时不能宣称成功，工具安全由 Host 守卫保障，不依赖这个格式。
+结果契约 WorkerResult V1：`worker/status/summary/findings[{claim,evidence[{reference,quote}]}]/uncertainties/proposals`。这是提示与 Root 核验契约，不是运行时强制 JSON Schema。最终用户回复与决策由 Root 负责。
 
-兼容 `worker-review` 继续按需配置。`private/build-config.json`：
+## 社区真实 ID
 
-```json
-{"specialistWorkers":["worker-review"]}
-```
-
-构建同时生成内置 Preset、Spawn 白名单及 Root 角色说明；删除可选配置会同时移除 review 的声明和引用。Extras 内容保持原样，关闭 Extras 不影响内置分析 Worker。官方 Creator 指纹、构建源、角色词表和配置变化触发重建；构建清单记录 `workerPolicyVersion:2` 与实际白名单。
-
-### 社区真实 ID 与可选别名（test.16）
-
-`communityWorkerPresets` 在可信 `private/build-config.json` 中显式声明；兼容原字符串数组，不再强制 `worker-*` 前缀：
+可信构建配置可显式声明已安装、已审查的第三方 Preset：
 
 ```json
-{
-  "communityWorkerPresets": [
-    "third-party-worker",
-    {"id": "root-planner-worker", "alias": "external-planner"}
-  ]
-}
+{"communityWorkerPresets":["third-party-worker",{"id":"root-planner-worker","alias":"external-planner"}]}
 ```
 
-`id` 是已安装的真实原生 Preset ID；`alias` 可省略，只用于 Root 的角色说明。构建保留规范化声明，原生 `allowedAgentPresets`、工具枚举、实际 `agent_preset` 和冷恢复均使用真实 ID；**不存在别名翻译、第二份 Preset 或别名作为委派目标的路径**。上例必须调用 `subagent` 的 `agent_preset:"root-planner-worker"`，传 `external-planner` 会被原生白名单拒绝。旧字符串形式仍可用。
+原生白名单、`agent_preset`、持久目标和冷恢复均使用真实 `id`；alias 仅用于展示，不能作为调用目标。拒绝重复、别名冲突、内置 ID、Character 自引用和已知高权限 Root（含 cordis/creator/root/long-task）。ID 不能是路径、含空白或不可见字符；声明只接受 id/alias。名字不证明权限安全，必须审查实际工具、Scope、身份和依赖。不会自动安装插件或给第三方授予权限。
 
-拒绝重复真实 ID、重复别名、别名与任何真实 ID/内置角色的冲突（包括当前停用的 review）、Character 自身（含自定义 presetId），以及 `cordis`、`creator`、`root`、`character`、`qq-character`、`long-task` 等保留目标。构建还保护实际官方 Creator ID。ID/别名须为 1–128 字符的非空字符串，不含空白、控制/不可见格式字符或路径分隔符；不是模块路径。对象仅接受 `id`/`alias`，不能通过声明注入工具或其他权限。
+目标未安装、装配失败或冷恢复时已卸载，都安全拒绝，不回退 Creator。恢复原真实 ID 后才可继续原有子 Session。更名时需要保留旧 ID 供历史 Session 恢复，不能靠展示别名迁移目标。
 
-必须先通过原生 Profile/Bundle 安装并审查独立目标及其依赖，确认同等叶子守卫、最小工具权限、禁止 QQ/Memory/管理授权和多级委派，再由可信 Host 写入白名单。**名字包含 root 不等于 Root 权限，名字包含 worker 也不证明安全**；未知第三方权限仍需审查，ID 校验不是权限审计器。显式声明不自动安装、修改外部 Persona、挂载工具、授予权限或豁免审查；可信 Host 插件仍能运行进程代码。
+## 升级与回滚
 
-声明缺失时原生工具装配拒绝，可能阻止引用该名单的 Root 激活；应补齐已审查目标或移除配置后重建，不能静默跳过。目标无法装配时原生 Spawn 拒绝；冷恢复时目标被卸载也拒绝，不回退 Creator 或其他 Agent。重新注册原真实 ID 后可恢复原有子 Session。别名不进入持久目标，因此不能改变历史 Session 的归属。已有社区 ID 若改名，应保留旧 ID 对应的已审查 Preset 直到旧 Session 不再需要恢复；不要用别名迁移历史目标。
+`prepare-deploy.cjs` / `prepare-host-upgrade.cjs` 仅在候选 Profile 清除精确的旧 `dsh-character-memory-tools/worker.mjs` 行（含 Group、自定义 Preset 和 Manager 合并 base）。只刷新与旧发行模板完全相同的内置 Worker Persona，保留用户改动、其他工具、排序、Skills 分配、版本和历史。状态暂存后若再变化，切换会拒绝，需重新准备候选。
 
-角色/官方 Creator/构建源或配置变化会要求重新构建并回归。未来如果增加文件、检索或 Memory 授权，应另行设计可验证的最小授权；不要简单移除执行守卫或把父 Agent 的身份参数传给 Worker。
+旧模块地址保留为无操作兼容入口，避免历史 Override/Session 缺模块而失败。新 Core 不引用它，兼容入口不限制或授予权限。构建清单 `workerPolicyVersion:3`。回滚需要恢复匹配的旧 Core/Tools、Profile 与 Manager base；不回滚 Memory/Session 数据。回滚到 test.16 会恢复当时的强制无工具策略。
 
-## 验证与限制
+## 验证
 
-`node --test tests/workers.test.mjs` 验证角色、真实 ID/别名校验和 Root 自引用；`scripts/check-interaction-build.cjs` 用合成定义验证真实构建输出只把真实 ID 写入原生名单、不复制社区 Preset，并拒绝不安全配置。安装匹配 DSH 后设置 `DSH_INSTALL_ROOT`，执行 `scripts/run-inspector.ps1 --workers`，使用全新目录及两次独立 Host 进程。实际 Spawn 覆盖八个内置角色及两个社区夹具（包含真实 `root-planner-worker` 与别名），验证独立 Session、无父历史/Persona、工具/QQ/Memory/Long Tasks 拒绝、别名/非白名单拒绝、后挂载工具与嵌套委派绕过、非父通信、冷恢复和完整重启后恢复。还验证缺失声明、实际装配失败、目标卸载后恢复拒绝和重新注册原 ID 后恢复；不会把普通参数错误当作装配失败证据。结果按 runId 与阶段核验，不用旧报告代替本次验证。
+- `npm test`、`npm run test:audit`：角色/名单、兼容入口、候选配置迁移、完整 Manager 状态、并发修改拒绝和切换失败回滚。
+- `scripts/check-interaction-build.cjs`：合成构建保留 Creator/Extras、真实 ID、无 Boundary 声明。
+- `scripts/run-inspector.ps1 --workers`：十个原生 Preset 实际工具调用、未装配的 Root 工具缺席、QQ/Memory/任务授权拒绝、白名单、原生深度、父子通信、冷恢复与第二次 Host 启动。
+- 设置 `DSH_PRESET_MANAGER_PROJECT` 指向独立管理器仓库，再执行 `scripts/run-inspector.ps1 --workers --manager`：Manager 经 Owner API 修改真正的 Character Worker 插件/Skills，并验证 Spawn 与重启。
+- Core-only/Core+Extras 另验证 Creator、Memory/Compaction、Schedule/Outbox 和 Inspector。模型和 QQ Sender 为合成替身，不证明真实模型质量、审批收件或手机送达。
 
-Core-only/Core+Extras 原生回归另覆盖 Creator 工具、跨 Session Memory、自动提取、Compaction、Schedule/Outbox 和 Inspector。模型与 Sender 是确定性合成替身；这些隔离测试没有连接生产 QQ 或读取生产记忆；其后授权部署的启动与数据校验见 STATUS。真实模型的角色质量、结构化输出稳定性及主代审批完整业务验收仍未验证。
-
-角色划分参考 [dsh-plugin-cluster-preset](https://github.com/hu568/dsh-plugin-cluster-preset)，只参考职责，未复制旧 `toolFilter`/委派 `persona`、Team Policy 或其生命周期插件。许可证及固定源码版本见 [第三方说明](../THIRD_PARTY_NOTICES.md)。
+当前部署与未验收事项见 [STATUS](STATUS.md)。职责划分参考 [dsh-plugin-cluster-preset](https://github.com/hu568/dsh-plugin-cluster-preset)，未复制其旧 toolFilter、委派 persona 或 Agent Loop；来源见 [第三方说明](../THIRD_PARTY_NOTICES.md)。

@@ -1,10 +1,10 @@
-# 运行架构与复用边界（test.16 / Worker V2）
+# 运行架构与复用边界（test.17 / 原生 Worker 权限）
 
 test.13 在既有原生分析 Worker、Memory Inspector 上引入可选 QQ Session 生命周期和独立长期任务；test.14 收紧历史根权限并补充存量提醒审计。隔离与当前实例部署的验收边界统一见 [STATUS](STATUS.md)。阶段对照见 [路线图](IMPLEMENTATION_ROADMAP.md)，任务契约见 [Long Tasks](../packages/long-tasks/README.md)。
 
 test.16 的社区 Preset 修复只调整构建契约：`communityWorkerPresets` 可声明真实 ID 与展示别名，`allowedAgentPresets`、实际 Spawn 和持久目标始终使用真实 ID；不增加运行服务、权限或第三方安装路径。详细校验和隔离验收见 [Worker](WORKERS.md)。
 
-Worker V2 使用官方 `subagent` 的 `agentPreset / allowedAgentPresets` 和 `spawn`。Core 声明 general、explore、librarian、oracle、metis、momus、planner；review 仍可选，社区引用经可信构建配置审查。Character 唯一 Root 保留完整 Creator，按需向 Planner 请求草案；全部 Worker 是无工具的独立分析叶子，不继承 QQ/Memory 或父历史，`maxDepth:1`。角色/白名单/Root 策略共用词表，原生执行守卫仍在现有 Memory Tools 包，不增加 Manager、Spawn Provider 或 Agent Loop；隔离验收及部署边界见 STATUS。Inspector 是额外可选双端插件：原生 `dsh.client` 将 React 页面注册到 `settings.section`，复用 DSH 导航、组件与主题；通过 Connection RPC 与受控 Core API 访问记忆。四个核心插件与可选 Extras 边界保持；详见 [Worker](WORKERS.md) 和 [Inspector](MEMORY-INSPECTOR.md)。
+Worker V2 使用官方 `subagent` 的 `agentPreset / allowedAgentPresets` 和 `spawn`。Core 声明 general、explore、librarian、oracle、metis、momus、planner；review 仍可选，社区引用经可信构建配置审查。Character 唯一 Root 保留完整 Creator，按需向 Planner 请求草案；Worker 是独立 Preset，工具/Skills 按原生 Scope 装配，不继承 QQ/Memory 或父历史，`maxDepth:1`。角色/白名单/Root 策略共用词表，不再默认装配 Character Worker Boundary，不增加 Manager、Spawn Provider 或 Agent Loop；隔离验收及部署边界见 STATUS。Inspector 是额外可选双端插件：原生 `dsh.client` 将 React 页面注册到 `settings.section`，复用 DSH 导航、组件与主题；通过 Connection RPC 与受控 Core API 访问记忆。四个核心插件与可选 Extras 边界保持；详见 [Worker](WORKERS.md) 和 [Inspector](MEMORY-INSPECTOR.md)。
 
 **test.10 交互增量**：独立可选 `dsh-interaction-policy` 通过原生 Agent-scoped 事件和 Preset 服务隔离管理表达与发送策略。QQTK 只接入 Sender 与可信修正入口；Character Identity 复用原入站校验和证据逻辑提供提前接入钩子。没有新数据库、Planner 或 Agent Loop，原四插件和 Core/Extras 保留。详细接口及当前验证见 [Interaction Policy](INTERACTION-POLICY.md)。下文为既有记忆架构。
 
@@ -43,7 +43,7 @@ flowchart LR
 
 图中 CI 和 LI 是替代配置，单个作用域只装配一个 Provider。其他项目不需要安装 Character Identity、QQ Adapter 或两个 Character Bundle。
 
-Inspector 可以直接依赖 Core 的管理 API；Core 不反向依赖 Inspector，不新增接口服务。Character Adapter 对 Identity、Memory、Remote Ops 的组合依赖是项目边界，不能据此推断基础 QQ 或通用 Memory 也必须安装它们。Worker guard 继续复用 Tools 包入口，不单独拆包。
+Inspector 可以直接依赖 Core 的管理 API；Core 不反向依赖 Inspector，不新增接口服务。Character Adapter 对 Identity、Memory、Remote Ops 的组合依赖是项目边界，不能据此推断基础 QQ 或通用 Memory 也必须安装它们。旧 Worker 模块仅保留无操作兼容入口，新 Preset 不引用它。
 
 v0.7.8 的主体目标已有实现，但项目范围由可信 binding 固定配置；尚无任务级独立 grants 或项目管理 UI。主 Session 生命周期在 QQTK，稳定 Conversation 及 Outbox 在 Identity；原生 Schedule 仍指向原 Session，使用持久 qq_bindings 冷恢复原根，不迁移提醒。独立长期任务通过原生 storageDomain 保存任务/执行账本，使用独立任务根 Session 和受限 Preset；不新增 Coordinator、调度器或 Memory 数据库。旧 Task Memory 只有只读预览，未完成受控正式导入。
 

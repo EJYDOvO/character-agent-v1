@@ -2,7 +2,15 @@
 
 本页是版本与验收状态的统一入口。历史发布记录说明当时结果，不代表最新运行状态。
 
-## 安装与源码
+## test.17 源码与隔离验收
+
+Worker 默认 Boundary 已移除，权限完全沿用原生 Preset/Scope；旧模块为无操作兼容入口。候选迁移覆盖嵌套 Override、自定义 Preset 与 Manager 合并 base，保留用户工具、Skills/版本和历史，拒绝过期状态切换。
+
+本轮 Character **178/178** 单元/安全回归通过，无跳过；当前 DSH 0.2.1-rc.2 的 Core-only/Core+Extras、十个原生 Worker 实际工具调用、原生一级深度、Root 身份/Memory/任务拒绝、冷恢复与两进程重启通过。跨仓库测试由独立 Preset Manager 经 Owner API 为真正的 Character Worker 配置 Plugins/Skills，重启后实际工具执行继续通过。Creator、Memory/Compaction、Schedule/Outbox 回归通过。模型与 QQ Sender 是合成替身，不代表真实业务质量或手机收件。
+
+Preset Manager test.2：107 通过，1 项原有 Windows 符号链接跳过；实际打包产物两进程 Host、Profile 替换、Schema/依赖/Scope/CAS、版本和失败回退通过。Web 原生设置已实测配置表单、搜索、添加、排序、停用/移除、错误提示、Skills 分配/启停和刷新；Desktop 实际窗口与视觉 HMR 未验证。运行配置切换状态在完成后单独记录，以下是原 test.16 实例记录。
+
+## test.16 实例记录
 
 **当前实例已部署 test.16 / 社区 Preset ID 修复**，代码提交 `1c587f2`。兼容字符串真实 ID，支持 `{id,alias?}`；原生白名单、Spawn 和持久恢复只使用真实 ID。配置冲突、已知受保护 Root、Character 自引用均拒绝，不自动安装或授权。当前实例仍只有七个默认 Worker，没有新增或启用社区目标。
 
@@ -20,7 +28,7 @@ test.16 原发布验证：Character **174/174**、QQTK **57/57** 自动回归通
 
 ### test.15 历史部署记录
 
-**test.15 当时的实例：Worker V2 / `0.1.0-test.15`**（2026-10-26）：Character 保持唯一 Root；Core 新增 explore/librarian/oracle/metis/momus/planner 六个独立分析 Preset，保留 general 与可选 review。通过原生 Spawn 白名单和叶子工具守卫装配；没有额外 Agent Manager、执行型 Worker、Memory Schema 或 QQTK 改动。社区 Preset 只支持 Host 审查安装后的显式引用，不自动安装。详细配置、结果契约及零工具限制见 [Worker](WORKERS.md)。代码提交 `981ce79`；其余依赖版本与 QQTK 补丁保持不变。
+**test.15 当时的实例：Worker V2 / `0.1.0-test.15`**（2026-10-26）：Character 保持唯一 Root；Core 新增 explore/librarian/oracle/metis/momus/planner 六个独立分析 Preset，保留 general 与可选 review。通过原生 Spawn 白名单和叶子工具守卫装配；没有额外 Agent Manager、执行型 Worker、Memory Schema 或 QQTK 改动。社区 Preset 只支持 Host 审查安装后的显式引用，不自动安装。这是当时的零工具限制；test.17 当前权限见 [Worker](WORKERS.md)。代码提交 `981ce79`；其余依赖版本与 QQTK 补丁保持不变。
 
 隔离验收：Character **172/172**、QQTK **57/57** 自动回归通过，无跳过。实际安装候选包的 Core-only/Core+Extras、普通 Agent 模块启停、九种 Worker Preset 的原生委派/权限攻击/冷恢复及完整 Host 重启恢复通过；Memory 提取与 Compaction、Schedule/通知去重、QQ 生命周期/Long Tasks 和 Interaction 回归通过。攻击测试按本次输入和真实 tool-call 记录断言；Interaction 只调整测试计时间隔，未改运行插件。
 

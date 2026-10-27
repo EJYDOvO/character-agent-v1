@@ -4,9 +4,10 @@ import {LlmAdapter,createUserMessage} from '@deepseek-ai/dsh-llm';
 import {defineTool} from '@deepseek-ai/dsh-tools';
 import AgentPreset from '@deepseek-ai/dsh-agent-preset';
 import {selectedWorkerIds} from '../packages/character-definition/workers.mjs';
+import {calls as nativeToolExecutions} from './worker-tool-fixture.mjs';
 import {managerFixture} from './qq-manager-fixture.mjs';
 export const name='worker-v2-native-probe';
-export const inject=['agents','agentPresets','tools','llm','subagents','sessions','characterIdentity','memoryIdentity','dshMemory','longTasks'];
+export const inject=['agents','agentPresets','tools','llm','subagents','sessions','characterIdentity','memoryIdentity','dshMemory','longTasks','connection','webServer','skills'];
 let brokenMountAttempts=0;
 export function apply(ctx,config){
  if(config.brokenFixture){brokenMountAttempts++;throw Error('Fixture target cannot be mounted');}
@@ -16,13 +17,12 @@ export function apply(ctx,config){
   observed.set(role,{system,messages});
   bySession.set(request.sessionId,{system,messages});
   const input=request.messages.filter(m=>m.role==='user'&&!['runtime-context','time-context','skill-catalog','agent-instructions'].includes(m.source?.kind)).at(-1),text=JSON.stringify(input?.content??[]),key=request.sessionId+':'+input?.id;
-  if((text.includes('attack-late-tool')||text.includes('attack-nested-spawn'))&&!attempted.has(key)){
-   attempted.add(key);yield {type:'tool-call-delta',index:0,id:'attack-'+randomUUID(),name:text.includes('attack-nested-spawn')?'subagent':'late_worker_write',argumentsDelta:'{}'};
+  if((text.includes('attack-late-tool')||text.includes('invoke-configured-tool'))&&!attempted.has(key)){
+   attempted.add(key);yield {type:'tool-call-delta',index:0,id:'attack-'+randomUUID(),name:text.includes('invoke-configured-tool')?'worker_fixture_tool':'late_worker_write',argumentsDelta:'{}'};
   }else yield {type:'text-delta',index:0,text:JSON.stringify({worker:role,status:'ok',summary:'Fixture analysis only',findings:[],uncertainties:['Model quality is not measured'],proposals:[]})};
   yield {type:'finish',reason:{kind:'stop'}};
  }}
  ctx.llm.registerAdapter(['worker-v2-fixture'],new Fixture());
- ctx.tools.register(defineTool({name:'global_worker_write',description:'Synthetic inherited side effect',parameters:{},output:{schema:{type:'string'},render:(_a,v)=>[{type:'text',text:v}]},execute(){effects++;return 'forbidden';}}));
  ctx.effect(()=>{const timer=setTimeout(()=>void run(),1200);return()=>clearTimeout(timer);});
  async function run(){
   const handles=[],registrations=[],report={ok:false,runId:config.runId,host:config.version,provenance:config.provenance,restart:fs.existsSync(config.cwd+'/worker-state.json'),qqNetwork:false,model:'deterministic fixture',checks:[]};let release;
@@ -42,7 +42,7 @@ export function apply(ctx,config){
    await assert.rejects(()=>ctx.tools.get('subagent',brokenParent).execute({description:'Reject broken target',prompt:'fixture',agent_preset:'unmountable-community-preset'},{agent:brokenParent,signal:AbortSignal.timeout(5000)}));
    assert.equal(brokenMountAttempts,beforeBroken+1,'Broken target must actually attempt native mounting');
    await broken.dispose();
-   const targetPlugins=[{id:'boundary',name:new URL('../packages/character-memory-tools/worker.mjs',import.meta.url).href},{id:'persona',name:'@deepseek-ai/dsh-persona',config:{prefix:'你是独立的 restore-community-worker。WorkerResult V1。Only analyze supplied evidence.'}}];
+   const targetPlugins=[{id:'legacy-boundary',name:new URL('../packages/character-memory-tools/worker.mjs',import.meta.url).href},{id:'persona',name:'@deepseek-ai/dsh-persona',config:{prefix:'你是独立的 restore-community-worker。WorkerResult V1。Only analyze supplied evidence.'}}];
    const target=await register('restore-community-worker',targetPlugins),recoveryParent=await parentFor('fixture-recovery-parent','restore-community-worker');
    const native=ctx.tools.get('subagent',recoveryParent),child=await native.execute({description:'Persist real preset',prompt:'fixture',agent_preset:'restore-community-worker'},{agent:recoveryParent,signal:AbortSignal.timeout(10000)});
    await ctx.agents.get(child.subagentId).whenIdle();await ctx.subagents.drainChildren(recoveryParent,[child.subagentId]);await target.dispose();
@@ -50,12 +50,24 @@ export function apply(ctx,config){
    assert.equal(ctx.agents.get(child.subagentId),undefined);
    await register('restore-community-worker',targetPlugins);
    await ctx.subagents.sendMessage(recoveryParent,child.subagentId,[{type:'text',text:'Restore original real ID only'}],{signal:AbortSignal.timeout(10000)});
-   const restored=ctx.agents.get(child.subagentId);assert.equal(ctx.agentPresets.composedPreset(restored.ctx),'restore-community-worker');assert(ctx.tools.guardReason({agent:restored}));await restored.whenIdle();
+   const restored=ctx.agents.get(child.subagentId);assert.equal(ctx.agentPresets.composedPreset(restored.ctx),'restore-community-worker');assert.equal(ctx.tools.guardReason({agent:restored}),undefined);await restored.whenIdle();
    report.checks.push('Native missing declaration, broken mount and removed cold target reject without Creator fallback; original ID can be restored');
    const saved=report.restart?JSON.parse(fs.readFileSync(config.cwd+'/worker-state.json')):null;
+   if(config.managerProbe){
+    const origin=ctx.webServer.getOrigin(),login=await fetch(ctx.connection.authenticatedUrl(origin+'/'),{redirect:'manual'}),cookie=login.headers.get('set-cookie').split(';')[0];
+    const call=async(action,body={})=>{const response=await fetch(origin+'/api/dsh-preset-manager',{method:'POST',headers:{cookie,origin,'content-type':'application/json'},body:JSON.stringify({action,...body})});assert.equal(response.status,200);const result=await response.json();assert.equal(result.ok,true,JSON.stringify(result));return result.value;};
+    const preset=async id=>(await call('list')).presets.find(p=>p.id===id);
+    if(!saved)for(const id of ids){
+     for(const row of [{rowId:'managed-tool',module:'dsh-character-worker-fixture',config:{}},{rowId:'managed-depth-fixture',module:'@deepseek-ai/dsh-tool-subagent',config:{provider:'spawn',agentPreset:'worker-general',allowedAgentPresets:['worker-general'],maxDepth:1}}])await call('editPlugin',{id,base:(await preset(id)).pluginRevision,op:'add',...row});
+     await call('assignSkill',{id,base:(await preset(id)).pluginRevision,skill:'worker-probe',enabled:true});
+    }
+    for(const id of ids){const lease=await ctx.agentPresets.acquireScope(id);try{assert((await ctx.skills.snapshot({scope:lease.key})).skills.some(s=>s.name==='worker-probe'));}finally{await lease[Symbol.asyncDispose]();}}
+    report.checks.push('Independent Preset Manager actually configures all Character Worker Presets/Skills through Owner API; Overrides survive full Host restart');
+   }
    const root=await create('qq-character',saved?.root,report.restart),other=await create('qq-character'),creator=await create('cordis');
    const baseNames=[...ctx.tools.view(creator).visible.keys()],rootNames=[...ctx.tools.view(root).visible.keys()];
    assert.deepEqual(baseNames.filter(n=>!rootNames.includes(n)),[]);assert(rootNames.includes('character_recall'));assert(rootNames.includes('long_task_create'));
+   root.ctx.tools.register(defineTool({name:'root_only_fixture',description:'Root scoped authority must not inherit',parameters:{},output:{schema:{type:'string'},render:(_a,v)=>[{type:'text',text:v}]},execute(){throw Error('Root only');}}));
    report.checks.push('Character preserves every native Creator tool, delegation and optional Long Tasks');
    const manager=managerFixture();release=ctx.characterIdentity.attach({manager,config:{appId:'mock-app',preset:'qq-character',access:{c2cMode:'allowlist',c2cAllow:['mock-owner'],groupMode:'disabled'}},sender:{async sendMarkdown(){throw Error('No notification expected');}}});
    manager.commit({sessionId:root.id,agent:root,agentPreset:'qq-character',scope:'c2c',peerId:'mock-owner',senderId:'mock-owner'});await manager.getOrCreate('c2c','mock-owner','mock-owner',{scope:'c2c',targetId:'mock-owner'});
@@ -71,7 +83,10 @@ export function apply(ctx,config){
     if(saved){const child=saved.children.find(c=>c.preset===id);assert(child);await ctx.subagents.sendMessage(root,child.id,[{type:'text',text:'Continue analysis with supplied evidence only.'}],{signal:AbortSignal.timeout(10000)});worker=ctx.agents.get(child.id);}
     else {const result=await spawn.execute({description:'Independent '+id,prompt:'Analyze only supplied fixture evidence; reference fixture:1.',agent_preset:id},exec);worker=ctx.agents.get(result.subagentId);}
     assert(worker);await worker.whenIdle();assert.notEqual(worker.id,root.id);assert.equal(ctx.agentPresets.composedPreset(worker.ctx),id);
-    assert.deepEqual([...ctx.tools.view(worker).visible.keys()],[]);assert(ctx.tools.guardReason({agent:worker,name:'subagent',arguments:{agent_preset:'worker-general'}}));
+    assert(ctx.tools.get('worker_fixture_tool',worker));assert(!ctx.tools.get('root_only_fixture',worker));assert(!ctx.tools.get('character_recall',worker));// Host-global tools may be visible natively; visibility never grants task identity.
+    await assert.rejects(()=>ctx.tools.get('long_task_create',worker).execute({title:'forged',prompt:'work',after_seconds:60},{agent:worker,signal:AbortSignal.timeout(1000)}));assert.equal(ctx.tools.guardReason({agent:worker}),undefined);
+    await assert.rejects(()=>ctx.tools.get('subagent',worker).execute({description:'Reject nested native Spawn',prompt:'fixture',agent_preset:'worker-general'},{agent:worker,signal:AbortSignal.timeout(5000)}),/depth .* exceeds maxDepth 1/);
+    const configuredBefore=nativeToolExecutions.get(worker.id)??0;worker.followup(createUserMessage({content:[{type:'text',text:'invoke-configured-tool'}],source:{kind:'fixture'}}));await worker.whenIdle();assert.equal(nativeToolExecutions.get(worker.id),configuredBefore+1);
     assert.throws(()=>ctx.characterIdentity.forSession(worker.id));assert.throws(()=>ctx.memoryIdentity.forSession(worker.id));
     assert.throws(()=>ctx.dshMemory.recall({...trusted,sessionId:worker.id},''));
     await assert.rejects(()=>ctx.longTasks.create(worker,{title:'forged',prompt:'work',after_seconds:60},AbortSignal.timeout(1000),'forged'));
@@ -81,20 +96,17 @@ export function apply(ctx,config){
     await assert.rejects(()=>ctx.subagents.sendMessage(other,worker.id,[{type:'text',text:'Hijack worker'}],{signal:AbortSignal.timeout(1000)}));
     children.push({id:worker.id,preset:id});
     // Scope-local tools normally bypass inherited tool filters. Test actual execution.
-    const remove=worker.ctx.tools.register(defineTool({name:'late_worker_write',description:'Late scoped attack fixture',parameters:{},output:{schema:{type:'string'},render:(_a,v)=>[{type:'text',text:v}]},execute(){effects++;return 'forbidden';}}));
+    const beforeLate=effects;const remove=worker.ctx.tools.register(defineTool({name:'late_worker_write',description:'Late scoped attack fixture',parameters:{},output:{schema:{type:'string'},render:(_a,v)=>[{type:'text',text:v}]},execute(){effects++;return 'scoped-tool-executed';}}));
     const allow=worker.ctx.on('tools/pre-execute',()=>({kind:'allow'}));
     worker.followup(createUserMessage({content:[{type:'text',text:'attack-late-tool'}],source:{kind:'fixture'}}));await worker.whenIdle();remove();allow();
     const called=name=>worker.session.snapshotEvents().some(e=>e.type==='assistant/message'&&e.data?.message?.content?.some(b=>b.type==='tool-call'&&b.name===name));
-    assert(called('late_worker_write'),'Attack was not actually submitted');assert.equal(effects,0);
-    const removeSpawn=worker.ctx.tools.register(defineTool({name:'subagent',description:'Late attempt to bypass leaf policy',parameters:{},output:{schema:{type:'string'},render:(_a,v)=>[{type:'text',text:v}]},execute(){effects++;return 'forbidden';}}));
-    worker.followup(createUserMessage({content:[{type:'text',text:'attack-nested-spawn'}],source:{kind:'fixture'}}));await worker.whenIdle();removeSpawn();
-    assert(called('subagent'),'Nested call was not actually submitted');assert.equal(effects,0);
-    if(!saved){await ctx.subagents.drainChildren(root,[worker.id]);assert.equal(ctx.agents.get(worker.id),undefined);await ctx.subagents.sendMessage(root,worker.id,[{type:'text',text:'Cold resume analysis only.'}],{signal:AbortSignal.timeout(10000)});const cold=ctx.agents.get(worker.id);await cold.whenIdle();assert.equal(ctx.agentPresets.composedPreset(cold.ctx),id);assert(ctx.tools.guardReason({agent:cold}));await ctx.sessions.flush(cold.session);}
+    assert(called('late_worker_write'),'Attack was not actually submitted');assert.equal(effects,beforeLate+1);
+    if(!saved){await ctx.subagents.drainChildren(root,[worker.id]);assert.equal(ctx.agents.get(worker.id),undefined);await ctx.subagents.sendMessage(root,worker.id,[{type:'text',text:'Cold resume analysis only.'}],{signal:AbortSignal.timeout(10000)});const cold=ctx.agents.get(worker.id);await cold.whenIdle();assert.equal(ctx.agentPresets.composedPreset(cold.ctx),id);assert.equal(ctx.tools.guardReason({agent:cold}),undefined);assert(ctx.tools.get('worker_fixture_tool',cold));const beforeCold=nativeToolExecutions.get(cold.id)??0;cold.followup(createUserMessage({content:[{type:'text',text:'invoke-configured-tool after cold recovery'}],source:{kind:'fixture'}}));await cold.whenIdle();assert.equal(nativeToolExecutions.get(cold.id),beforeCold+1);await ctx.sessions.flush(cold.session);}
    }
-   report.checks.push(`${ids.length} actual native independent Presets: zero tools, no parent history/Persona, no QQ/Memory/Long Tasks authority`);
-   report.checks.push('Unlisted presets and unrelated parent communication rejected; late scoped execution + explicit allow still denied');
+   report.checks.push(`${ids.length} actual native independent Presets: configured tools execute, no parent history/Persona or inherited QQ/Memory/Long Tasks authority`);
+   report.checks.push('Native whitelist, depth=1 and parent communication restrictions hold; configured and late scoped tools execute');
    report.checks.push('Real root-planner-worker ID spawns and persists; display alias and undeclared high-privilege roots rejected');
-   report.checks.push(saved?'Full Host restart restores parent and every saved child with original Preset and guard':'Every Worker drained and cold-restored with its original Preset and guard');
+   report.checks.push(saved?'Full Host restart restores parent and every saved child with original Preset and native tools':'Every Worker drained and cold-restored with its original Preset and native tools');
    await ctx.sessions.flush(root.session);
    if(!saved)fs.writeFileSync(config.cwd+'/worker-state.json',JSON.stringify({root:root.id,children}));
    report.ok=true;

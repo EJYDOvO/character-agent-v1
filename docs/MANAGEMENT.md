@@ -85,3 +85,7 @@ Inspector 的入口为 DSH 网页/桌面的 **设置 → 记忆管理**。详细
 默认物理 Session 编码为 zstd；未压缩实例加 `--uncompressed`。脚本只装载独立的原生持久化读取后端，不启动 Profile、调度、QQ 或 Memory。输出仅含计数、任务/Session 哈希别名与异常码，不含正文、身份和凭据。退出码 0 表示一致且所有任务归属可证；2 表示存在未证明绑定、头部异常或读取期间状态变化，不是授权修复成功。其他独立任务也可能显示 `unproven`，含义仅是未证明属于本 QQ 作用域，不应因此删除或授权。
 
 离线脚本不补写任何绑定。运行时只对 Host 持久链可证明的祖先补写 `qq_bindings`，失败整批回滚；不恢复完整身份，不复投已停用任务，不更改任务 ID、规则、到期时间和通知去重 ID。审计和修复的真实启用边界见 STATUS。
+
+### Worker 插件与 Skills
+
+test.17 起使用原生 Worker Preset/Scope 权限，不再默认全拒绝工具。独立 Preset Manager Bundle 可编辑 Worker Override；显式装配所需工具及 Skill 读取能力，分配 Skill 不代表授予 QQ/Memory/任务身份。Root Spawn 白名单和 maxDepth:1 保留，详见 [WORKERS](WORKERS.md)。

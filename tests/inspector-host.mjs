@@ -15,12 +15,12 @@ export function apply(ctx,config){
   yield {type:'text-delta',index:0,text};yield {type:'finish',reason:{kind:'stop'}};
  }}
  ctx.llm.registerAdapter(['inspector-fixture'],new Fixture());
- let executed=0;ctx.tools.register(defineTool({name:'inspector_fixture_danger',description:'Synthetic side effect',parameters:{},output:{schema:{type:'string'},render:(_a,v)=>[{type:'text',text:v}]},execute(){executed++;return 'executed';}}));
+ let executed=0;const rootOnly=defineTool({name:'inspector_fixture_danger',description:'Synthetic side effect',parameters:{},output:{schema:{type:'string'},render:(_a,v)=>[{type:'text',text:v}]},execute(){executed++;return 'executed';}});
  ctx.effect(()=>{const t=setTimeout(()=>void run(),1200);return()=>clearTimeout(t);});
  async function run(){const handles=[],report={ok:false,runId:config.runId,provenance:config.provenance,host:config.version,extras:config.extras,qqNetwork:false,model:'deterministic fixture',checks:[]};let release;
  try{
   const create=async preset=>{const h=await ctx.agents.create({sessionId:randomUUID(),agentOptions:{provider:'inspector-fixture',model:'fixture'},meta:{cwd:config.cwd,agentPreset:preset},setup:async c=>{await ctx.agentPresets.mount(c,preset);}});handles.push(h);return h.agent;};
-  const parent=await create('qq-character'),base=await create('cordis');
+  const parent=await create('qq-character'),base=await create('cordis');parent.ctx.tools.register(rootOnly);
   const deadline=Date.now()+5000;while(!ctx.tools.get('subagent',parent)&&Date.now()<deadline)await sleep(20);
   const baseNames=[...ctx.tools.view(base).visible.keys()],names=[...ctx.tools.view(parent).visible.keys()];assert.deepEqual(baseNames.filter(n=>!names.includes(n)),[]);assert(names.includes('character_recall'));report.checks.push('Native Creator tool/Skills/delegation parity');
   if(config.extras){
@@ -40,16 +40,16 @@ export function apply(ctx,config){
   if(!config.extras)await assert.rejects(()=>spawn.execute({description:'disabled specialist',prompt:'test',agent_preset:'worker-review'},exec),/agent_preset/);
   const spawned=await spawn.execute({description:'native independent worker',prompt:'Analyze supplied material only.'},exec);
   let worker=ctx.agents.get(spawned.subagentId);assert(worker);assert.notEqual(worker.id,parent.id);assert.equal(ctx.agentPresets.composedPreset(worker.ctx),'worker-general');
-  assert(!ctx.tools.get('inspector_fixture_danger',worker));assert(!ctx.tools.get('character_recall',worker));assert(ctx.tools.guardReason({agent:worker}));assert.equal(ctx.tools.guardReason({agent:parent}),undefined);
+  assert(!ctx.tools.get('inspector_fixture_danger',worker));assert(!ctx.tools.get('character_recall',worker));assert.equal(ctx.tools.guardReason({agent:worker}),undefined);assert.equal(ctx.tools.guardReason({agent:parent}),undefined);
   assert.throws(()=>ctx.memoryIdentity.forSession(worker.id));assert.throws(()=>memory.recall({...trusted,sessionId:worker.id},''));
   await worker.whenIdle();assert.equal(executed,0);report.checks.push('Actual native Spawn: independent preset/session, inherited tool denied, Memory ACL denies forged capability');
-  const removeScoped=worker.ctx.tools.register(defineTool({name:'worker_scoped_danger',description:'Late scoped side effect fixture',parameters:{},output:{schema:{type:'string'},render:(_a,v)=>[{type:'text',text:v}]},execute(){executed++;return 'must never run';}}));
-  worker.followup(createUserMessage({content:[{type:'text',text:'guard-attack'}],source:{kind:'user'}}));await worker.whenIdle();removeScoped();assert.equal(executed,0);
+  const removeScoped=worker.ctx.tools.register(defineTool({name:'worker_scoped_danger',description:'Late scoped side effect fixture',parameters:{},output:{schema:{type:'string'},render:(_a,v)=>[{type:'text',text:v}]},execute(){executed++;return 'configured scoped tool ran';}}));
+  worker.followup(createUserMessage({content:[{type:'text',text:'guard-attack'}],source:{kind:'user'}}));await worker.whenIdle();removeScoped();assert.equal(executed,1);
   assert(Array.from({length:worker.session.seq},(_,i)=>worker.session.eventAt(i)).some(e=>JSON.stringify(e).includes('guard-fixture-call')),'No actual attack tool call');
   await assert.rejects(()=>ctx.subagents.sendMessage(second,worker.id,[{type:'text',text:'unauthorized'}],{signal:AbortSignal.timeout(5000)}));
   const workerId=worker.id;await ctx.subagents.drainChildren(parent,[workerId]);assert.equal(ctx.agents.get(workerId),undefined);
-  await ctx.subagents.sendMessage(parent,workerId,[{type:'text',text:'Resume the analysis without executing.'}],{signal:AbortSignal.timeout(10000)});worker=ctx.agents.get(workerId);assert(worker);assert.equal(ctx.agentPresets.composedPreset(worker.ctx),'worker-general');assert(ctx.tools.guardReason({agent:worker}));assert.throws(()=>ctx.memoryIdentity.forSession(workerId));await worker.whenIdle();
-  report.checks.push('Native execution guard denies late scoped tool; unrelated parent denied; cold resume preserves Worker preset and ACL');
+  await ctx.subagents.sendMessage(parent,workerId,[{type:'text',text:'Resume the analysis without executing.'}],{signal:AbortSignal.timeout(10000)});worker=ctx.agents.get(workerId);assert(worker);assert.equal(ctx.agentPresets.composedPreset(worker.ctx),'worker-general');assert.equal(ctx.tools.guardReason({agent:worker}),undefined);assert.throws(()=>ctx.memoryIdentity.forSession(workerId));await worker.whenIdle();
+  report.checks.push('Native configured scoped tool executes; unrelated parent denied; cold resume preserves Worker preset and ACL');
   if(config.extras){const review=await spawn.execute({description:'specialist',prompt:'Review only supplied evidence.',agent_preset:'worker-review'},exec);const a=ctx.agents.get(review.subagentId);assert.equal(ctx.agentPresets.composedPreset(a.ctx),'worker-review');await a.whenIdle();report.checks.push('Optional specialist native Spawn');}
   await identity.notify(trusted,{eventId:'fixture-dedup',kind:'task_completed',text:'synthetic completion'});await identity.notify(trusted,{eventId:'fixture-dedup',kind:'task_completed',text:'synthetic completion'});assert.equal(deliveries.length,1);
   const schedule=await ctx.tools.get('schedule_create',parent).execute({title:'Isolated schedule',prompt:'fixture reminder',after_seconds:1},exec);

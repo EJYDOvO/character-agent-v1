@@ -2,13 +2,13 @@
 
 在 DeepSeek Harness 上运行的角色 Agent 扩展，提供私人 QQ 接入、可配置角色和带来源的长期记忆。Character 从官方 Creator Preset 构建派生，保留其工具能力；角色设定不会增加系统权限。
 
-这是测试版源码仓库，不包含 DSH 本体，也不是一键安装器。当前实例已部署 **test.16 / Worker V2**，启用 QQ Session 生命周期和零工具权限的长期任务；源码默认仍关闭这些可选能力。验证基线是 **Windows、Node.js 24.21.0、DSH 0.2.1-rc.2、QQ Bot 0.5.2 / SDK 1.0.5 及配套 QQTK 补丁**。其他版本和平台需要重新验证。部署验收及未完成事项统一见[当前状态](docs/STATUS.md)。
+这是测试版源码仓库，不包含 DSH 本体，也不是一键安装器。当前源码为 **test.17 / 原生 Worker Preset 权限**；实例部署状态见 STATUS。此前实例为 test.16，启用 QQ Session 生命周期和零工具权限的长期任务；源码默认仍关闭这些可选能力。验证基线是 **Windows、Node.js 24.21.0、DSH 0.2.1-rc.2、QQ Bot 0.5.2 / SDK 1.0.5 及配套 QQTK 补丁**。其他版本和平台需要重新验证。部署验收及未完成事项统一见[当前状态](docs/STATUS.md)。
 
 可选 [Interaction Policy V1](docs/INTERACTION-POLICY.md) 提供自然表达、等待提示、流式气泡与安全修正。源码默认构建不启用；该通用插件不要求安装 Character 或 QQ。
 
-可选 [Preset Manager](https://github.com/EJYDOvO/dsh-preset-manager) 在原生设置页管理已安装 Plugins、Skills 和 Preset Override。它独立安装到 Profile，不复制进 Core/Extras，也不自动修改 Worker 权限或 Character 委派白名单；当前验收边界见 STATUS。
+可选 [Preset Manager](https://github.com/EJYDOvO/dsh-preset-manager) 在原生设置页管理已安装 Plugins、Skills 和 Preset Override。它独立安装到 Profile，不复制进 Core/Extras，通过原生 Override 管理 Worker 工具和 Skills，不自动扩大 Character 委派白名单；当前验收边界见 STATUS。
 
-Worker V2 及社区真实 ID/展示别名修复已完成隔离验收和授权部署；真实模型的任务质量与手机审批完整链路仍需实机验收。
+test.17 的原生 Worker 工具与跨仓库 Manager 配置已完成隔离验收；真实模型的任务质量与手机审批完整链路仍需实机验收。
 
 test.14 已收紧历史 QQ Session：只有当前主路由获得完整身份；旧根仅由 Host 转发可信 Schedule 提醒，禁止模型、工具、Memory 与长期任务创建。提供[只读存量审计](docs/MANAGEMENT.md)；必须配套更新 QQTK 补丁，不能单独部署 Identity。
 
@@ -21,7 +21,7 @@ test.14 已收紧历史 QQ Session：只有当前主路由获得完整身份；�
 - **可选人格化**：Off / Assistant / Character 三种模式，与通用记忆共用数据库，按 Agent 隔离；模式切换同时约束历史记录读取。形成带引用的用户画像、互动约定和自身经验，不修改固定角色设定；引用存在不代表推断一定正确。
 - **提醒与维护集成**：复用官方 Schedule 和独立 QQTK，记录明确任务通知的投递状态。
 - **可选独立长期任务**：Extras 中默认停用的 [Long Tasks](packages/long-tasks/README.md)，使用原生 Schedule、独立任务根 Session 和既有通知账本，附带管理工具与 Skill。QQTK 可选重启/12 小时无用户输入换新主 Session，默认关闭。
-- **独立分析 Worker**：Worker V2 源码新增 Explore、Librarian、Oracle、Metis、Momus 和按需 Planner；保留 general/review。Character 是唯一 Root，原生独立 Preset/Session、白名单与叶子守卫，无执行和 Memory 权限。能力边界见 [Worker](docs/WORKERS.md)。
+- **独立分析 Worker**：Worker V2 源码新增 Explore、Librarian、Oracle、Metis、Momus 和按需 Planner；保留 general/review。Character 是唯一 Root，原生独立 Preset/Session、白名单与一级委派；工具/Skills 由原生装配决定，不继承 Root QQ/Memory 授权。能力边界见 [Worker](docs/WORKERS.md)。
 - **Memory Inspector**：可选的 DSH 原生「设置 → 记忆管理」页面，网页与桌面共用客户端插件，查看分层记忆、来源、修订与后台任务，按现有治理规则确认、纠错、遗忘和恢复有效元数据。
 
 ## 仓库结构

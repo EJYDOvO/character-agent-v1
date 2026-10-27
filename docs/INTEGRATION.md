@@ -53,3 +53,7 @@ test.13 已通过隔离验证并在本机部署，具体边界见 STATUS。QQ �
 test.14 历史 Session 修复不更改数据库 Schema、任务 ID/规则或通知键，只补充可证的提醒绑定。Identity 与新增 `isCurrentSession/commitSession` 的 QQTK 补丁必须配套；旧补丁缺少契约时明确拒绝 attach，不静默降级。本次使用新的 test.14 包版本及配套补丁哈希，未覆盖已发布 test.13 包。已在授权后完成一致性备份、单活切换和启动验证；实际 QQ 收件和生产回滚仍未验收。
 
 回退到原 test.13 会重新引入历史根完整授权缺陷，不能视为安全回滚。需保留这层安全修复，或停用 QQ 集成及相关冷恢复入口，复核后再开放；只关自动轮换不会撤销已有历史绑定。兼容性测试保留原表、Session/Schedule 与 Outbox，修复写入失败事务回滚；未验证整套旧版本的生产回滚。不可用旧 coordination/Memory 快照覆盖后续通知和记忆。
+
+### test.17 Worker 配置兼容
+
+候选准备脚本递归清理精确的旧 Worker Boundary 行，并迁移独立 Preset Manager 合并基线；仅刷新未被用户修改的旧默认 Persona。自定义工具、Skills 及版本/历史保留。切换前验证 Manager 源状态和候选状态哈希，过期拒绝切换。旧模块保持无权限行为的兼容入口，冷恢复不会因该路径缺失而回退其他 Agent。失败切换恢复旧 Profile、prefs、binding 和策略，不覆盖 Session/Memory。回滚 Core/Tools 时一并恢复匹配 Profile 和 Manager base；test.16 会重新施加其旧零工具策略。Preset Manager 仍是独立原生 Bundle，不加入 Core 或 Extras。

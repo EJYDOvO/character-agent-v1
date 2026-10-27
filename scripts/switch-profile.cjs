@@ -2,6 +2,7 @@ const fs=require('fs'),path=require('path'),crypto=require('crypto'),assert=requ
 const root=require('./installation.cjs').install,state=root+'/data/maintenance/character-deploy',live=root+'/data/profiles/desktop';const record=JSON.parse(fs.readFileSync(state+'/candidate.json','utf8'));const hash=f=>crypto.createHash('sha256').update(fs.readFileSync(f)).digest('hex');
 assert(record.verifiedAt&&Date.now()-Date.parse(record.verifiedAt)<60000,'Fresh gate required');
 for(const [f,h]of Object.entries(record.sealed))assert.equal(hash(record.candidate+'/'+f),h);
+if(record.managerState){const {snapshot}=require('./worker-upgrade.cjs');assert.deepEqual(snapshot(live+'/.dsh-preset-manager'),record.managerState.baseline,'Manager state changed after staging; restage required');assert.deepEqual(snapshot(record.candidate+'/.dsh-preset-manager'),record.managerState.sealed,'Staged Manager state changed');}
 const before=root+'/data/maintenance/character-profile-before-'+Date.now();assert(!fs.existsSync(before));
 fs.copyFileSync(root+'/data/qqbot/model-prefs.json',state+'/prefs-before.json');
 fs.copyFileSync(root+'/maintenance/plugin-policy.json',state+'/policy-before.json');
@@ -12,7 +13,7 @@ record.previousProfile=before;fs.writeFileSync(state+'/candidate.json',JSON.stri
 fs.renameSync(live,before);
 try{
  fs.renameSync(record.candidate,live);
- for(const name of ['.plugin-manager','.dsh-preset-manager','cordis.yml'])if(fs.existsSync(before+'/'+name))fs.cpSync(before+'/'+name,live+'/'+name,{recursive:true});
+ for(const name of ['.plugin-manager','.dsh-preset-manager','cordis.yml'])if(fs.existsSync(before+'/'+name)&&!(name==='.dsh-preset-manager'&&record.managerState))fs.cpSync(before+'/'+name,live+'/'+name,{recursive:true});
  fs.mkdirSync(root+'/data/character',{recursive:true});fs.copyFileSync(state+'/binding.json',root+'/data/character/binding.json');
  const binding=JSON.parse(fs.readFileSync(state+'/binding.json','utf8')),prefs=JSON.parse(fs.readFileSync(state+'/prefs-before.json','utf8'));
  const key=`qqbot:${binding.appId}:c2c:${binding.ownerId}`;prefs.sessionIds??={};prefs.presets??={};if(prefs.presets[key]!=='qq-character'||!prefs.sessionIds[key])prefs.sessionIds[key]=crypto.randomUUID();prefs.presets[key]='qq-character';

@@ -19,6 +19,7 @@ function fixture(){
  write(join(live,'package.json'),{dependencies:{'dsh-remote-ops-local':'file:'+remote},dsh:{profile:{bundles:['dsh-character-core','dsh-free-search']}}});
  write(join(live,'character-artifacts.json'),{'dsh-remote-ops-local':{source:'file:'+remote,sha256:plan.hash(remote)}});
  write(join(live,'node_modules/dsh-remote-ops-local/package.json'),{name:'dsh-remote-ops-local',version:'1.1.1-test.1'});
+ write(join(live,'node_modules/dsh-character-core/cordis.patch.yml'),[]);
  write(join(live,'cordis.patch.yml'),[{id:'im-qqbot',config:{appId:binding.appId,access:{c2cMode:'allowlist',c2cAllow:[binding.ownerId],groupMode:'disabled'}}}]);
  write(join(live,'pnpm-workspace.yaml'),{});write(join(live,'pnpm-lock.yaml'),{importers:{'.':{dependencies:{}}}});
  for(const [name,version]of [['dsh-qqbot','0.5.2'],['qqbot-nodejs','1.0.5']]){write(join(live,'node_modules/@tencent-connect',name,'package.json'),{version});write(join(root,'maintenance/patches',name+'@'+version+'.patch'),'synthetic '+name);}
@@ -29,7 +30,7 @@ function fixture(){
  const names={'packages/character-identity':'dsh-character-identity','packages/character-memory-core':'dsh-character-memory-core','packages/character-memory-tools':'dsh-character-memory-tools','packages/character-qq-adapter':'dsh-character-qq-adapter','bundles/character-core':'dsh-character-core'};
  for(const folder of packages.requiredFolders){const name=names[folder];write(join(project,folder,'package.json'),{name,version:'candidate'});write(join(project,'artifacts/packages',name+'-candidate.tgz'),'synthetic own package');}
  write(join(project,'artifacts/package-source.json'),{sourceDigest:'fixture',artifacts:packages.inventory(project,packages.requiredFolders)});
- for(const name of ['prepare-deploy','prepare-host-upgrade','installation','deployment-plan','package-plan','inspector-declaration'])cpSync(fileURLToPath(new URL('../scripts/'+name+'.cjs',import.meta.url)),join(project,'scripts',name+'.cjs'),{recursive:true});
+ for(const name of ['prepare-deploy','prepare-host-upgrade','installation','deployment-plan','package-plan','inspector-declaration','worker-upgrade'])cpSync(fileURLToPath(new URL('../scripts/'+name+'.cjs',import.meta.url)),join(project,'scripts',name+'.cjs'),{recursive:true});
  write(join(project,'scripts/ensure-build.cjs'),'// build validation independently covered by native probes\n');write(join(project,'scripts/source-digest.cjs'),"module.exports=()=> 'fixture';");
  write(join(project,'scripts/host-archive.cjs'),"module.exports={runtimeRoot:process.env.DSH_INSTALL_ROOT,openArchive:()=>({read:f=>f==='dsh/package.json'?'{\"version\":\"fixture\"}':'@deepseek-ai/dsh-tool-schedule',close(){}})};");
  mkdirSync(join(root,'plugin-packages'));return {root,live,project,remote,binding};

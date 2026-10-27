@@ -20,22 +20,28 @@ const schema=yaml.DEFAULT_SCHEMA.extend([new yaml.Type('tag:yaml.org,2002:js',{k
  character.config.plugins.push({id:'memory-tools',name:local('packages/character-memory-tools/character.mjs'),config:{workerPresets:workerIds,communityWorkerPresets:community}});
  const {communityWorkerIds}=await import('../packages/character-memory-tools/worker-policy.mjs');
  const external=communityWorkerIds(community),workers=workerIds.filter(id=>!external.includes(id)).map(workerPreset);
- for(const id of external){const reviewed=workerPreset();reviewed.id='preset-'+id;reviewed.config.id=id;reviewed.config.name='Reviewed community fixture';reviewed.config.plugins[1].config.prefix=reviewed.config.plugins[1].config.prefix.replaceAll('worker-general',id);workers.push(reviewed);}
- for(const worker of workers)worker.config.plugins[0].name=local('packages/character-memory-tools/worker.mjs');
+ for(const id of external){const reviewed=workerPreset();reviewed.id='preset-'+id;reviewed.config.id=id;reviewed.config.name='Reviewed community fixture';reviewed.config.plugins.find(p=>p.id==='persona').config.prefix=reviewed.config.plugins.find(p=>p.id==='persona').config.prefix.replaceAll('worker-general',id);workers.push(reviewed);}
+ const managerProbe=process.argv.includes('--manager');if(managerProbe&&!workerProbe)throw Error('--manager requires --workers');
+ if(workerProbe&&!managerProbe)for(const worker of workers)worker.config.plugins.push({id:'native-worker-fixture',name:local('tests/worker-tool-fixture.mjs')},{id:'native-leaf-spawn',name:'@deepseek-ai/dsh-tool-subagent',config:{provider:'spawn',agentPreset:'worker-general',allowedAgentPresets:['worker-general'],maxDepth:1}});
  const binding=home+'/binding.json';fs.writeFileSync(binding,JSON.stringify({appId:'mock-app',ownerId:'mock-owner',characterId:'fixture-character',projectId:'fixture-project'}));
  const inserted=[...workers,character,
   {id:'character-identity',name:local('packages/character-identity/index.mjs'),config:{presetId:'qq-character',bindingFile:binding,stateFile:home+'/coordination.sqlite',memoryMode:'character'}},
   {id:'memory-core',name:local('packages/character-memory-core/index.mjs'),config:{database:home+'/memory.sqlite',autoCapture:true,idleMs:50,consolidation:false}},
   ...(extras?[{id:'memory-inspector',name:local('packages/memory-inspector/index.mjs'),config:{writable:true}}]:[]),
   ...(workerProbe?[{id:'long-tasks',name:local('packages/long-tasks/index.mjs'),config:{cwd:home}}]:[]),
-  {id:'inspector-probe',name:local(workerProbe?'tests/workers-host.mjs':realModel?'tests/creator-ab-host.mjs':'tests/inspector-host.mjs'),config:{cwd:home,result:home+'/result.json',runId,extras,version,preview:process.argv.includes('--preview')}}];
+  {id:'inspector-probe',name:local(workerProbe?'tests/workers-host.mjs':realModel?'tests/creator-ab-host.mjs':'tests/inspector-host.mjs'),config:{cwd:home,result:home+'/result.json',runId,extras,version,managerProbe,preview:process.argv.includes('--preview')}}];
  if(modules)inserted.splice(0,inserted.length,{id:'module-contract',name:local('tests/module-lifecycle-host.mjs'),config:{cwd:home,result:home+'/result.json',runId,version}});
  const bundles=['@deepseek-ai/dsh-base','@deepseek-ai/dsh-web-app'];
  if(extras){
   const extra=dir+'/node_modules/fixture-extras';fs.mkdirSync(extra,{recursive:true});fs.writeFileSync(extra+'/package.json',JSON.stringify({name:'fixture-extras',version:'1.0.0',dsh:{bundle:{patch:'./cordis.patch.yml'}}}));
   fs.writeFileSync(extra+'/cordis.patch.yml',yaml.dump([{insert:[{id:'optional-fixture',name:local('tests/module-lifecycle-host.mjs'),config:{role:'extras'}}]}]));bundles.push('fixture-extras');
  }
- fs.writeFileSync(dir+'/package.json',JSON.stringify({name:'inspector-fixture',private:true,dsh:{profile:{bundles}}}));
+ const dependencies={};
+ if(managerProbe){const manager=process.env.DSH_PRESET_MANAGER_PROJECT;if(!manager||!path.isAbsolute(manager)||JSON.parse(fs.readFileSync(manager+'/package.json')).name!=='dsh-preset-manager')throw Error('Set DSH_PRESET_MANAGER_PROJECT to the independent manager repository');
+  fs.mkdirSync(dir+'/node_modules',{recursive:true});fs.symlinkSync(manager,dir+'/node_modules/dsh-preset-manager','junction');dependencies['dsh-preset-manager']='link:'+manager;bundles.push('dsh-preset-manager');
+  const fixture=dir+'/node_modules/dsh-character-worker-fixture';fs.mkdirSync(fixture+'/skills/worker-probe',{recursive:true});fs.writeFileSync(fixture+'/package.json',JSON.stringify({name:'dsh-character-worker-fixture',version:'1.0.0',type:'module',main:'index.mjs',dsh:{}}));fs.writeFileSync(fixture+'/index.mjs',`export {inject,apply} from ${JSON.stringify(local('tests/worker-tool-fixture.mjs'))};`);fs.writeFileSync(fixture+'/skills/worker-probe/SKILL.md','---\nname: worker-probe\ndescription: Synthetic native Worker Skill.\n---\nReturn only actual fixture results.\n');dependencies['dsh-character-worker-fixture']='file:'+fixture;
+ }
+ fs.writeFileSync(dir+'/package.json',JSON.stringify({name:'inspector-fixture',private:true,dependencies,dsh:{profile:{bundles}}}));
  const rows=[{id:'session-title-llm',disabled:true},{id:'llm-pi-ai',disabled:true},{insert:inserted}];
  inserted.at(-1).config.provenance=require('./audit-evidence.cjs')();
  if(realModel){

@@ -10,8 +10,11 @@ assert.equal(build.characterId,JSON.parse(fs.readFileSync(root+'/data/character/
 const yaml=plan.entryYaml(require(require.resolve('js-yaml',{paths:[live]})));const hash=f=>crypto.createHash('sha256').update(fs.readFileSync(f)).digest('hex');
 assert(!fs.existsSync(candidate),'Candidate exists; inspect before replacing');
 const manifest=JSON.parse(fs.readFileSync(live+'/package.json','utf8'));
-const rows=yaml.load(fs.readFileSync(live+'/cordis.patch.yml','utf8'));
+let rows=yaml.load(fs.readFileSync(live+'/cordis.patch.yml','utf8'));
 const core=yaml.load(fs.readFileSync(project+'/bundles/character-core/cordis.patch.yml','utf8')),extras=yaml.load(fs.readFileSync(project+'/bundles/character-extras/cordis.patch.yml','utf8'))||[];
+const workerUpgrade=require('./worker-upgrade.cjs');
+const oldCore=yaml.load(fs.readFileSync(live+'/node_modules/dsh-character-core/cordis.patch.yml','utf8'));
+const workerMigration=workerUpgrade.upgrade(rows,oldCore,core);rows=workerMigration.value;
 const extrasEnabled=manifest.dsh.profile.bundles.includes('dsh-character-extras')||process.argv.includes('--extras');
 plan.verifyTaskExtras(live,extras,extrasEnabled,yaml);
 if(process.argv.includes('--inspector'))require('./inspector-declaration.cjs')(rows,extrasEnabled?extras:[]);
@@ -27,6 +30,8 @@ record.baseline.policy=hash(root+'/maintenance/plugin-policy.json');record.sourc
 record.baseline.binding=hash(root+'/data/character/binding.json');
 for(const pkg of artifactPlan){const dest=root+'/plugin-packages/'+pkg.filename;if(fs.existsSync(dest))assert.equal(hash(dest),pkg.sha256,'Immutable artifact differs: '+pkg.name);}
 fs.mkdirSync(candidate,{recursive:true});
+record.managerState=workerUpgrade.stageManager(live,candidate,oldCore,core);
+record.workerMigration={removed:workerMigration.removed,personas:workerMigration.personas};
 for(const pkg of artifactPlan){const f=pkg.filename,source=project+'/artifacts/packages/'+f,dest=root+'/plugin-packages/'+f;
  assert(fs.existsSync(source),'Missing artifact: '+pkg.name);if(fs.existsSync(dest))assert.equal(hash(dest),hash(source),'Immutable artifact differs: '+pkg.name);else fs.copyFileSync(source,dest);
  manifest.dependencies[pkg.name]='file:'+dest.replaceAll('\\','/');record.artifacts[pkg.name]={source:manifest.dependencies[pkg.name],sha256:hash(dest),version:pkg.version};}

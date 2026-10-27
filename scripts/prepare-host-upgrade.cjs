@@ -13,9 +13,11 @@ try{version=JSON.parse(archive.read('dsh/package.json')).version;nativeSchedule=
 require('node:child_process').execFileSync(process.execPath,[path.join(__dirname,'ensure-build.cjs'),'--check'],{stdio:'inherit'});
 const release=JSON.parse(fs.readFileSync(project+'/package.json')).version;
 const manifest=JSON.parse(fs.readFileSync(live+'/package.json'));
-const rows=yaml.load(fs.readFileSync(live+'/cordis.patch.yml','utf8'));
+let rows=yaml.load(fs.readFileSync(live+'/cordis.patch.yml','utf8'));
 const plan=require('./deployment-plan.cjs'),sourceDigest=require('./source-digest.cjs')();
 const core=yaml.load(fs.readFileSync(project+'/bundles/character-core/cordis.patch.yml','utf8')),extras=yaml.load(fs.readFileSync(project+'/bundles/character-extras/cordis.patch.yml','utf8'))||[];
+const workerUpgrade=require('./worker-upgrade.cjs'),oldCore=yaml.load(fs.readFileSync(live+'/node_modules/dsh-character-core/cordis.patch.yml','utf8'));
+const migration=workerUpgrade.upgrade(rows,oldCore,core);rows=migration.value;
 const extrasEnabled=manifest.dsh.profile.bundles.includes('dsh-character-extras');
 plan.verifyTaskExtras(live,extras,extrasEnabled,yaml);
 if(process.argv.includes('--inspector'))require('./inspector-declaration.cjs')(rows,extrasEnabled?extras:[]);
@@ -51,7 +53,9 @@ if(extrasEnabled&&!retainsLegacy&&fs.existsSync(oldExtras)){
   if(!manifest.dsh.profile.bundles.includes(row.name))manifest.dsh.profile.bundles.push(row.name);
  }
 }
-fs.cpSync(live,candidate,{recursive:true,filter:s=>path.basename(s)!=='node_modules'});
+fs.cpSync(live,candidate,{recursive:true,filter:s=>!['node_modules','.dsh-preset-manager'].includes(path.basename(s))});
+record.managerState=workerUpgrade.stageManager(live,candidate,oldCore,core);
+record.workerMigration={removed:migration.removed,personas:migration.personas};
 fs.mkdirSync(candidate+'/patches',{recursive:true});
 for(const [rel,p]of Object.entries(patchPlan.patches))fs.copyFileSync(p.source,candidate+'/'+rel);
 fs.writeFileSync(candidate+'/pnpm-workspace.yaml',yaml.dump(patchPlan.workspace));
