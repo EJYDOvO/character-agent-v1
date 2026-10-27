@@ -1,6 +1,8 @@
 # Memory Inspector V1
 
-源码版本 test.12；独立包 `dsh-memory-inspector@0.1.0-test.2`。可选 Host 插件，使用已有 `webServer` 和 `connection`，不新建服务、数据库或 Agent Loop，不依赖 QQ、Persona 或 Character Identity。所需服务为 `memoryIdentity@1` 和 `dshMemory`。
+独立包 `dsh-memory-inspector@0.1.0-test.3`，Character Core 保持 test.17。可选 Host 插件，使用已有 `webServer` 和 `connection`，不新建服务、数据库或 Agent Loop，不依赖 QQ、Persona 或 Character Identity。所需服务为 `memoryIdentity@1` 和 `dshMemory`。
+
+页面分别显示正在确认授权、请求错误（可重试）、无活动上下文及当前层级零记录。无上下文时不会查询历史 SQLite 取得额外权限。QQ Identity 在 Host 重启/Session 轮换后需经当前可信入站重新建立；单纯打开旧 Session 不会授权。只读模式不禁止合法浏览。渲染异常限制在本设置分区并提供重新加载，不输出内部异常栈；无 Schema 迁移。
 
 ## 安装与启用
 

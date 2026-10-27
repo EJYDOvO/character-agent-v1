@@ -12,7 +12,7 @@ export function controller(memory,identity,{writable=false}={}){
   const {operation='contexts',context,filter,id,revision,targetRevision,statement}=request;
   if(Object.keys(request).some(k=>!['operation','context','filter','id','revision','targetRevision','statement'].includes(k)))throw Error('Unknown request field');
   const entries=contexts();
-  if(operation==='contexts')return {writable,contexts:[...entries].map(([id,{p}])=>({id,agent:p.agentId,mode:p.mode,scope:JSON.parse(p.key)}))};
+  if(operation==='contexts')return {writable,state:entries.size?'ready':'no_active_context',contexts:[...entries].map(([id,{p}])=>({id,agent:p.agentId,mode:p.mode,scope:JSON.parse(p.key)}))};
   const selected=entries.get(context);if(!selected)throw Error('Unauthorized memory context');
   const c=selected.handle;memory.policy(c);
   if(operation==='browse')return memory.browse(c,filter);

@@ -1,8 +1,8 @@
 import test from 'node:test';import assert from 'node:assert/strict';import vm from 'node:vm';import {readFileSync} from 'node:fs';
 const source=readFileSync(new URL('../packages/memory-inspector/client.js',import.meta.url),'utf8');
 function fixture(react={}){let exported,registration,styles=0;const cleanups=[],calls=[];
- vm.runInNewContext(source,{window:{__ModuleLoader__:{load({id,factory}){assert.equal(id,'dsh-memory-inspector');exported=factory(name=>{assert(['react','@deepseek-ai/dsh-client-ui-primitives'].includes(name));return name==='react'?{createElement:(tag,props,...children)=>({tag,props,children}),...react}:{Button:'Button',Input:'Input',SegmentedTabs:'SegmentedTabs',Tag:'Tag'};});}}},document:{createElement(){return {remove(){styles--;}};},head:{append(){styles++;}}},AbortController,setTimeout,clearTimeout});
- const ctx={effect(f){cleanups.push(f());},connection:{rpc:{async call(...args){calls.push(args);return {ok:true,value:{contexts:[]}};}}},slots:{inject(name,f){assert.equal(name,'settings.section');cleanups.push(f());},register(meta,component){registration={meta,component};return()=>{registration=undefined;};}}};
+ vm.runInNewContext(source.replace('const InspectorPage=InspectorBoundary;','const InspectorPage=InspectorBoundary; InspectorPage.testInspector=Inspector;'),{window:{__ModuleLoader__:{load({id,factory}){assert.equal(id,'dsh-memory-inspector');exported=factory(name=>{assert(['react','@deepseek-ai/dsh-client-ui-primitives'].includes(name));return name==='react'?{Component:class{constructor(props){this.props=props;}setState(fn){this.state=typeof fn==='function'?fn(this.state):fn;}},createElement:(tag,props,...children)=>({tag,props,children}),...react}:{Button:'Button',Input:'Input',SegmentedTabs:'SegmentedTabs',Tag:'Tag'};});}}},document:{createElement(){return {remove(){styles--;}};},head:{append(){styles++;}}},AbortController,setTimeout,clearTimeout});
+ const ctx={effect(f){cleanups.push(f());},connection:{rpc:{async call(...args){calls.push(args);return {ok:true,value:{contexts:[]}};}}},slots:{inject(name,f){assert.equal(name,'settings.section');cleanups.push(f());},register(meta,component){registration={meta,component:component.testInspector,boundary:component};return()=>{registration=undefined;};}}};
  return {exported,ctx,calls,cleanups,get registration(){return registration;},get styles(){return styles;}};
 }
 test('Native Inspector registers one settings section, reuses Connection RPC, disposes and respects disable',async()=>{
@@ -15,11 +15,11 @@ test('Native client aborts requests on HMR disposal and returns a safe CAS messa
  const f=fixture();f.exported.apply(f.ctx);const api=f.registration.meta.inject().api;
  f.ctx.connection.rpc.call=async()=>({ok:false,error:{code:'memory/409',message:'private error'}});await assert.rejects(()=>api('confirm'),/刷新后重试/);
  let signal;f.ctx.connection.rpc.call=(_c,_e,_p,s)=>new Promise((resolve,reject)=>{signal=s;s.addEventListener('abort',()=>reject(Error('aborted')),{once:true});});
- const pending=api('contexts');const rejected=assert.rejects(()=>pending,/aborted/);f.cleanups.reverse().forEach(fn=>fn?.());await rejected;assert(signal.aborted);
+ const pending=api('contexts');const rejected=assert.rejects(()=>pending,/关闭/);f.cleanups.reverse().forEach(fn=>fn?.());await rejected;assert(signal.aborted);
 });
 
 test('Layer switches never render previous L2 records as L3 during asynchronous loading',()=>{
- const render=(rows)=>{let i=0;const states=[[{id:'ctx',agent:'test',mode:'off',scope:['owner','namespace','project']}],'ctx',false,'l3',{query:''},0,rows,null,null,'',null,false,'','',0,{}];
+ const render=(rows)=>{let i=0;const states=[[{id:'ctx',agent:'test',mode:'off',scope:['owner','namespace','project']}],'ctx',false,'l3',{query:''},0,rows,null,null,'',null,false,'','',0,{},'ready'];
   const f=fixture({useState:initial=>[states[i++]??initial,()=>{}],useEffect(){},useRef:value=>({current:value})});f.exported.apply(f.ctx);return f.registration.component({api:async()=>{}});
  };
  const stale=render({layer:'l2',context:'ctx',items:[{statement:'old layer content',revision:1}],total:1});assert(!JSON.stringify(stale).includes('old layer content'));
@@ -61,4 +61,29 @@ test('T07 mutations require confirmation and same-tick duplicate submissions sen
  const m=mounted();try{await ready(m);for(const r of m.pending.splice(0))r.resolve(r.payload.operation==='browse'?{items:[{id:'a',statement:'record'}],total:1}:{l1:[],storage:{}});await tick();m.render();m.find('Button','查看详情').props.onClick();m.pending.pop().resolve({memory:{id:'a',statement:'record',revision:1},evidence:[],revisions:[],valid:true});await tick();m.render();
  m.find('Button','遗忘记忆').props.onClick();assert.equal(m.pending.length,0);m.render();const click=m.find('Button','确认执行').props.onClick;const a=click(),b=click();assert.equal(m.pending.length,1);assert.equal(m.pending[0].payload.operation,'forget');m.pending.pop().resolve({});await Promise.all([a,b]);
  }finally{m.unmount();}
+});
+
+test('Loading, no authorized context and request failure remain visibly distinct and retryable',async()=>{
+ const m=mounted();try{m.render();assert(JSON.stringify(m.tree).includes('正在确认 Host 授权'));
+ m.pending.shift().resolve({contexts:[],writable:false});await tick();m.render();assert(JSON.stringify(m.tree).includes('Host 重启后'));assert(!JSON.stringify(m.tree).includes('当前授权范围的'));assert.equal(m.pending.length,0);
+ m.find('Button','刷新').props.onClick();m.render();m.pending.shift().reject(Error('isolated network failure'));await tick();m.render();m.render();
+ assert(JSON.stringify(m.tree).includes('isolated network failure'));assert(JSON.stringify(m.tree).includes('尚未读取记忆'));assert(m.find('Button','重试'));
+ m.find('Button','重试').props.onClick();m.render();m.pending.shift().resolve({contexts:[{id:'one',agent:'a',mode:'off',scope:['p','n','x']}],writable:false});await tick();m.render();
+ for(const r of m.pending.splice(0))r.resolve(r.payload.operation==='browse'?{items:[],total:0}:{l1:[],l2:0,l3:0,jobs:0,storage:{}});await tick();m.render();
+ assert(JSON.stringify(m.tree).includes('当前授权范围的'));assert(JSON.stringify(m.tree).includes('不代表整个数据库为空'));assert(!m.find('Button','遗忘记忆'));
+ }finally{m.unmount();}
+});
+
+test('Context refresh authorization failure hides previously loaded data and forbids stale requests',async()=>{
+ const m=mounted();try{await ready(m);for(const r of m.pending.splice(0))r.resolve(r.payload.operation==='browse'?{items:[{id:'a',statement:'old authorized data'}],total:1}:{l1:[],storage:{}});await tick();m.render();assert(JSON.stringify(m.tree).includes('old authorized data'));
+ m.find('Button','刷新').props.onClick();m.render();m.render();assert(!JSON.stringify(m.tree).includes('old authorized data'));
+ m.pending.find(r=>r.payload.operation==='contexts').reject(Error('authorization expired'));await tick();m.render();m.render();assert(!JSON.stringify(m.tree).includes('old authorized data'));assert(JSON.stringify(m.tree).includes('authorization expired'));
+ }finally{m.unmount();}
+});
+
+test('Render errors are contained in the settings section without exposing error details',()=>{
+ const f=fixture();f.exported.apply(f.ctx);const Boundary=f.registration.boundary,instance=new Boundary({api(){}});
+ instance.state={...instance.state,...Boundary.getDerivedStateFromError(Error('private stack'))};const error=instance.render();assert(JSON.stringify(error).includes('页面渲染失败'));assert(!JSON.stringify(error).includes('private stack'));
+ const retry=error.children.find(n=>n?.tag==='Button');retry.props.onClick();assert.equal(instance.state.failed,false);assert.equal(instance.state.version,1);
+ f.cleanups.reverse().forEach(fn=>fn?.());
 });

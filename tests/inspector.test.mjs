@@ -16,6 +16,15 @@ function fixture(){
  const call=(operation,extra={})=>api({operation,context:c.sessionId,...extra});
  return {memory,c,scope,issued,identity,api,add,call,file,authorize};
 }
+
+test('Read-only contexts require live Host authority, never persisted memory or old Session alone',()=>{
+ const f=fixture();try{const row=f.add(),read=controller(f.memory,f.identity);
+ assert.equal(read({operation:'contexts'}).state,'ready');assert.equal(read({operation:'browse',context:f.c.sessionId}).total,1);
+ assert.throws(()=>read({operation:'forget',context:f.c.sessionId,id:row.id,revision:1}),/read only/);
+ f.issued.delete(f.c);const empty=read({operation:'contexts'});assert.equal(empty.state,'no_active_context');assert.deepEqual(empty.contexts,[]);assert.equal(empty.writable,false);
+ assert.throws(()=>read({operation:'browse',context:f.c.sessionId}),/Unauthorized/);
+ }finally{f.memory.close();}
+});
 test('Inspector L1/L2/L3, filters, links and pagination use authorized contexts',()=>{
  const f=fixture();try{const row=f.add();for(let n=2;n<8;n++)f.add('另一条测试经历 '+n,n);
  assert.equal(f.call('browse',{filter:{layer:'l2',query:'长期'}}).total,1);

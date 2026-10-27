@@ -31,7 +31,7 @@ $p=Start-Process -FilePath $exe -ArgumentList @('--expose-internals','--import',
  if(!$report.ok){throw 'Isolated Inspector/Worker assertions failed'}
  if($phases -gt 1 -and $report.restart -ne [bool]$phase){throw 'Worker restart phase mismatch'}
  if($args -contains '--preview'){
-  $previewDeadline=(Get-Date).AddSeconds(180)
+  $previewDeadline=(Get-Date).AddSeconds(600)
   while(!(Test-Path -LiteralPath (Join-Path $run.home 'preview.done')) -and (Get-Date) -lt $previewDeadline -and !$p.HasExited){Start-Sleep -Milliseconds 250;$p.Refresh()}
  }
  $p.Refresh();if(!$p.HasExited){Stop-Process -Id $p.Id};if(!$p.WaitForExit(5000)){throw 'Isolated Host did not stop'};$p=$null

@@ -2,6 +2,15 @@
 
 本页是版本与验收状态的统一入口。历史发布记录说明当时结果，不代表最新运行状态。
 
+## 管理界面更新（Inspector / Manager test.3）
+
+当前部署：DSH rc.3、Character Core test.17、独立 Preset Manager test.3、Memory Inspector test.3。只更新两个管理包，沿用 Profile、角色/模型、Memory、Session、QQ 与 Schedule；未改官方文件和 Worker 权限，没有 Schema 迁移。13 个 Preset 健康、QQ 单连接，Inspector 继续 writable:false；已保留一致性备份和旧 Profile。
+
+本轮现场复现的是「无有效活动上下文」，并非已证实的 React 白屏或数据库为空。Host 重启后当前可信身份必须重新建立，旧 Session 不自动授予记忆权限。UI 增加加载、请求错误/重试、无上下文引导、分层零记录与局部渲染恢复；授权刷新失败不会继续展示旧记录。没有读取真实记忆正文。
+
+验证：Character 单元及安全审计共 182/182；Manager 112 通过、1 项原有平台跳过。实际 rc.3 验证 Core+Extras、只读重载/撤销、Compaction、十个 Worker/Manager 配置及冷恢复、历史提醒和长期任务重启恢复。Web GUI 在合成数据中已点击验收；新 UI 的 Desktop 点击写操作、视觉 HMR及真实手机收件仍未验证。原生 Desktop relay 的认证/Origin 拒绝通过，不将它等同于桌面视觉验收。测试和详细维护证据仅存本地忽略目录。
+
+
 ## DSH 0.2.1-rc.3 适配
 
 官方更新改为用户安装目录，数据继续沿用原目录。关键 Preset/Subagent/Tools/Config SDK 与 Creator 定义逐文件比对未变；Client registry 的变化为发行提交标识。修复验证/维护脚本误指向旧二进制和含空格路径的引用，保留旧版测试能力；没有修改官方 DSH 或更换插件运行包。

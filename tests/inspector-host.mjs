@@ -5,7 +5,7 @@ const sdk=(process.env.DSH_CHARACTER_HOST_ROOT||process.env.DSH_INSTALL_ROOT)+'/
 const {LlmAdapter,createUserMessage}=await import(pathToFileURL(sdk+'dsh-llm/lib/index.js').href);
 const {defineTool}=await import(pathToFileURL(sdk+'dsh-tools/lib/index.js').href);
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
-export const name='inspector-worker-host-test';export const inject=['agents','agentPresets','tools','llm','characterIdentity','memoryIdentity','dshMemory','webServer','connection','subagents','commands'];
+export const name='inspector-worker-host-test';export const inject=['agents','agentPresets','tools','llm','characterIdentity','memoryIdentity','dshMemory','webServer','connection','subagents','commands','configEditor'];
 export function apply(ctx,config){
  class Fixture extends LlmAdapter{async *stream(request){
   const prompt=JSON.stringify(request.messages);
@@ -67,7 +67,8 @@ export function apply(ctx,config){
    assert.equal((await fetch(path,{method:'POST',headers:{origin,'content-type':'application/json'},body:'{}'})).status,401);
    const login=await fetch(ctx.connection.authenticatedUrl(origin+'/'),{redirect:'manual'});assert.equal(login.status,303);const cookie=login.headers.get('set-cookie').split(';')[0];
    const call=async(operation,extra={},override={})=>{const response=await fetch(path,{method:'POST',headers:{origin,cookie,'content-type':'application/json',...override},body:JSON.stringify({operation,context:parent.id,...extra})});return {status:response.status,body:await response.json()};};
-   const contexts=await call('contexts');assert.equal(contexts.status,200);assert(contexts.body.contexts.some(c=>c.id===parent.id));
+   const contexts=await call('contexts');assert.equal(contexts.status,200);assert.equal(contexts.body.state,'ready');assert(contexts.body.contexts.some(c=>c.id===parent.id));
+   assert.equal((await call('browse',{filter:{layer:'l2',query:'isolated-no-such-record'}})).body.total,0);
    assert.equal((await call('browse',{}, {origin:'http://foreign.invalid'})).status,403);
    assert.equal((await call('browse',{context:worker.id})).status,403);
    assert.equal((await call('detail',{id:row.id})).body.memory.statement,row.statement);
@@ -96,15 +97,21 @@ export function apply(ctx,config){
    report.checks.push('Exact installed Desktop dsh-app relay: owner RPC succeeds without Origin; foreign renderer denied');
    report.checks.push('Native shell module graph + Connection RPC correlation; standalone page removed');
    report.checks.push('Real native Web login/cookie and HTTP API: unauthenticated/cross-origin/Worker denied, CAS and forget history enforced');
+   const inspectorEntry=ctx.configEditor.entries().find(e=>e.options.id==='memory-inspector');assert(inspectorEntry);
+   await ctx.configEditor.edit(inspectorEntry,current=>({...current,writable:false}));
+   assert.equal((await call('contexts')).body.writable,false);assert.equal((await call('browse')).status,200);assert.equal((await call('forget',{id:row.id,revision:3})).status,403);
+   release();release=undefined;const noContext=await call('contexts');assert.equal(noContext.body.state,'no_active_context');assert.deepEqual(noContext.body.contexts,[]);assert.equal((await call('browse')).status,403);
+   await ctx.configEditor.edit(ctx.configEditor.entries().find(e=>e.options.id==='memory-inspector'),current=>({...current,writable:true}));
+   report.checks.push('Actual readonly plugin reload permits authorized browse; detached identity exposes explicit empty context and denies old Session');
   }else report.checks.push('Core without GUI or specialist still functions');
-  release();release=undefined;assert.throws(()=>memory.browse(trusted));report.checks.push('Gateway detach revokes Inspector/Memory authority');report.ok=true;
+  release?.();release=undefined;assert.throws(()=>memory.browse(trusted));report.checks.push('Gateway detach revokes Inspector/Memory authority');report.ok=true;
   if(config.preview&&config.extras){
    // Disposable synthetic fixture only; never shipped in the runtime plugin.
    release=identity.attach({manager,config:{appId:'mock-app',preset:'qq-character',access:{c2cMode:'allowlist',c2cAllow:['mock-owner'],groupMode:'disabled'}},sender:{async sendMarkdown(){}}});await bind(parent);
    const previewCapability=identity.forSession(parent.id);
    for(let i=0;i<24;i++)memory.remember(previewCapability,{kind:'semantic',statement:'合成分页验收条目 '+String(i).padStart(2,'0')},{sessionId:parent.id,eventSeq:1000+i,messageId:'preview:'+i,origin:'direct_user',quote:'合成分页验收条目 '+i});
    ctx.webServer.register({kind:'exact',path:'/fixture-login',handler(req,res){req.url=new URL(ctx.connection.authenticatedUrl(origin+'/')).search;req.url='/'+req.url;ctx.connection.authorizeIndex(req,res);}});
-   report.previewOrigin=origin;fs.writeFileSync(config.result,JSON.stringify(report,null,2));const until=Date.now()+180000;while(Date.now()<until&&!fs.existsSync(config.cwd+'/preview.done'))await sleep(250);
+   report.previewOrigin=origin;fs.writeFileSync(config.result,JSON.stringify(report,null,2));const until=Date.now()+600000;while(Date.now()<until&&!fs.existsSync(config.cwd+'/preview.done'))await sleep(250);
   }
  }catch(e){report.ok=false;report.error=e.stack;}finally{release?.();for(const h of handles)await h.dispose().catch(()=>{});fs.writeFileSync(config.result,JSON.stringify(report,null,2));}
  }
