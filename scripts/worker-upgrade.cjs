@@ -1,7 +1,7 @@
 // Offline candidate migration only. Never touches Sessions, skills or the source Profile.
 const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto'),assert=require('node:assert/strict');
 const legacy='dsh-character-memory-tools/worker.mjs';
-function templates(rows){return new Map(rows.flatMap(r=>r.insert??[r]).filter(r=>r.config?.id&&Array.isArray(r.config.plugins)).map(r=>[r.config.id,r.config.plugins.find(p=>p.id==='persona')?.config?.prefix]));}
+function templates(rows){return new Map(rows.flatMap(r=>r.insert??[r]).filter(r=>r.id?.startsWith('preset-worker-')&&r.id==='preset-'+r.config?.id&&Array.isArray(r.config.plugins)).map(r=>[r.config.id,r.config.plugins.find(p=>p.id==='persona')?.config?.prefix]));}
 function upgrade(value,oldRows=[],newRows=[]){
  const old=templates(oldRows),latest=templates(newRows);let removed=0,personas=0;
  function plugins(rows,id){return rows.filter(r=>{if(r?.name===legacy){removed++;return false;}return true;}).map(r=>{

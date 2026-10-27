@@ -2,17 +2,25 @@
 
 本页是版本与验收状态的统一入口。历史发布记录说明当时结果，不代表最新运行状态。
 
-## test.17 源码与隔离验收
+## test.17 当前版本
 
 Worker 默认 Boundary 已移除，权限完全沿用原生 Preset/Scope；旧模块为无操作兼容入口。候选迁移覆盖嵌套 Override、自定义 Preset 与 Manager 合并 base，保留用户工具、Skills/版本和历史，拒绝过期状态切换。
 
 本轮 Character **178/178** 单元/安全回归通过，无跳过；当前 DSH 0.2.1-rc.2 的 Core-only/Core+Extras、十个原生 Worker 实际工具调用、原生一级深度、Root 身份/Memory/任务拒绝、冷恢复与两进程重启通过。跨仓库测试由独立 Preset Manager 经 Owner API 为真正的 Character Worker 配置 Plugins/Skills，重启后实际工具执行继续通过。Creator、Memory/Compaction、Schedule/Outbox 回归通过。模型与 QQ Sender 是合成替身，不代表真实业务质量或手机收件。
 
-Preset Manager test.2：107 通过，1 项原有 Windows 符号链接跳过；实际打包产物两进程 Host、Profile 替换、Schema/依赖/Scope/CAS、版本和失败回退通过。Web 原生设置已实测配置表单、搜索、添加、排序、停用/移除、错误提示、Skills 分配/启停和刷新；Desktop 实际窗口与视觉 HMR 未验证。运行配置切换状态在完成后单独记录，以下是原 test.16 实例记录。
+Preset Manager test.2：107 通过，1 项原有 Windows 符号链接跳过；实际打包产物两进程 Host、Profile 替换、Schema/依赖/Scope/CAS、版本和失败回退通过。Web 原生设置已实测配置表单、搜索、添加、排序、停用/移除、错误提示、Skills 分配/启停和刷新；Desktop 实际窗口与视觉 HMR 未验证。运行验证与历史实例记录如下。
+
+### 当前运行（已验证）
+
+已单活部署 Character **0.1.0-test.17**（运行代码 `5c23b75`）和独立 Preset Manager **0.1.0-test.2**（运行代码 `34db4a1`）。新 Host 健康、Agent 空闲、13 个 Preset 无失败、七个默认 Worker 均只有 Persona，单一 QQ Gateway connected/ready。Owner API、Schema、原生版本化客户端资源及未登录/跨来源拒绝通过；现场未改 Worker 工具配置，工具执行验收使用隔离 Profile。
+
+切换前保留旧 Profile 及 297 文件校验快照。Memory/治理表、绑定、QQ prefs、Schedule 和官方 ASAR 的前后校验一致；未进行生产数据迁移、未发送真实 QQ 测试消息。隔离切换失败回滚通过，生产实例本轮未执行回滚演练。后续迁移脚本额外收窄为只刷新内置 Worker Persona，明确不改变 Root Persona；此维护脚本不改变已部署运行包。
+
+Character 运行代码的 GitHub Actions 已通过；Manager 本提交未查到远端 Actions 运行，不将本地通过写成远端 CI 已验收。Desktop 当前没有可操作窗口，实际 Desktop GUI/HMR 和手机审批收件仍未验证。
 
 ## test.16 实例记录
 
-**当前实例已部署 test.16 / 社区 Preset ID 修复**，代码提交 `1c587f2`。兼容字符串真实 ID，支持 `{id,alias?}`；原生白名单、Spawn 和持久恢复只使用真实 ID。配置冲突、已知受保护 Root、Character 自引用均拒绝，不自动安装或授权。当前实例仍只有七个默认 Worker，没有新增或启用社区目标。
+**test.16 当时实例 / 社区 Preset ID 修复**，代码提交 `1c587f2`。兼容字符串真实 ID，支持 `{id,alias?}`；原生白名单、Spawn 和持久恢复只使用真实 ID。配置冲突、已知受保护 Root、Character 自引用均拒绝，不自动安装或授权。当前实例仍只有七个默认 Worker，没有新增或启用社区目标。
 
 test.16 原发布验证：Character **174/174**、QQTK **57/57** 自动回归通过，无跳过。实际安装候选包的 Core-only/Core+Extras、普通 Agent 模块启停、十个 Preset 的原生委派/权限隔离/双进程恢复，以及缺失、实际装配失败、卸载后恢复拒绝均通过，无 Creator 回退；Session/Long Tasks、Memory/Compaction、Schedule/通知和 Interaction 回归通过。第三方样例为合成夹具，未审查或验证任何真实第三方插件的安全性与质量。
 
@@ -22,7 +30,7 @@ test.16 原发布验证：Character **174/174**、QQTK **57/57** 自动回归通
 
 ### 可选 Preset Manager
 
-当前 test.16 Profile 另装独立 `dsh-preset-manager@0.1.0-test.1` Bundle，运行产物对应其仓库 `f82ccac`；Core/Extras、QQTK、Interaction、Memory 及其版本未变。安装后 13 个 Preset 无装配失败，七个 Worker 与单 QQ Gateway 正常；Owner API、Schema 和原生前端图公布的版本化客户端资源通过，未登录/跨来源请求拒绝。Memory/治理表、Session 路由、绑定、Schedule 和官方 ASAR 的重启前后校验保持一致。
+当时 test.16 Profile 另装独立 `dsh-preset-manager@0.1.0-test.1` Bundle，运行产物对应其仓库 `f82ccac`；Core/Extras、QQTK、Interaction、Memory 及其版本未变。安装后 13 个 Preset 无装配失败，七个 Worker 与单 QQ Gateway 正常；Owner API、Schema 和原生前端图公布的版本化客户端资源通过，未登录/跨来源请求拒绝。Memory/治理表、Session 路由、绑定、Schedule 和官方 ASAR 的重启前后校验保持一致。
 
 首次切换被错误的固定客户端资源地址检查拦截，已实际回退并验证数据保留；按实际 SDK 改用原生图中的版本 URL，补充隔离回归后重新部署通过。既有 Profile 与一致性快照保留本机。Character 新增 Profile 切换保留插件状态目录的回归后 **175/175** 通过；管理器独立 **103 通过、1 项上游 Windows 平台跳过**，打包产物两进程原生验收通过。管理页实际点击/布局/桌面窗口未验收，未发送真实 QQ 测试消息。详细过程、配置和日志不公开。
 
