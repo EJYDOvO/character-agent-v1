@@ -2,9 +2,9 @@
 
 在 DeepSeek Harness 上运行的角色 Agent 扩展，提供私人 QQ 接入、可配置角色和带来源的长期记忆。Character 从官方 Creator Preset 构建派生，保留其工具能力；角色设定不会增加系统权限。
 
-这是测试版源码仓库，不包含 DSH 本体，也不是一键安装器。当前源码为 **test.17 / 原生 Worker Preset 权限**；实例部署状态见 STATUS。当前实例已部署 test.17 + Preset Manager test.3 / Memory Inspector test.3，启用 QQ Session 生命周期，长期任务授权配置保持不变；源码默认仍关闭这些可选能力。验证基线是 **Windows、Node.js 24.21.0、DSH 0.2.1-rc.2 / rc.3、QQ Bot 0.5.2 / SDK 1.0.5 及配套 QQTK 补丁**。其他版本和平台需要重新验证。部署验收及未完成事项统一见[当前状态](docs/STATUS.md)。
+这是测试版源码仓库，不包含 DSH 本体，也不是一键安装器。当前源码为 **test.18 / Interaction test.4**；实例部署状态统一见[当前状态](docs/STATUS.md)。QQ Session 生命周期、长期任务和 Interaction 均需显式配置。验证基线是 **Windows、Node.js 24.21.0、DSH 0.2.1-rc.2 / rc.3、QQ Bot 0.5.2 / SDK 1.0.5 及配套 QQTK 补丁**。其他版本和平台需要重新验证。
 
-可选 [Interaction Policy V1](docs/INTERACTION-POLICY.md) 提供自然表达、等待提示、流式气泡与安全修正。源码默认构建不启用；该通用插件不要求安装 Character 或 QQ。
+可选 [Interaction Policy V1](docs/INTERACTION-POLICY.md) 提供自然表达、默认 8 秒无发送确认提示、短聊/长结果语义气泡与安全修正；工具调用不禁止分段。源码默认构建不启用；该通用插件不要求安装 Character 或 QQ。配套 QQTK 可开启限量、脱敏的本地投递诊断；真实重复气泡仍待复现。
 
 可选 [Preset Manager](https://github.com/EJYDOvO/dsh-preset-manager) 在原生设置页管理已安装 Plugins、Skills 和 Preset Override。它独立安装到 Profile，不复制进 Core/Extras，通过原生 Override 管理 Worker 工具和 Skills，不自动扩大 Character 委派白名单；当前验收边界见 STATUS。
 

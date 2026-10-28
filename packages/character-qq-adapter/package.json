@@ -1,6 +1,6 @@
 {
   "name": "dsh-character-qq-adapter",
-  "version": "0.1.0-test.17",
+  "version": "0.1.0-test.18",
   "private": true,
   "type": "module",
   "main": "index.mjs",

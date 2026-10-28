@@ -1,13 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {Interaction,boundary,options,replyPolicy} from '../packages/interaction-policy/policy.mjs';
+import {Interaction,boundary,options,replyPolicy,semanticParts} from '../packages/interaction-policy/policy.mjs';
 import {apply} from '../packages/interaction-policy/index.mjs';
 function fixture(config={}){
  let time=0,id=0;const timers=new Map(),sent=[],actions=[],bubbles=[];
  const clock={now:()=>time,set(fn,ms){timers.set(++id,{fn,at:time+ms});return id;},clear:id=>timers.delete(id)};
  const agent={status:'running',cancel:(...a)=>actions.push(['cancel',...a]),followup:m=>actions.push(['followup',m]),steer:m=>actions.push(['steer',m])};
  const p=new Interaction(agent,{hangOnMs:30,throttleMs:10,...config},clock);
- const transport={key:agent,async sendText(text,meta){sent.push(['text',text,meta]);},openStream(){const b={text:'',closed:false};bubbles.push(b);sent.push(['open']);return {async update(t){assert(!b.closed);b.text=t;sent.push(['update',t]);},async complete(){assert(!b.closed);b.closed=true;sent.push(['complete']);},cancel(){b.closed=true;sent.push(['cancel']);}};}};
+ const transport={key:agent,async sendText(text,meta){sent.push(['text',text,meta]);},openStream(meta){const b={text:'',closed:false,meta};bubbles.push(b);sent.push(['open']);return {async update(t){assert(!b.closed);b.text=t;sent.push(['update',t]);},async complete(){assert(!b.closed);b.closed=true;sent.push(['complete']);},cancel(){b.closed=true;sent.push(['cancel']);}};}};
  p.bind(transport);
  const event=(type,data={})=>p.event({type,data});
  let rev=0,attempt=0;const start=()=>{event('turn/start');p.frame({type:'start',attemptId:++attempt,revision:++rev});};
@@ -36,9 +36,9 @@ test('hang-on uses actual running state and elapsed clock, once per turn, transi
  const f=fixture();f.start();await f.advance(29);assert.equal(f.sent.length,0);f.event('tool/call',{callId:'one'});await f.advance(1);await f.advance(500);f.p.hangOn();await f.p.idle();
  assert.equal(f.sent.length,1);assert.equal(f.sent[0][2].transient,true);assert.equal(f.sent[0][2].state,'tool');f.event('turn/end',{reason:{kind:'completed'}});await f.p.dispose();
 });
-test('natural response, queued race, idle and closed turns suppress redundant hang-on',async()=>{
- for(const mode of ['natural','idle','ended']){const f=fixture();f.start();if(mode==='natural')f.chunk('嗯，');if(mode==='idle')f.agent.status='idle';if(mode==='ended')f.event('turn/end',{reason:{kind:'completed'}});await f.advance(40);assert(!f.sent.some(s=>s[2]?.kind==='status'));await f.p.dispose();}
- const f=fixture();f.start();f.p.hangOn();f.chunk('我正在检查。');await f.p.idle();assert(!f.sent.some(s=>s[2]?.kind==='status'));await f.p.dispose();
+test('delivered response, idle and closed turns suppress redundant hang-on',async()=>{
+ for(const mode of ['natural','idle','ended']){const f=fixture();f.start();if(mode==='natural'){f.chunk('嗯，');await f.advance(11);}if(mode==='idle')f.agent.status='idle';if(mode==='ended')f.event('turn/end',{reason:{kind:'completed'}});await f.advance(40);assert(!f.sent.some(s=>s[2]?.kind==='status'));await f.p.dispose();}
+ const f=fixture();f.start();f.chunk('我正在检查。');await f.advance(11);f.p.hangOn();await f.p.idle();assert(!f.sent.some(s=>s[2]?.kind==='status'));await f.p.dispose();
 });
 test('explicit revision cancels text only, preserves inbox and queues native followup',async()=>{
  const f=fixture();f.start();f.chunk('旧回复未发送');assert.equal(f.p.revise({native:true}),'restarted');await f.p.idle();assert.equal(f.sent.length,0);assert.deepEqual(f.actions,[['cancel',{kind:'user'},{keepInbox:true}],['followup',{native:true}]]);await f.p.dispose();
@@ -110,4 +110,50 @@ test('Host context cannot admit background/Web input or revive canceled output',
    f.chunk('不应发送');f.message('不应发送');await f.advance(100);assert.deepEqual(f.sent,[],origin);
   }finally{await f.p.dispose();}
  }
+});
+
+test('eight seconds without a transport receipt triggers once even after model text exists',async()=>{
+ const f=fixture({hangOnMs:8000});f.transport.deliveryReceipts=true;f.start();f.chunk('模型已经生成但SDK仍在缓冲的内容。');
+ await f.advance(7999);assert.equal(f.sent.filter(x=>x[2]?.kind==='status').length,0);
+ await f.advance(1);assert.equal(f.sent.filter(x=>x[2]?.kind==='status').length,1);
+ await f.advance(20000);assert.equal(f.sent.filter(x=>x[2]?.kind==='status').length,1);await f.p.dispose();
+});
+
+test('receipt suppresses queued hang-on; old canceled receipt cannot suppress a new turn',async()=>{
+ const f=fixture({hangOnMs:8000});f.transport.deliveryReceipts=true;f.start();f.chunk('自然回应');await f.advance(11);
+ const receipt=f.bubbles[0].meta.onDelivered;f.p.hangOn();receipt();await f.p.idle();assert(!f.sent.some(x=>x[2]?.kind==='status'));
+ f.p.stopOutput();f.start();receipt();await f.advance(8000);assert.equal(f.sent.filter(x=>x[2]?.kind==='status').length,1);await f.p.dispose();
+});
+
+test('slow stream receipt cannot be overtaken by a status queued at the deadline',async()=>{
+ const f=fixture({hangOnMs:8000});f.transport.deliveryReceipts=true;let release,meta;
+ f.transport.openStream=m=>{meta=m;return {update:()=>new Promise(r=>release=r),complete:async()=>{},cancel(){}};};
+ f.start();f.chunk('慢网络内容');f.p.update(f.p.message);await Promise.resolve();await Promise.resolve();
+ f.p.hangOn();meta.onDelivered();release();await f.p.idle();assert(!f.sent.some(x=>x[2]?.kind==='status'));await f.p.dispose();
+});
+
+test('tool results over 240 characters split at useful boundaries without losing or repeating text',async()=>{
+ const text=Array.from({length:12},(_,i)=>`第${i}项结果：`+'这是有依据的完整说明'.repeat(4)+'。').join('\n\n');
+ const partitions=[];
+ for(const size of [1,7,80,text.length]){
+  const f=fixture();f.start();f.event('tool/call',{callId:'read'});f.event('tool/result',{message:{source:{callId:'read'}}});
+  for(let i=0;i<text.length;i+=size){f.chunk(text.slice(i,i+size));await f.advance(10);}
+  assert(f.bubbles.length<=1);assert(f.bubbles.every(b=>!b.closed),'uncommitted remainder must not become completed bubbles');
+  f.message(text);await f.p.idle();const result=f.bubbles.map(b=>b.text);assert(result.length>1&&result.length<=3);assert.equal(result.join(''),text);assert(f.bubbles.every(b=>b.closed));partitions.push(result);await f.p.dispose();
+ }
+ for(const parts of partitions)assert.deepEqual(parts,partitions[0]);
+});
+
+test('long Markdown blocks, inline links, quotes, tables and lists are atomic',()=>{
+ const before='前面的完整说明。'.repeat(22)+'\n\n',after='后面的补充说明。'.repeat(22);
+ for(const block of ['```js\n'+ 'console.log("不要拆开。代码！");\n'.repeat(18)+'```', '- 列表第一项。\n  续行说明。\n- 列表第二项。', '| 名称 | 说明 |\n|---|---|\n| 内容 | 不能拆开。 |', '[链接说明。](https://example.invalid/path?q=1)', '「这是引用。里面不能断开！」']){
+  const text=before+block+'\n\n'+after,parts=semanticParts(text,options(),3);
+  assert.equal(parts.join(''),text);assert(parts.some(p=>p.includes(block)),block);
+ }
+});
+
+test('progress and hang-on share the turn bubble budget; final remainder is never truncated',async()=>{
+ const f=fixture();delete f.transport.openStream;f.start();f.p.hangOn();await f.p.idle();f.message('先检查一下。');
+ const text='第一份完整结果。'.repeat(40)+'\n\n'+'第二份完整结果。'.repeat(40);f.message(text);await f.p.idle();
+ assert.equal(f.sent.length,3);assert.equal(f.sent[2][1],text);await f.p.dispose();
 });

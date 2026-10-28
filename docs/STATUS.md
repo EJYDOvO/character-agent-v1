@@ -2,9 +2,15 @@
 
 本页是版本与验收状态的统一入口。历史发布记录说明当时结果，不代表最新运行状态。
 
-## 管理界面更新（Inspector / Manager test.3）
+## Interaction test.4（Character test.18）
 
-当前部署：DSH rc.3、Character Core test.17、独立 Preset Manager test.3、Memory Inspector test.3。只更新两个管理包，沿用 Profile、角色/模型、Memory、Session、QQ 与 Schedule；未改官方文件和 Worker 权限，没有 Schema 迁移。13 个 Preset 健康、QQ 单连接，Inspector 继续 writable:false；已保留一致性备份和旧 Profile。
+源码与隔离验证完成：长工具结果可按安全句界/段落分泡；8 秒未收到自然回复发送确认时加入一次等待提示；SDK 缓冲不算确认。QQTK 新增默认关闭的脱敏投递记录及只观察的 SDK 回执钩子。完整重复气泡尚未复现，本轮不宣称已修复其根因。
+
+验证：Character 单元/安全审计 188/188、QQTK 轻量 30/30、代码隔离 SDK 测试 33/33；实际 rc.3 Host 10 项交互检查及两进程生命周期/旧提醒/长期任务恢复通过。模型、Sender/API 为合成替身；不等同于真实 QQ 手机收件。已部署 Character test.18 / Interaction test.4，配套两份 QQTK 补丁；13 个 Preset 健康、单 QQ Gateway，8 秒策略与脱敏诊断已启用。Preset Manager / Inspector 保持 test.3，Inspector 仍只读。保留一致性备份和旧 Profile；本轮因非交互安装确认曾中止并自动恢复旧版，补齐参数后重试成功，未覆盖用户数据。真实手机效果仍待复现。
+
+## 上一轮管理界面更新（Inspector / Manager test.3）
+
+当时部署：DSH rc.3、Character Core test.17、独立 Preset Manager test.3、Memory Inspector test.3。只更新两个管理包，沿用 Profile、角色/模型、Memory、Session、QQ 与 Schedule；未改官方文件和 Worker 权限，没有 Schema 迁移。13 个 Preset 健康、QQ 单连接，Inspector 继续 writable:false；已保留一致性备份和旧 Profile。
 
 本轮现场复现的是「无有效活动上下文」，并非已证实的 React 白屏或数据库为空。Host 重启后当前可信身份必须重新建立，旧 Session 不自动授予记忆权限。UI 增加加载、请求错误/重试、无上下文引导、分层零记录与局部渲染恢复；授权刷新失败不会继续展示旧记录。没有读取真实记忆正文。
 
@@ -19,7 +25,7 @@ rc.3 隔离验证：Character 178/178、Preset Manager 107 通过 + 1 项原有�
 
 当前 rc.3 实例健康、QQ 单连接、13 个 Preset 无装配失败；自有维护入口已选择新安装目录，数据/Profile/模型偏好保持。切换保留一致性快照，实际维护失败恢复后校验用户数据不变。没有发送真实 QQ 测试消息。详细路径、备份及临时日志仅留本机。
 
-## test.17 当前版本
+## test.17 原生 Worker 权限基础
 
 Worker 默认 Boundary 已移除，权限完全沿用原生 Preset/Scope；旧模块为无操作兼容入口。候选迁移覆盖嵌套 Override、自定义 Preset 与 Manager 合并 base，保留用户工具、Skills/版本和历史，拒绝过期状态切换。
 

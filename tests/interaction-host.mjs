@@ -50,7 +50,7 @@ export function apply(ctx,config){
    const sent=[],bubbles=[],record={sessionKey:'fixture',agent:a,replyTarget:{scope:'c2c',targetId:'synthetic-owner',msgId:'synthetic-message'}};
    const manager={ctx,findBySessionId:id=>id===a.id?record:undefined,getSessionRecord:()=>record,approvalChannel:{pending:new Map()},questionChannel:{pending:new Map()}};
    const logger={debug(){},info(){},warn(){},error(){}};
-   const sender={async sendMarkdown(_target,t){sent.push({t});},openStream(){const row={text:'',done:false};bubbles.push(row);return {async update(t){row.text=t;},async complete(){row.done=true;}};}};
+   const sender={async sendMarkdown(_target,t){sent.push({t});},openStream(_target,meta){const row={text:'',done:false};bubbles.push(row);return {async update(t){row.text=t;meta?.onDelivered?.();},async complete(){row.done=true;}};}};
    releaseOutbound=ctx.on('session/event',createInteractionOutbound(ctx,manager,sender,{streaming:true,textChunkLimit:3500,showToolResults:false},logger,ctx.tools));
    const middleware=[];setupMiddlewares({use:m=>middleware.push(m)},{access:{c2cMode:'allowlist',c2cAllow:['synthetic-owner'],groupMode:'disabled',groupAllow:[]},historyLimit:10,media:{enabled:false}},manager,logger);
    let admitted=false;await middleware[2]({message:{kind:'c2c',senderId:'stranger'},log:logger,stop(){}},async()=>{admitted=true;});assert(!admitted);
