@@ -313,7 +313,10 @@ export class Interaction {
     if(event.type==='turn/start')this.start(d.turn);
     else if(event.type==='subagent/catalog'&&this.active&&!this.background&&typeof d.childId==='string'){this.children.delete(d.childId);this.children.set(d.childId,{input:this.replyCtx?.input});if(this.children.size>50)this.children.delete(this.children.keys().next().value);}
     else if(event.type==='tool/call'){this.toolSeen=true;this.tools.add(d.callId);}
-    else if(event.type==='tool/result')this.tools.delete(d.message?.source?.callId);
+    else if(event.type==='tool/result'){
+      const finished=this.tools.delete(d.message?.source?.callId);
+      if(finished&&!this.tools.size)this.toolSeen=false;
+    }
     else if(event.type==='assistant/message'&&this.active){
       if(d.message?.content?.some(b=>b.type==='tool-call'))this.toolSeen=true;
       const text=(d.message?.content??[]).filter(b=>b.type==='text').map(b=>b.text).join('');
@@ -338,6 +341,10 @@ export class Interaction {
   // Anything unclear, slow or failing is queued as an independent follow-up.
   intervene(message,{explicit}={}){
     if(this.closed||!this.config.enabled)throw Error('Interaction disabled');
+    if(this.intervention&&(explicit==='revise'||this.agent.status!=='running')){
+      this.intervention.messages.push(message);
+      return this.resolveIntervention(this.intervention,this.agent.status==='running'?'revise':'append','superseded');
+    }
     if(this.agent.status!=='running'){this.agent.followup(message);return 'queued';}
     if(explicit==='revise')return this.act('revise',[message],'explicit');
     if(!this.judge)return this.act('append',[message],'none');
@@ -358,7 +365,7 @@ export class Interaction {
   resolveIntervention(pending,decision,why){
     if(this.intervention!==pending)return;
     this.intervention=null;this.clock.clear(pending.timer);pending.control?.abort();
-    try{this.act(decision,pending.messages,why);}finally{if(this.hold===pending.hold)this.hold=null;pending.hold.release();}
+    try{return this.act(decision,pending.messages,why);}finally{if(this.hold===pending.hold)this.hold=null;pending.hold.release();}
   }
   phase(){return this.transport?.waitingForUser?.()?'waiting-user':this.tools.size||this.toolSeen?'tool':'text';}
   act(decision,messages,why){

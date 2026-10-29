@@ -33,7 +33,7 @@ export function apply(ctx,config){
   yield {type:'finish',reason:{kind:'stop'}};
  }}
  ctx.llm.registerAdapter(['interaction-fixture'],new Provider());
- ctx.tools.register(defineTool({name:'interaction_fixture',description:'Isolated synthetic tool',parameters:{},output:{schema:{type:'string'},render:(_a,v)=>[{type:'text',text:v}]},async execute(_a,{signal}){toolStarted=true;signal.addEventListener('abort',()=>toolAborted=true,{once:true});await toolGate;return 'fixture-result';}}));
+ ctx.tools.register(defineTool({name:'interaction_fixture',description:'Isolated synthetic tool',parameters:{},output:{schema:{type:'string'},render:(_a,v)=>[{type:'text',text:v}]},async execute(_a,{signal}){toolStarted=true;const aborted=()=>toolAborted=true;signal.addEventListener('abort',aborted,{once:true});try{await toolGate;return 'fixture-result';}finally{signal.removeEventListener('abort',aborted);}}}));
  ctx.effect(()=>{const timer=setTimeout(()=>void run(),700);return()=>clearTimeout(timer);});
  async function run(){const handles=[],report={ok:false,runId:config.runId,host:config.version,provider:'deterministic-fixture',qqNetwork:false,checks:[]};let resolver,releaseOutbound;
   try{
@@ -145,6 +145,16 @@ export function apply(ctx,config){
    const order=bubbles.filter(b=>b.input===kept.id||b.input===extra.id).map(b=>b.input);
    assert.deepEqual(order,[kept.id,kept.id,extra.id,extra.id]);assert(bubbles.filter(b=>b.input===kept.id).every(b=>b.done));
    report.checks.push('Judged independent question is queued: current reply completes first, then the new input');
+   for(const kind of ['priority','revise']){
+    mark=a.session.seq;toolStarted=false;
+    const old=input('tool-case slow-case post-tool-'+kind);a.followup(old);await waitFor(old.id);
+    const until=Date.now()+5000;while(!events().some(e=>e.seq>=mark&&e.type==='tool/result')&&Date.now()<until)await sleep(5);
+    assert(events().some(e=>e.seq>=mark&&e.type==='tool/result'));assert.equal(p.tools.size,0);assert.equal(p.toolSeen,false);
+    const next=input(kind==='priority'?'chat-case 先说说新话题':'chat-case 不对，改看新目标');p.intervene(next);await settle();
+    assert(events().some(e=>e.seq>=mark&&e.type==='turn/end'&&e.data.reason?.kind==='aborted'));
+    assert(bubbles.some(b=>b.input===next.id));assert(!toolAborted);
+   }
+   report.checks.push('Completed native tools return to text: judged priority/revise cancel text without cancelling a tool');
    report.ok=true;
   }catch(e){report.ok=false;report.error=e.stack;}finally{releaseTool();releaseOutbound?.();for(const h of handles)await h.dispose().catch(()=>{});resolver?.deregister();fs.writeFileSync(config.result,JSON.stringify(report,null,2));}
  }

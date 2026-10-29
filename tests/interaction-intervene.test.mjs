@@ -4,6 +4,28 @@ import {Interaction} from '../packages/interaction-policy/policy.mjs';
 import {apply,judgePrompt} from '../packages/interaction-policy/index.mjs';
 
 const deferred=()=>{let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});return {promise,resolve,reject};};
+
+test('completed tools return to text phase; parallel tools and approval remain protected',async()=>{
+ for(const decision of ['priority','revise']){
+  const f=fixture(async()=>decision);f.start();f.event('tool/call',{callId:'a'});f.event('tool/call',{callId:'b'});
+  f.event('tool/result',{message:{source:{callId:'a'}}});assert.equal(f.p.phase(),'tool');
+  f.event('tool/result',{message:{source:{callId:'b'}}});assert.equal(f.p.phase(),'text');
+  f.p.intervene(f.msg('q2','先处理新要求'));await f.advance(0);assert.deepEqual(f.actions.map(a=>a[0]),['cancel','followup']);await f.p.dispose();
+ }
+ const f=fixture(null);f.start();f.p.toolSeen=true;f.event('tool/result',{message:{source:{callId:'unknown'}}});assert.equal(f.p.phase(),'tool');await f.p.dispose();
+});
+
+test('explicit correction absorbs pending judged inputs exactly once in arrival order',async()=>{
+ const pending=deferred(),f=fixture(()=>pending.promise);f.start();f.p.intervene(f.msg('q2','补充一下'));
+ f.p.revise(f.msg('q3','更正：先做新任务'));pending.resolve('append');await f.advance(0);
+ assert.deepEqual(f.actions.map(x=>x[0]),['cancel','followup','followup']);assert.deepEqual(f.actions.slice(1),[['followup','q2'],['followup','q3']]);await f.p.dispose();
+});
+
+test('idle transition while judging cannot reverse input order or duplicate the old input',async()=>{
+ const pending=deferred(),f=fixture(()=>pending.promise);f.start();f.p.intervene(f.msg('q2','先到'));
+ f.agent.status='idle';f.p.intervene(f.msg('q3','后到'));pending.resolve('priority');await f.advance(0);
+ assert.deepEqual(f.actions,[['followup','q2'],['followup','q3']]);await f.p.dispose();
+});
 function fixture(judge){
  let time=0,id=0;const timers=new Map(),sent=[],bubbles=[],actions=[],traces=[],judged=[];
  const clock={now:()=>time,set(fn,ms){timers.set(++id,{fn,at:time+ms});return id;},clear:i=>timers.delete(i)};

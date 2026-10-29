@@ -43,8 +43,8 @@ test('delivered response, idle and closed turns suppress redundant hang-on',asyn
 test('explicit revision cancels text only, preserves inbox and queues native followup',async()=>{
  const f=fixture();f.start();f.chunk('旧回复未发送');assert.equal(f.p.revise({native:true}),'restarted');await f.p.idle();assert.equal(f.sent.length,0);assert.deepEqual(f.actions,[['cancel',{kind:'user'},{keepInbox:true}],['followup',{native:true}]]);await f.p.dispose();
 });
-test('tool call fragments, active and completed tools use steer, never cancel',async()=>{
- for(const mode of ['fragment','running','completed','unknown']){const f=fixture();f.start();if(mode==='fragment')f.p.toolSeen=true;else if(mode==='unknown')f.p.active=false;else{f.event('tool/call',{callId:'x'});if(mode==='completed')f.event('tool/result',{message:{source:{callId:'x'}}});}assert.equal(f.p.revise({native:true}),'steered');assert.equal(f.actions[0][0],'steer');assert.equal(f.actions.length,1);await f.p.dispose();}
+test('tool call fragments, active tools and unknown phase use steer, never cancel',async()=>{
+ for(const mode of ['fragment','running','unknown']){const f=fixture();f.start();if(mode==='fragment')f.p.toolSeen=true;else if(mode==='unknown')f.p.active=false;else{f.event('tool/call',{callId:'x'});if(mode==='completed')f.event('tool/result',{message:{source:{callId:'x'}}});}assert.equal(f.p.revise({native:true}),'steered');assert.equal(f.actions[0][0],'steer');assert.equal(f.actions.length,1);await f.p.dispose();}
 });
 test('cancel drops unsent output, closes visible stream and ignores stale frames',async()=>{
  const f=fixture();f.start();f.chunk('已经可见');await f.advance(11);f.chunk('未发送的尾巴');f.event('turn/end',{reason:{kind:'aborted'}});await f.advance(100);f.chunk('迟到片段');await f.p.idle();assert.equal(f.bubbles[0].text,'已经可见');assert(f.bubbles[0].closed);await f.p.dispose();
