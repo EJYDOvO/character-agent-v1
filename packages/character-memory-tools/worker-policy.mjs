@@ -11,6 +11,15 @@ const roles={
 };
 export const workerRoles=Object.freeze(Object.fromEntries(Object.entries(roles).map(([id,[name,purpose,deliverable]])=>[id,Object.freeze({id,name,purpose,deliverable})])));
 export const professionalWorkerIds=Object.freeze(['worker-explore','worker-librarian','worker-oracle','worker-metis','worker-momus','worker-planner']);
+// Host-global tools a built-in Worker may still inherit: read-only web search
+// without local side effects. Browser, file, terminal, QQ, Long Tasks and any
+// global tool installed later stay masked. Tools the Worker's own Preset mounts
+// are unaffected.
+export const workerGlobalTools=Object.freeze(['advanced_search','multi_search','platform_search','domain_search','video_search','research','cache_search','weather']);
+export function workerToolAllowlist(allow=workerGlobalTools){
+ if(!Array.isArray(allow)||allow.some(n=>typeof n!=='string'||!n||n.length>128||n==='run_code')||new Set(allow).size!==allow.length)throw Error('Worker global tool allowlist must be distinct tool names');
+ return allow;
+}
 // IDs are native registry keys, not role names or filesystem/module paths.
 const validId=id=>typeof id==='string'&&id.length>0&&id.length<=128&&!/[\s\p{Cc}\p{Cf}\\/]/u.test(id)&&!['.','..','__proto__','constructor','prototype'].includes(id);
 function protectedIds({characterPresetId='qq-character',rootPresetIds=[]}={}){

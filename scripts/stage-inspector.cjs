@@ -21,6 +21,8 @@ const schema=yaml.DEFAULT_SCHEMA.extend([new yaml.Type('tag:yaml.org,2002:js',{k
  const {communityWorkerIds}=await import('../packages/character-memory-tools/worker-policy.mjs');
  const external=communityWorkerIds(community),workers=workerIds.filter(id=>!external.includes(id)).map(workerPreset);
  for(const id of external){const reviewed=workerPreset();reviewed.id='preset-'+id;reviewed.config.id=id;reviewed.config.name='Reviewed community fixture';reviewed.config.plugins.find(p=>p.id==='persona').config.prefix=reviewed.config.plugins.find(p=>p.id==='persona').config.prefix.replaceAll('worker-general',id);workers.push(reviewed);}
+ // Source-only fixture: load the Worker tool scope from source like the other Character modules.
+ for(const worker of workers)for(const row of worker.config.plugins)if(row.name==='dsh-character-memory-tools/worker-scope.mjs')row.name=local('packages/character-memory-tools/worker-scope.mjs');
  const managerProbe=process.argv.includes('--manager');if(managerProbe&&!workerProbe)throw Error('--manager requires --workers');
  if(workerProbe&&!managerProbe)for(const worker of workers)worker.config.plugins.push({id:'native-worker-fixture',name:local('tests/worker-tool-fixture.mjs')},{id:'native-leaf-spawn',name:'@deepseek-ai/dsh-tool-subagent',config:{provider:'spawn',agentPreset:'worker-general',allowedAgentPresets:['worker-general'],maxDepth:1}});
  const binding=home+'/binding.json';fs.writeFileSync(binding,JSON.stringify({appId:'mock-app',ownerId:'mock-owner',characterId:'fixture-character',projectId:'fixture-project'}));

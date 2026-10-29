@@ -1,13 +1,13 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import {workerPreset,configureWorkers,selectedWorkerIds} from '../packages/character-definition/workers.mjs';
-import {workerRoles,rootWorkerPolicy,communityWorkers,communityWorkerIds} from '../packages/character-memory-tools/worker-policy.mjs';
+import {workerRoles,rootWorkerPolicy,communityWorkers,communityWorkerIds,workerGlobalTools,workerToolAllowlist} from '../packages/character-memory-tools/worker-policy.mjs';
 import {apply as boundary} from '../packages/character-memory-tools/worker.mjs';
 
 test('Every Worker is an independent analysis leaf with its own role and evidence contract',()=>{
  const prompts=new Set();
  for(const id of Object.keys(workerRoles)){
   const preset=workerPreset(id);assert.equal(preset.config.id,id);
-  assert.deepEqual(preset.config.plugins.map(p=>p.id),['persona']);
+  assert.deepEqual(preset.config.plugins.map(p=>p.id),['persona','worker-tool-scope']);assert.equal(preset.config.plugins[1].name,'dsh-character-memory-tools/worker-scope.mjs');assert(!('config' in preset.config.plugins[1]));
   const prompt=preset.config.plugins[0].config.prefix;prompts.add(prompt);
   for(const text of [id,'WorkerResult V1','evidence','needs_input','不继承父会话历史','最终决策'])assert(prompt.includes(text));
  }
@@ -60,4 +60,9 @@ test('Duplicate IDs, alias collisions, protected Roots and custom Character self
 test('Legacy boundary entry point remains loadable without restricting native tools',()=>{
  const calls=[];boundary({tools:{presentAs(){calls.push('presentation');},restrict(){calls.push('restriction');},guard(){calls.push('guard');}}});
  assert.deepEqual(calls,[]);
+});
+test('Worker global tool allowlist is read-only search only and rejects malformed names',()=>{
+ for(const n of workerGlobalTools)assert.match(n,/search|research|weather/);
+ for(const danger of ['read','write','glob','grep','pwsh','bash','web_fetch','qqbot_send_file','long_task_create','mcp__browser__browser_run_code_unsafe','bilibili_frames','working_directory','subagent'])assert(!workerGlobalTools.includes(danger));
+ assert.deepEqual(workerToolAllowlist([]),[]);for(const bad of ['x',[1],['a','a'],['run_code'],[''],null])assert.throws(()=>workerToolAllowlist(bad));
 });

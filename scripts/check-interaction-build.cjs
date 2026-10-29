@@ -18,7 +18,8 @@ for(const mode of ['on','off']){
  assert.equal(result.status,0,result.stderr);
  const manifest=JSON.parse(fs.readFileSync(path.join(fixture,'artifacts/build-manifest.json'),'utf8'));
  const patch=fs.readFileSync(path.join(fixture,'bundles/character-core/cordis.patch.yml'),'utf8');
- assert.equal(manifest.workerPolicyVersion,3);assert.equal(manifest.workerPresets.length,7+community.length);
+ assert.equal(manifest.workerPolicyVersion,4);assert.equal(manifest.workerPresets.length,7+community.length);
+ assert.equal(patch.split('name: dsh-character-memory-tools/worker-scope.mjs').length-1,manifest.workerPresets.filter(id=>id!=='root-planner-worker').length,'Every built-in Worker mounts the native tool scope');
  for(const id of manifest.workerPresets.filter(id=>id!=='root-planner-worker'))assert(patch.includes('id: preset-'+id),'Missing independent Worker declaration');
  assert(!patch.includes('worker-boundary')&&!patch.includes('dsh-character-memory-tools/worker.mjs'));
  assert(!patch.includes('id: preset-root-planner-worker'),'External presets must not be cloned or installed');

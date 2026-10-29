@@ -3,7 +3,8 @@ export {professionalWorkerIds,selectedWorkerIds};
 export function workerPreset(id='worker-general'){
  if(!Object.hasOwn(workerRoles,id))throw Error('Unknown Worker preset');
  return {id:'preset-'+id,name:'@deepseek-ai/dsh-agent-preset',config:{id,name:id,description:workerRoles[id].purpose,plugins:[
-  {id:'persona',name:'@deepseek-ai/dsh-persona',config:{prefix:workerPersona(id)}}
+  {id:'persona',name:'@deepseek-ai/dsh-persona',config:{prefix:workerPersona(id)}},
+  {id:'worker-tool-scope',name:'dsh-character-memory-tools/worker-scope.mjs'}
  ]}};
 }
 export function configureWorkers(character,specialists=[],community=[]){
