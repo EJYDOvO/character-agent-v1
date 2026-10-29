@@ -2,14 +2,22 @@
 
 本页是版本与验收状态的统一入口。历史发布记录说明当时结果，不代表最新运行状态。
 
-## Interaction test.6 第 2、3 阶段（源码，未部署）
+## Interaction test.6（Character test.20）部署记录
+
+已部署 Character test.20 / Interaction test.6（含下文第 1–3 阶段），配套更新的 QQ Bot 补丁（含 `inbound.js`）。候选 Profile 离线安装并冻结锁文件，产物校验通过；Profile 配置未改动，其他运行代码未变，官方 ASAR 未变，无 Memory 迁移，未发送真实 QQ 测试消息。
+
+本次线上 Host 由 13:33 的非维护启动产生，维护状态接口不可达；经所有者授权停机，停机后离线一致性快照（338 个文件）与离线状态审计确认无未完成 Turn 或审批，再执行切换。切换后 13 个 Preset 健康、单 QQ Gateway、诊断开启。旧 Profile 保留在 `data/maintenance/interaction6-*/profile-before`。
+
+真实模型的插话判断准确率与延迟、真实 QQ 入站和手机展示仍待实机验收。
+
+## Interaction test.6 第 2、3 阶段
 
 - **渐进分泡**：长回复流式期间按与 settlement 相同的切分逐泡定稿，保留一泡给开放尾部；已定稿气泡不改写、不重发，重试和 settlement 改写只记录诊断。切分新增引导语与标题规则（修复实机截图中标题和引言被切到上一泡末尾的问题）。
 - **执行期间的新消息**：QQ 入站在 Agent 运行时把新输入交给 `intervene`，不再在入口层扣到整轮结束；插件用原生 `llm` 判断 revise/priority/supplement/append，只调用原生 cancel/steer/followup，工具与审批不被 cancel，超时或失败按排队处理。入站不再等待整轮结束，改由会话级 typing 保活维持“正在输入”。
 
 验证：Character 单元 197/197（第 2 阶段新增 8 项，第 3 阶段新增 11 项）、审计 33/33；QQTK 轻量 37/37（含入站与判断诊断枚举）及补丁重建校验；实际 rc.3 Host 16 项，新增判断为 priority 时原生 cancel 并立即回答新输入、判断为 append 时原回复完整送达后再回答。Provider、判断器与 Sender 为合成替身；真实模型的判断准确率与延迟、真实 QQ 入站（`handleInbound` 只有单元覆盖）与手机展示均未验证。QQTK 的 SDK 隔离审计需要专用夹具目录，本轮未运行（SDK 补丁未改）。
 
-## Interaction test.6 第 1 阶段（源码，未部署）
+## Interaction test.6 第 1 阶段
 
 回复归属与 Worker 续轮。修复 Worker 完成结果被当作后台输出整轮丢弃（实机 Turn 7 确认）；回复上下文按输入划分（编号、预算、`input` 归属），修复跨 Turn 尾泡编号串号和同 Turn 多输入挤占预算；QQTK 按输入 ID 选择回复目标、委托 Interaction 判断非用户来源，并为主动回退失败、抑制来源和不确定流式分段增加脱敏诊断。插话控制（第 3 阶段）与渐进分泡（第 2 阶段）尚未实现。
 
