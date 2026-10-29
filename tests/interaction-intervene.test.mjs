@@ -145,3 +145,13 @@ test('plugin judge uses the native route without Session attribution and parses 
  reply='说不清';assert.equal(await judge(),'append');
  reply='tool';await assert.rejects(judge(),/tool/);
 });
+
+test('judged interjections trace how long the judgement took; explicit ones carry no timing',async()=>{
+ const pending=deferred(),f=fixture(()=>pending.promise);f.start();f.chunk('旧回答。');
+ f.p.intervene(f.msg('q2','先说说晚饭'));await f.advance(700);pending.resolve('priority');await f.advance(0);
+ const judged=f.traces.find(([e])=>e==='intervene')[1];assert.equal(judged.why,'judge');assert.equal(judged.elapsedMs,700);await f.p.dispose();
+ const g=fixture(null);g.start();g.p.revise(g.msg('q3','不对，改成三句话'));const explicit=g.traces.find(([e])=>e==='intervene')[1];
+ assert.equal(explicit.why,'explicit');assert.equal('elapsedMs' in explicit,false);await g.p.dispose();
+ const h=fixture(()=>new Promise(()=>{}));h.start();h.p.intervene(h.msg('q4','随便问问'));await h.advance(2500);
+ const timeout=h.traces.find(([e])=>e==='intervene')[1];assert.equal(timeout.why,'timeout');assert.equal(timeout.elapsedMs,2500);await h.p.dispose();
+});

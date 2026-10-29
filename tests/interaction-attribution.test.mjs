@@ -96,3 +96,10 @@ test('hang-on status carries its input and whether it was drafted',async()=>{
  const status=f.sent.find(([,m])=>m.kind==='status');assert(status);assert.equal(status[1].input,'q1');assert.equal(status[1].dynamic,false);
  await f.p.dispose();
 });
+
+test('a late receipt is traced against the reply that sent it, not the current one',async()=>{
+ const f=fixture({hold:true});f.begin('q1');f.reply('第一条回复的完整内容，稍后才有回执。');await Promise.resolve();
+ f.step();f.user('q2');assert.equal(f.p.reply,2);f.reply('第二条回复。');f.release();await f.p.idle();
+ const confirmed=f.traces.filter(([e])=>e==='delivery-confirmed').map(([,x])=>x.reply);
+ assert.equal(confirmed[0],1,'first receipt belongs to reply 1');assert(confirmed.includes(2));
+});

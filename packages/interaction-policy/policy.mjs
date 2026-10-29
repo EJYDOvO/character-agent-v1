@@ -195,7 +195,7 @@ export class Interaction {
   // native UserMessage id; platforms map it to their own reply target.
   beginReply(input){this.reply=(this.reply??0)+1;this.bubbles=0;this.replyCtx={turn:this.turn,reply:this.reply,input,seq:0};if(this.message&&!this.message.full&&!this.message.stream)this.message.context=this.replyCtx;}
   // Only assistant output confirms the natural reply; a status receipt never does.
-  metadata(token=this.token,context=this.replyCtx,kind='assistant'){const c=context??{turn:this.turn,reply:this.reply};c.seq=(c.seq??0)+1;return {turn:c.turn,reply:c.reply,...(c.input===undefined?{}:{input:c.input}),kind,bubble:c.seq,onDelivered:()=>{if(kind!=='status'&&this.token===token&&!token.cancelled){this.delivered=true;this.stopDraft();this.trace('delivery-confirmed');}}};}
+  metadata(token=this.token,context=this.replyCtx,kind='assistant'){const c=context??{turn:this.turn,reply:this.reply};c.seq=(c.seq??0)+1;return {turn:c.turn,reply:c.reply,...(c.input===undefined?{}:{input:c.input}),kind,bubble:c.seq,onDelivered:()=>{if(kind!=='status'&&this.token===token&&!token.cancelled){this.delivered=true;this.stopDraft();this.trace('delivery-confirmed',{turn:c.turn,reply:c.reply});}}};}
   newMessage(){return {full:'',pending:'',transport:this.transport,token:this.token,context:this.replyCtx,stream:null,updated:'',failed:false,finished:false};}
   text(delta){
     if(!this.active||this.closed||this.background||typeof delta!=='string'||!delta)return;
@@ -369,17 +369,17 @@ export class Interaction {
     return 'judging';
   }
   openIntervention(){
-    const pending={messages:[],hold:{}};pending.hold.promise=new Promise(resolve=>pending.hold.release=resolve);this.hold=pending.hold;
+    const pending={messages:[],hold:{},began:this.clock.now()};pending.hold.promise=new Promise(resolve=>pending.hold.release=resolve);this.hold=pending.hold;
     pending.timer=this.clock.set(()=>this.resolveIntervention(pending,'append','timeout'),JUDGE_MS);return pending;
   }
   resolveIntervention(pending,decision,why){
     if(this.intervention!==pending)return;
     this.intervention=null;this.clock.clear(pending.timer);pending.control?.abort();
-    try{return this.act(decision,pending.messages,why);}finally{if(this.hold===pending.hold)this.hold=null;pending.hold.release();}
+    try{return this.act(decision,pending.messages,why,this.clock.now()-pending.began);}finally{if(this.hold===pending.hold)this.hold=null;pending.hold.release();}
   }
   phase(){return this.transport?.waitingForUser?.()?'waiting-user':this.tools.size||this.toolSeen?'tool':'text';}
-  act(decision,messages,why){
-    const phase=this.phase();this.trace('intervene',{decision,phase,why});
+  act(decision,messages,why,elapsedMs){
+    const phase=this.phase();this.trace('intervene',{decision,phase,why,...(elapsedMs===undefined?{}:{elapsedMs})});
     if(this.agent.status!=='running'||decision==='append'){for(const m of messages)this.agent.followup(m);return 'queued';}
     if(decision==='supplement'){for(const m of messages)this.agent.steer(m);return 'steered';}
     if(!this.active||phase!=='text'){

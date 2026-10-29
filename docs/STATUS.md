@@ -2,6 +2,18 @@
 
 本页是版本与验收状态的统一入口。历史发布记录说明当时结果，不代表最新运行状态。
 
+## test.23 / Interaction test.8（源码，未部署）
+
+针对 test.22 实机审计的修复；当前实例仍运行 test.22 / Interaction test.7。
+
+- **Worker 工具范围（安全）**：内置 Worker Preset 增加 `worker-scope.mjs`，在 Preset 自身组合内用原生 `ctx.tools.restrict({deny})` 屏蔽只读搜索以外的全部 Host 全局工具（Browser MCP 含 `run_code_unsafe`、`long_task_*`、`qqbot_send_file`、`working_directory` 等），并随 `tools/change` 刷新；刷新前由原生 `ctx.tools.guard()` 拒绝执行。Preset 自带工具、Root 与原生全局权限不变，未给 Worker 增加文件/终端/网络权限。详见 [Worker](WORKERS.md)。
+- **委派可靠性**：Root 策略说明 Worker 无文件工具（Root 先读材料并附来源）、`subagent` 返回子 Agent ID 而非 job、结果经 settlement 自动送达；blocked/needs_input 时如实说明，不把推测当结论，不复述内部工具细节；查看目录用 glob 或限定深度，不把递归全量列表放进对话。
+- **Interaction test.8**：闲聊不再逐句碎泡（只在空行处分段）；等待提示不占正文气泡预算；尾泡流式时完整预览；动态等待提示于 4 秒起草并参考请求节选、避免重复；回复策略补充对问候/表情的轻松解读。详见 [Interaction Policy](INTERACTION-POLICY.md)。
+- **诊断**：`delivery-confirmed` 按发出该气泡的回复归属；`intervene` 带判断耗时 `elapsedMs`；`hang-on`/`hang-on-draft` 带 `draft` 结局；QQTK 记录器同步放行这些枚举/数字字段及 `superseded`。
+- **测试**：Character 单元 215、安全审计 33；QQTK 轻量 55、审批（含新增 5 分钟超时）6；真实 rc.3：Worker 两阶段（十个 Preset，Spawn 前后注册的全局工具及 `long_task_create` 的模型调用均未执行，WorkerResult 以 settlement 回到 Root，冷恢复与整机重启）、Interaction 17 项、Inspector Core-only/Extras/模块、Lifecycle 两阶段均通过。模型、判断器与 Sender 为合成替身。`--workers --manager` 探针在 55 秒加载期限内未完成，本轮未作为通过项。
+
+未解决与待决：原生 pwsh 输出没有按 Preset 的内联上限，只能靠 Root 策略避免递归列表；QQ Session 工作目录由生产 Profile 指向 `default-workspace`，其中有旧版 `character-agent-v1` 副本（test.2），未改动；私有 Persona 的“每次以嗯开头”和固定等待文案只给出建议文案，未覆盖；流式撤回残留待手机确认；测试残留文件保留。
+
 ## test.22 / Conversation Manager test.2（已授权部署）
 
 隔离复现 test.21 遗留问题后，修复普通 ENOENT 被误判为缺失、Preset 查询吞异常、关闭重复释放/未等待旧句柄和清理异常中断收尾。Identity 保留现有包装方式，只增加 rebuild 前后 epoch 校验及卸载时的包装归属检查；旧操作完成不能授予新 epoch 权限。不修改 Memory Schema、Persona、Owner、Interaction 或 Worker 授权，也不增加服务。
