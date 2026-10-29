@@ -1,6 +1,6 @@
 {
   "name": "dsh-interaction-policy",
-  "version": "0.1.0-test.5",
+  "version": "0.1.0-test.6",
   "type": "module",
   "main": "index.mjs",
   "files": ["*.mjs", "README.md"],

@@ -39,11 +39,41 @@ Hang on 仅适用于已登记的交互入站、Agent running、无审批/问答�
 
 动态生成依赖 rc.3 `systemPrompt` 的作用域层读取 Persona 段落（内部 `layers.merge`）；读取失败、路由不可用、模型未完整结束或请求工具时都退回固定文案。等待提示仍是瞬态展示，不能证明任务进展。
 
+### 回复归属与 Worker 续轮（test.6，源码，未部署）
+
+- **按输入划分回复**：每条已登记的输入（Turn 首条，或经原生 steer 在同一 Turn 内进入的输入）开启独立的回复上下文，拥有自己的 `reply` 序号、气泡编号和 `maxBubbles` 预算。上一轮迟发的尾泡保留原上下文编号，不再借用下一轮计数。
+- **平台无关的归属字段**：发送元数据携带 `input`（原生 UserMessage ID）与 `reply`。Interaction 不保存任何平台的回复目标或额度；QQ 等平台自行把 `input` 映射到回复目标。
+- **Worker 续轮**：已登记回复中由 `subagent` 产生的子 Session（`subagent/catalog.childId`）完成时，原生 `subagent-settled` 通知被视为该回复的续轮，沿用原 `input`，不受 300 秒入站登记时效限制；无论通知以 followup 开启新 Turn 还是 steer 进入运行中的 Turn。后台 Turn 里产生的子 Session、未知或伪造的 `senderSessionId`、Schedule/Web/未知来源仍被抑制。平台可调用 `admitsSource(message)` 询问。
+- **诊断**：流式回执不确定的分段仍不盲目重发，额外记录 `stream-withheld`；等待提示的发送元数据带 `dynamic`。
+
+### 渐进分泡与切分（test.6，源码，未部署）
+
+- 长回复（超过闲聊长度并超出 `bubbleTargetChars` 的 4/3 软上限）在流式期间就把已完成的气泡定稿发送，最后一泡保持流式直到原生 settlement。定稿点与整段 settlement 的切分**完全一致**：只在整个软窗口都已到达后，按同一规则选出第一段；下一行尚未写完、或下一行延续列表/表格/代码块时继续等待。
+- 至少为开放的尾部保留一个气泡名额（等待提示占用的名额也计入）。已定稿的气泡永不改写或重发：settlement 改写已定稿内容时只记录 `settlement-diverged`，不再补发；同一回复重试时，若新尝试以已定稿内容开头则跳过这部分，否则记录 `retry-diverged`。
+- 切分新增两条规则，同时作用于流式定稿和 settlement：气泡不以“：”“如下”“例如”“以下”这类引导语结尾；标题（Markdown 标题、短编号标题、整行加粗）连同其后 80 字以内的引言不会被切到气泡末尾，而是与正文同泡。新气泡可以从下一个标题开始。
+- 不新增配置项；闲聊长度内的回复仍在 settlement 后统一切分。
+
+### 执行期间的新消息（test.6，源码，未部署）
+
+可信入口在 Agent 运行期间收到的新输入交给 `intervene(message)`，只使用原生 cancel / steer / followup：
+
+| 判断 | 纯文本生成中 | 工具执行或等待审批/问答 |
+|---|---|---|
+| revise（更正、否定旧要求） | 撤下未发送输出，cancel（保留 Inbox）后 followup | 撤下未发送输出，steer，不中断工具 |
+| priority（明确要求先处理新话题） | cancel 后 followup；被中止的部分留在历史中，模型可稍后接续 | steer，不中断工具，旧输出保留 |
+| supplement（补充当前任务） | steer，在下一个 step 边界纳入 | steer |
+| append（独立问题或闲聊） | followup，排到下一 Turn | followup |
+
+- 判断由插件入口注入的回调完成：与等待提示相同，用原生 `ctx.llm`、同一模型路由（`hangon-model.json` 或继承），不带 `sessionId`，不写历史；只输出四个标签之一，不生成回复内容。输入包括当前回复所属的用户原文（截断）、新消息和当前阶段。
+- 判断期间暂停发送当前尚未发出的输出，避免更正被过期正文抢先；等待以首条新输入起 2.5 秒为上限。超时、出错、标签无效一律按 append 处理。判断窗口内到达的多条输入合并判断，共用一个结果。
+- 显式“更正：”仍直接按 revise 处理，不经判断；/stop 丢弃仍在判断中的输入并执行原生取消。Agent 空闲时新输入直接 followup。
+- 已发送的消息不撤回；“撤下”只作用于发送队列中尚未执行的部分。工具阶段的 revise 会让旧回答完整进入历史，而用户只看到一部分，这属于明确的抑制，不另行注入说明。
+
 ## 权限、取消与维护
 
 QQ 必须先登记可信 native UserMessage。runtime-context、skill-catalog、time-context、agent-instructions 仅是上下文，不消费入站登记，也不能解除后台抑制。Schedule、Web、未知来源不得借 QQ 绑定串台。
 
-/stop 先抑制未发送显示，再执行既有原生取消。明确“更正：”由可信入口调用 revise：纯文本阶段 cancel + followup；工具已请求或执行阶段不确定时只 steer，不承诺撤销副作用。移除插件会取消未完成的显示队列。
+/stop 先抑制未发送显示，再执行既有原生取消。明确“更正：”由可信入口调用 revise（即显式的 intervene）：纯文本阶段 cancel + followup；工具已请求或执行阶段不确定时只 steer，不承诺撤销副作用。普通新消息的处理见上文“执行期间的新消息”。移除插件会取消未完成的显示队列。
 
 QQ 配置 deliveryDiagnostics:true 可记录本机限量脱敏的事件→气泡→SDK 请求/回执关系，不记录正文、原始身份或凭据，详见 [QQTK](https://github.com/EJYDOvO/harness-qq-toolkit-public/blob/main/docs/INTERACTION.md)。真实完整重复气泡尚待复现；新增记录不等于已修复根因。
 

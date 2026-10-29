@@ -138,7 +138,8 @@ test('tool results over 240 characters split at useful boundaries without losing
  for(const size of [1,7,80,text.length]){
   const f=fixture();f.start();f.event('tool/call',{callId:'read'});f.event('tool/result',{message:{source:{callId:'read'}}});
   for(let i=0;i<text.length;i+=size){f.chunk(text.slice(i,i+size));await f.advance(10);}
-  assert(f.bubbles.length<=1);assert(f.bubbles.every(b=>!b.closed),'uncommitted remainder must not become completed bubbles');
+  // Long replies may commit bubbles while streaming; committed text is always a final prefix.
+  assert(f.bubbles.length<=3);assert(text.startsWith(f.bubbles.filter(b=>b.closed).map(b=>b.text).join('')));assert(f.bubbles.filter(b=>!b.closed).length<=1);
   f.message(text);await f.p.idle();const result=f.bubbles.map(b=>b.text);assert(result.length>1&&result.length<=3);assert.equal(result.join(''),text);assert(f.bubbles.every(b=>b.closed));partitions.push(result);await f.p.dispose();
  }
  for(const parts of partitions)assert.deepEqual(parts,partitions[0]);
