@@ -64,7 +64,7 @@ QQTK 使用独立仓库的版本化补丁和产物哈希核验，当前部署范
 
 test.10 提供独立 `dsh-interaction-policy`。普通 Agent 在自己的 Preset 配置；Character 可用 `DSH_CHARACTER_INTERACTION=on/off` 或私有构建配置选择。默认不增加交互条目，不改变运行中的 Agent。等待文案、阈值、流式节流与分段上限，以及安全修正和关闭方式见 [Interaction Policy](INTERACTION-POLICY.md)。
 
-Interaction test.5 默认 `hangOnMs:8000`、`hangOnDraftMs:5500`：5.5 秒起并发生成一句 Persona 等待提示，8 秒未就绪则用固定文案，没有单独开关。Character 构建把 `hangOnModelFile` 设为私有数据目录下的 `hangon-model.json`；文件默认不存在，即继承当前 Agent 的 Provider/Model。需要单独换模型时只写 `{"provider":"…","model":"…"}`，下次生成即生效，删除文件即恢复继承。QQ 仅以接口回执确认自然回复已发出，不以模型生成文字或 SDK 入缓冲为准。`chatMaxChars:240` 只区分短闲聊与长结果策略，不再禁止长结果/工具任务分气泡；`bubbleTargetChars:300` 是长结果软目标，`maxBubbles:3` 由进度、状态和正文共享，余文不截断。QQ 配置 `deliveryDiagnostics:true` 开启本地脱敏关联日志，关闭后不再记录；日志不进入 Session/Memory，位置与保留量见 QQTK 文档。
+Interaction 默认 `hangOnMs:8000`、`hangOnDraftMs:4000`（test.8 起；test.5–7 为 5500）：4 秒起并发生成一句 Persona 等待提示，8 秒未就绪则用固定文案，没有单独开关。Character 构建把 `hangOnModelFile` 设为私有数据目录下的 `hangon-model.json`；文件默认不存在，即继承当前 Agent 的 Provider/Model。需要单独换模型时只写 `{"provider":"…","model":"…"}`，下次生成即生效，删除文件即恢复继承。QQ 仅以接口回执确认自然回复已发出，不以模型生成文字或 SDK 入缓冲为准。`chatMaxChars:240` 只区分短闲聊与长结果策略，不再禁止长结果/工具任务分气泡；`bubbleTargetChars:300` 是长结果软目标，`maxBubbles:3` 由进度、状态和正文共享，余文不截断。QQ 配置 `deliveryDiagnostics:true` 开启本地脱敏关联日志，关闭后不再记录；日志不进入 Session/Memory，位置与保留量见 QQTK 文档。
 
 ## test.13 可选 Session 生命周期与长期任务（实例启用状态见 STATUS）
 

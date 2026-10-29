@@ -27,10 +27,10 @@ function fixture(config={},drafter){
 }
 const deferred=()=>{let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});return {promise,resolve,reject};};
 
-test('draft starts at about 5.5s and a finished candidate is sent once at 8s',async()=>{
- const f=fixture();f.start();await f.advance(5499);assert.equal(f.drafts.length,0);
+test('draft starts at half the threshold and a finished candidate is sent once at 8s',async()=>{
+ const f=fixture();f.start();await f.advance(3999);assert.equal(f.drafts.length,0);
  await f.advance(1);assert.equal(f.drafts.length,1);assert.equal(f.drafts[0].state,'agent');assert(f.drafts[0].signal instanceof AbortSignal);
- await f.advance(2499);assert.equal(f.status().length,0);
+ await f.advance(3999);assert.equal(f.status().length,0);
  await f.advance(1);assert.deepEqual(f.status().map(s=>s[1]),['嗯，我还在弄，稍等我一下。']);assert.equal(f.status()[0][2].transient,true);
  await f.advance(60000);assert.equal(f.status().length,1);assert.equal(f.drafts.length,1);await f.p.dispose();
 });
@@ -88,15 +88,15 @@ test('drafting runs concurrently and never blocks the main stream',async()=>{
  f.p.draft();assert.equal(f.drafts.length,1);await f.advance(2400);assert.equal(f.status().length,1);pending.resolve('无用');await f.p.dispose();
 });
 
-test('hang-on reserves its bubble before settlement so maxBubbles holds',async()=>{
+test('hang-on is a status line outside the content budget; content still respects maxBubbles',async()=>{
  const f=fixture({maxBubbles:3});delete f.transport.openStream;const gate=deferred();let first=true;
  f.transport.sendText=async(text,meta)=>{f.sent.push(['text',text,meta]);if(first){first=false;await gate.promise;}meta?.onDelivered?.();};
  f.start();f.message('我先检查一下。');await f.settle(false);await f.advance(8000,false);
  const text='第一份完整结果。'.repeat(40)+'\n\n'+'第二份完整结果。'.repeat(40)+'\n\n'+'第三份完整结果。'.repeat(40);
  f.message(text);gate.resolve();await f.p.idle();
- assert(f.sent.length<=3,`sent ${f.sent.length}`);assert.equal(f.sent.filter(s=>s[2]?.kind!=='status').map(s=>s[1]).join(''),'我先检查一下。'+text);await f.p.dispose();
+ const content=f.sent.filter(s=>s[2]?.kind!=='status');assert(content.length<=3,`sent ${content.length}`);assert(f.status().length<=1);assert.equal(content.map(s=>s[1]).join(''),'我先检查一下。'+text);await f.p.dispose();
  // Settled text already claimed the whole budget and awaits receipts: no draft, no status.
- const g=fixture({maxBubbles:2});g.start();g.message('嗯，我先看一下。马上就好。');await g.settle();assert.equal(g.p.bubbles,2);await g.advance(8000);assert.equal(g.status().length,0);assert.equal(g.drafts.length,0);await g.p.dispose();
+ const g=fixture({maxBubbles:1});g.start();g.message('嗯，我先看一下。马上就好。');await g.settle();assert.equal(g.p.bubbles,1);await g.advance(8000);assert.equal(g.status().length,0);assert.equal(g.drafts.length,0);await g.p.dispose();
 });
 
 test('send order: status queued at 8s precedes later text and follows earlier queued text',async()=>{
@@ -111,7 +111,7 @@ test('send order: status queued at 8s precedes later text and follows earlier qu
 
 test('without a drafter the fixed hang-on behaviour is unchanged',async()=>{
  const f=fixture({},null);f.start();await f.advance(8000);assert.deepEqual(f.status().map(s=>s[1]),['还在处理中，稍等一下。']);await f.p.dispose();
- assert.equal(options().hangOnDraftMs,5500);assert.equal(options({hangOnMs:30}).hangOnDraftMs,21);
+ assert.equal(options().hangOnDraftMs,4000);assert.equal(options({hangOnMs:30}).hangOnDraftMs,15);
  for(const bad of [{hangOnDraftMs:8000},{hangOnDraftMs:-1},{hangOnModelFile:'relative/hangon-model.json'},{hangOnModelFile:3}])assert.throws(()=>options(bad));
  assert.equal(options({hangOnModelFile:'C:/data/hangon-model.json'}).hangOnModelFile,'C:/data/hangon-model.json');
 });
@@ -154,6 +154,28 @@ test('hangon-model.json overrides only provider and model; missing or invalid in
  }finally{rmSync(dir,{recursive:true,force:true});}
 });
 
+test('hang-on diagnostics distinguish ready, late, failed, rejected and no draft',async()=>{
+ const outcome=async(drafter,draftMs)=>{
+  const f=fixture({},drafter),traces=[];f.transport.trace=(e,fields)=>traces.push([e,fields]);f.start();await f.advance(draftMs??8000);await f.advance(8000);await f.p.dispose();
+  return {sent:traces.find(t=>t[0]==='hang-on')?.[1],drafts:traces.filter(t=>t[0]==='hang-on-draft').map(t=>t[1])};
+ };
+ const ready=await outcome();assert.equal(ready.sent.draft,'ready');assert.equal(ready.sent.dynamic,true);assert.deepEqual(ready.drafts.map(d=>d.draft),['ready']);assert.equal(typeof ready.drafts[0].elapsedMs,'number');
+ const gate=deferred();const late=await outcome(()=>gate.promise,8000);assert.equal(late.sent.draft,'late');assert.equal(late.sent.dynamic,false);
+ const failed=await outcome(()=>Promise.reject(Error('offline')));assert.equal(failed.sent.draft,'failed');assert.deepEqual(failed.drafts.map(d=>d.draft),['failed']);
+ const rejected=await outcome(()=>'预计 3 分钟完成');assert.equal(rejected.sent.draft,'rejected');
+ const none=await outcome(null);assert.equal(none.sent.draft,'none');assert.deepEqual(none.drafts,[]);
+});
+test('the draft sees a request excerpt and recent lines, never the full history',async()=>{
+ const f=plugin();await f.policy.drafter({agent:f.agent,state:'agent',request:'很长的前文'.repeat(100)+'帮我查一下明天的天气',recent:['嗯，等我一下。'],signal:new AbortController().signal});
+ const text=f.calls.find(c=>c[0]==='stream')[1].messages[0].content[0].text;
+ assert.match(text,/用户请求（节选）：.*明天的天气/);assert.match(text,/最近用过的提示：嗯，等我一下。/);assert(text.length<300);
+ const g=plugin();await g.draft();assert.doesNotMatch(g.calls.find(c=>c[0]==='stream')[1].messages[0].content[0].text,/用户请求|最近用过/);
+});
+test('the policy passes the current request excerpt and remembers sent drafted lines',async()=>{
+ const f=fixture();f.start();f.event('user/message',{message:{id:'u1',content:[{type:'text',text:'帮我整理一下项目结构'}],source:{kind:'user'}}});
+ await f.advance(8000);assert.equal(f.drafts[0].request,'帮我整理一下项目结构');assert.deepEqual(f.drafts[0].recent,[]);
+ f.event('turn/end',{reason:{kind:'completed'}});f.start();await f.advance(8000);assert.deepEqual(f.drafts[1].recent,['嗯，我还在弄，稍等我一下。']);await f.p.dispose();
+});
 test('incomplete, tool-calling or aborted model streams are rejected',async()=>{
  await assert.rejects(plugin({},{chunks:[{type:'text-delta',index:0,text:'稍'},{type:'finish',reason:{kind:'max-tokens'}}]}).draft(),/incomplete/);
  await assert.rejects(plugin({},{chunks:[{type:'tool-call-delta',index:0,id:'x',argumentsDelta:''}]}).draft(),/tool/);

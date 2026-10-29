@@ -16,10 +16,15 @@ function fixture(config={}){
  const advance=async ms=>{time+=ms;for(const [key,t]of [...timers])if(t.at<=time){timers.delete(key);t.fn();}await p.idle();};
  return {p,agent,transport,event,start,chunk,message,advance,sent,actions,bubbles,timers};
 }
-test('short natural chat splits streaming bubbles without truncation or duplicate settlement',async()=>{
+test('short natural chat stays one streaming bubble without truncation or duplicate settlement',async()=>{
  const f=fixture();f.start();f.chunk('嗯，今天还不错。');await f.advance(11);f.chunk('咖啡机终于修好了。');f.message('嗯，今天还不错。咖啡机终于修好了。');f.event('turn/end',{reason:{kind:'completed'}});await f.p.idle();
- assert.deepEqual(f.bubbles.map(b=>b.text),['嗯，今天还不错。','咖啡机终于修好了。']);assert(f.bubbles.every(b=>b.closed));assert.equal(f.sent.filter(s=>s[0]==='text').length,0);
- assert.deepEqual(f.sent.filter(s=>['open','complete'].includes(s[0])).map(s=>s[0]),['open','complete','open','complete']);
+ assert.deepEqual(f.bubbles.map(b=>b.text),['嗯，今天还不错。咖啡机终于修好了。']);assert(f.bubbles.every(b=>b.closed));assert.equal(f.sent.filter(s=>s[0]==='text').length,0);
+ assert.deepEqual(f.sent.filter(s=>['open','complete'].includes(s[0])).map(s=>s[0]),['open','complete']);
+});
+test('a chat reply splits only at a paragraph break between substantial parts',()=>{
+ const config=options({});
+ for(const text of ['嗯，明白。有什么正事，快说。','嗯。\n\n这件事我明天再看看吧。','嗯，你好。今天的档案整理得差不多了。咖啡机又坏了。'])assert.deepEqual(semanticParts(text,config,3),[text]);
+ const two='嗯，先去吃饭，回来再说这件事。\n\n然后再处理剩下的几个问题。';assert.deepEqual(semanticParts(two,config,3),['嗯，先去吃饭，回来再说这件事。\n\n','然后再处理剩下的几个问题。']);
 });
 test('all chunk partitionings preserve short Chinese text and closed quote boundary',async()=>{
  const text='嗯，我记得这件事。「明天再说！」现在先喝咖啡。';
@@ -58,11 +63,12 @@ test('stream unavailable falls back once; ambiguous update failure never duplica
 });
 test('Markdown boundaries conservative; validation and disabled mode',async()=>{
  for(const t of ['```js\n内容。还有。\n```','[链接](https://example.com)。后文','- 列表。下一项','| 表格。内容 |'])assert.equal(boundary(t),0);
- assert.throws(()=>options({maxBubbles:50}));assert(replyPolicy.includes('完整 Assistant'));
+ assert.throws(()=>options({maxBubbles:50}));assert(replyPolicy.includes('完整 Assistant'));for(const t of ['简短问候','不据此推断','可以调侃','不要向用户复述内部工具名'])assert(replyPolicy.includes(t),t);
  const f=fixture({enabled:false});assert.equal(f.p.bind(f.transport),false);f.start();f.chunk('禁止发送');await f.advance(500);assert.equal(f.sent.length,0);await f.p.dispose();
 });
 test('static transport segments naturally, no additional model or storage needed',async()=>{
- const f=fixture();delete f.transport.openStream;f.start();f.chunk('嗯，先去吃饭。然后再处理。');f.message('嗯，先去吃饭。然后再处理。');await f.p.idle();assert.deepEqual(f.sent.map(s=>s[1]),['嗯，先去吃饭。','然后再处理。']);await f.p.dispose();
+ const f=fixture();delete f.transport.openStream;f.start();f.chunk('嗯，先去吃饭。然后再处理。');f.message('嗯，先去吃饭。然后再处理。');await f.p.idle();assert.deepEqual(f.sent.map(s=>s[1]),['嗯，先去吃饭。然后再处理。']);await f.p.dispose();
+ const g=fixture();delete g.transport.openStream;g.start();const text='嗯，先去吃饭，回来再说这件事。\n\n然后再处理剩下的几个问题。';g.chunk(text);g.message(text);await g.p.idle();assert.equal(g.sent.length,2);assert.equal(g.sent.map(s=>s[1]).join(''),text);await g.p.dispose();
 });
 test('pending approval/question suppresses hang-on and explicit stop suppresses tool-drain status',async()=>{
  const f=fixture();f.transport.waitingForUser=()=>true;f.start();await f.advance(100);assert.equal(f.sent.length,0);f.transport.waitingForUser=()=>false;f.p.stopOutput();await f.advance(100);assert.equal(f.sent.length,0);await f.p.dispose();
@@ -70,7 +76,8 @@ test('pending approval/question suppresses hang-on and explicit stop suppresses 
 test('slow sender cannot reorder bubbles; cancel discards queued segments',async()=>{
  const f=fixture();let unblock;const wait=new Promise(r=>unblock=r),order=[];
  f.transport.openStream=()=>({async update(text){order.push(text);await wait;},async complete(){order.push('closed');},cancel(){order.push('closed');}});
- f.start();f.chunk('第一段完整内容。第二段完整内容。');f.message('第一段完整内容。第二段完整内容。');await Promise.resolve();f.p.stopOutput();unblock();await f.p.idle();assert.deepEqual(order,['第一段完整内容。','closed']);await f.p.dispose();
+ const text='第一段完整内容，写得足够长。\n\n第二段完整内容，同样足够长。';
+ f.start();f.chunk(text);f.message(text);await Promise.resolve();f.p.stopOutput();unblock();await f.p.idle();assert.deepEqual(order,['第一段完整内容，写得足够长。\n\n','closed']);await f.p.dispose();
 });
 test('canonical final supplies a missing stream suffix and output target remains bound to its message',async()=>{
  const f=fixture();f.start();f.chunk('已有前缀');const other=[];f.p.bind({key:f.agent,sendText:async t=>other.push(t)});f.message('已有前缀，还有尾巴');await f.p.idle();assert.equal(f.bubbles.map(b=>b.text).join(''),'已有前缀，还有尾巴');assert.equal(other.length,0);await f.p.dispose();
@@ -153,8 +160,9 @@ test('long Markdown blocks, inline links, quotes, tables and lists are atomic',(
  }
 });
 
-test('progress and hang-on share the turn bubble budget; final remainder is never truncated',async()=>{
- const f=fixture();delete f.transport.openStream;f.start();f.p.hangOn();await f.p.idle();f.message('先检查一下。');
+test('hang-on stays outside the content bubble budget; final remainder is never truncated',async()=>{
+ const f=fixture();delete f.transport.openStream;f.start();f.p.hangOn();await f.p.idle();assert.equal(f.p.bubbles,0);f.message('先检查一下。');
  const text='第一份完整结果。'.repeat(40)+'\n\n'+'第二份完整结果。'.repeat(40);f.message(text);await f.p.idle();
- assert.equal(f.sent.length,3);assert.equal(f.sent[2][1],text);await f.p.dispose();
+ const content=f.sent.filter(s=>s[2]?.kind!=='status');assert.equal(f.sent.length-content.length,1);assert.equal(content.length,3);
+ assert.equal(content.map(s=>s[1]).join(''),'先检查一下。'+text);await f.p.dispose();
 });

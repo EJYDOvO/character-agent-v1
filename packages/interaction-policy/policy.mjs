@@ -1,10 +1,10 @@
 // Process-local presentation only: never appends Session events. The optional
 // hang-on drafter is an injected callback; this module never calls a model.
-export const replyPolicy = `Interaction Policy V1：沿用既定 Persona 的语言、语气与边界，自然交流，不因处理任务切换成另一人格。闲聊简洁，可以用自然段分开完整语义；不要为分气泡生造内容。复杂任务保留完整 Assistant 能力、必要细节、代码和依据，不受闲聊字数目标限制。需要工具或等待时，可先给一句符合 Persona 的简短进度，再执行并给完整结果；已有进度不要重复说稍等。只描述实际执行状态，不把计划或工具返回等同于成功。用户明确更正时采用新要求；不要自行假设已取消或撤销工具副作用。`;
+export const replyPolicy = `Interaction Policy V1：沿用既定 Persona 的语言、语气与边界，自然交流，不因处理任务切换成另一人格。闲聊简洁，可以用自然段分开完整语义；不要为分气泡生造内容。简短问候、语气词或表情（如“早”“-.-”“XD”）按轻松语气自然接话，可以调侃，但不据此推断对方不满、着急或催促，也不分析对方情绪。不要向用户复述内部工具名、ID、参数错误或重试过程，除非它影响结果。复杂任务保留完整 Assistant 能力、必要细节、代码和依据，不受闲聊字数目标限制。需要工具或等待时，可先给一句符合 Persona 的简短进度，再执行并给完整结果；已有进度不要重复说稍等。只描述实际执行状态，不把计划或工具返回等同于成功。用户明确更正时采用新要求；不要自行假设已取消或撤销工具副作用。`;
 
 export function options(input={}) {
   const hangOnMs=input.hangOnMs??8000;
-  const result={enabled:input.enabled!==false,hangOnMs,hangOnDraftMs:input.hangOnDraftMs??(Number.isInteger(hangOnMs)?Math.round(hangOnMs*11/16):0),throttleMs:input.throttleMs??180,maxBubbles:input.maxBubbles??3,chatMaxChars:input.chatMaxChars??240,bubbleTargetChars:input.bubbleTargetChars??300,hangOnText:input.hangOnText??'还在处理中，稍等一下。'};
+  const result={enabled:input.enabled!==false,hangOnMs,hangOnDraftMs:input.hangOnDraftMs??(Number.isInteger(hangOnMs)?Math.round(hangOnMs/2):0),throttleMs:input.throttleMs??180,maxBubbles:input.maxBubbles??3,chatMaxChars:input.chatMaxChars??240,bubbleTargetChars:input.bubbleTargetChars??300,hangOnText:input.hangOnText??'还在处理中，稍等一下。'};
   for(const [key,min,max]of [['hangOnMs',10,300000],['throttleMs',0,5000],['maxBubbles',1,4],['chatMaxChars',20,1000]])if(!Number.isInteger(result[key])||result[key]<min||result[key]>max)throw Error('Invalid interaction option: '+key);
   if(!Number.isInteger(result.hangOnDraftMs)||result.hangOnDraftMs<0||result.hangOnDraftMs>=result.hangOnMs)throw Error('Invalid interaction option: hangOnDraftMs');
   if(typeof result.hangOnText!=='string'||!result.hangOnText.trim()||result.hangOnText.length>200)throw Error('Invalid hangOnText');
@@ -69,7 +69,9 @@ export function semanticParts(text,config,limit) {
   while(parts.length<limit-1){
     const remaining=candidates.filter(p=>p>start&&text.slice(start,p).trim()&&text.slice(p).trim());if(!remaining.length)break;
     let end;
-    if(text.length<=config.chatMaxChars)end=remaining[0];
+    // A chat reply stays whole; only a paragraph break between two substantial
+    // parts separates it, never a lone interjection or short sentence.
+    if(text.length<=config.chatMaxChars)end=remaining.find(p=>paragraphs.has(p)&&text.slice(start,p).trim().length>=CHAT_MIN&&text.slice(p).trim().length>=CHAT_MIN);
     else{
       const target=config.bubbleTargetChars,min=Math.floor(target/2),max=Math.ceil(target*4/3),good=remaining.filter(p=>goodCut(text,start,p));
       const near=good.filter(p=>p-start>=min&&p-start<=max),preferred=near.filter(p=>paragraphs.has(p));
@@ -95,10 +97,12 @@ export function progressiveCut(text,config){
   return (item.test(prev)&&item.test(next[1]))||(row.test(prev)&&row.test(next[1]))?0:p;
 }
 
-// Hold the tail until native settlement. The preview never extends beyond the
-// earliest possible boundary, so final segmentation cannot retract visible text.
-function preview(text){
-  const stop=text.search(/[。！？；\n]/u);return stop<0?text:text.slice(0,stop+1);
+// The preview never extends beyond the earliest point any split could cut — a
+// paragraph break, or a sentence end past half the bubble target — so final
+// segmentation cannot retract visible text.
+function preview(text,config){
+  const {points,paragraphs}=splitPoints(text),min=Math.floor(config.bubbleTargetChars/2);
+  const stop=points.find(p=>paragraphs.has(p)||p>=min);return stop===undefined?text:text.slice(0,stop);
 }
 
 // Conservative plain-text boundaries; code, lists, links and tables stay intact.
@@ -116,7 +120,7 @@ export function boundary(text) {
   return 0;
 }
 
-const JUDGE_MS=2500,DECISIONS=['revise','priority','supplement','append'];
+const JUDGE_MS=2500,DECISIONS=['revise','priority','supplement','append'],CHAT_MIN=12;
 const textOf=message=>(message?.content??[]).filter(b=>b?.type==='text').map(b=>b.text??'').join('\n');
 
 export class Interaction {
@@ -150,34 +154,39 @@ export class Interaction {
   stopDraft(){const control=this.draftControl;this.draftControl=null;control?.abort();}
   start(turn){
     if(this.active)this.invalidate();else this.clearTimers();
-    this.token={cancelled:false};this.turn=turn;this.message=null;this.active=true;this.natural=false;this.delivered=false;this.prompted=false;this.drafted=false;this.candidate=null;this.toolSeen=false;this.tools.clear();this.started=this.clock.now();this.beginReply();
+    this.token={cancelled:false};this.turn=turn;this.message=null;this.active=true;this.natural=false;this.delivered=false;this.prompted=false;this.drafted=false;this.draftState=undefined;this.candidate=null;this.toolSeen=false;this.tools.clear();this.started=this.clock.now();this.beginReply();
     if(this.transport?.requireIngress)this.background=true;
     this.suppressSettlement=false;
     if(this.drafter)this.draftTimer=this.clock.set(()=>{this.draftTimer=undefined;this.draft();},this.config.hangOnDraftMs);
     this.hangTimer=this.clock.set(()=>{this.hangTimer=undefined;this.hangOn();},this.config.hangOnMs);
   }
   // Only a natural-reply receipt suppresses hang-on; SDK buffering does not.
-  // Hang-on never exceeds the bubble budget already claimed by settled text.
+  // Hang-on is a status line outside the content bubble budget; it is skipped
+  // once settled text already claims the whole budget.
   waiting(){return this.active&&!this.closed&&!this.background&&this.agent.status==='running'&&!this.delivered&&!this.prompted&&this.bubbles<this.config.maxBubbles&&!!this.transport&&!this.transport.waitingForUser?.();}
   draft(){
     if(this.drafted||!this.drafter||!this.waiting())return;
-    const token=this.token,control=new AbortController();this.drafted=true;this.draftControl=control;
-    let pending;try{pending=Promise.resolve(this.drafter({agent:this.agent,state:this.tools.size?'tool':'agent',signal:control.signal}));}catch(error){pending=Promise.reject(error);}
+    const token=this.token,control=new AbortController(),began=this.clock.now();this.drafted=true;this.draftControl=control;this.draftState='pending';
+    // The request excerpt and recent lines keep the line situational and varied;
+    // nothing is persisted.
+    let pending;try{pending=Promise.resolve(this.drafter({agent:this.agent,state:this.tools.size?'tool':'agent',request:(this.replyCtx?.text??'').slice(-200),recent:[...(this.recentHangOns??[])],signal:control.signal}));}catch(error){pending=Promise.reject(error);}
+    const settle=draft=>{const elapsedMs=this.clock.now()-began;this.trace('hang-on-draft',{draft,elapsedMs});};
     pending.then(text=>{
-      if(this.draftControl!==control||control.signal.aborted||this.token!==token||token.cancelled)return;
+      if(this.draftControl!==control||control.signal.aborted||this.token!==token||token.cancelled){if(this.token===token&&this.prompted)settle('late');return;}
       this.draftControl=null;const line=hangOnLine(text);
-      if(line)this.candidate=line;else this.note('hang-on-draft-rejected');
-    },()=>{if(this.draftControl===control){this.draftControl=null;this.note('hang-on-draft-failed');}});
+      if(line){this.candidate=line;this.draftState='ready';settle('ready');}else{this.draftState='rejected';this.note('hang-on-draft-rejected');settle('rejected');}
+    },()=>{if(this.draftControl===control){this.draftControl=null;this.draftState='failed';this.note('hang-on-draft-failed');settle('failed');}else if(this.token===token&&this.prompted)settle('late');});
   }
   hangOn(){
     if(!this.waiting()){this.stopDraft();return;}
     const token=this.token,text=this.candidate??this.config.hangOnText,state=this.tools.size?'tool':'agent',dynamic=text!==this.config.hangOnText;
-    // Reserve the bubble synchronously so a later split sees the shared budget.
-    this.prompted=true;this.bubbles++;this.stopDraft();this.candidate=null;
-    this.trace('hang-on',{state:state==='tool'?1:0,dynamic});
+    // ready: drafted line used; late/failed/rejected/none: static fallback and why.
+    const draft=this.candidate?'ready':this.draftState==='pending'?'late':this.draftState??'none';
+    this.prompted=true;this.stopDraft();this.candidate=null;
+    if(dynamic){this.recentHangOns=[...(this.recentHangOns??[]),text].slice(-3);}
+    this.trace('hang-on',{state:state==='tool'?1:0,dynamic,draft});
     this.queue(async()=>{
       if(this.token===token&&this.active&&!this.delivered&&this.agent.status==='running'&&!this.transport.waitingForUser?.())await this.transport.sendText(text,{...this.metadata(token,undefined,'status'),transient:true,state,dynamic});
-      else if(this.token===token)this.bubbles--;
     },token);
   }
   trace(event,fields={}){try{this.transport?.trace?.(event,{turn:this.turn,reply:this.reply,...fields});}catch{}}
@@ -219,7 +228,8 @@ export class Interaction {
       m.queued=false;if(m.finished)return;
       const cut=this.config.maxBubbles-this.bubbles>1?progressiveCut(m.pending,this.config):0;
       if(cut){const head=m.pending.slice(0,cut);m.pending=m.pending.slice(cut);m.committed=(m.committed??0)+cut;this.bubbles++;await this.deliver(m,head,m.token??this.token);}
-      if(!m.finished&&m.pending.trim())await this.push(m,preview(m.pending));
+      // The last bubble of the budget is never split again: show all of it.
+      if(!m.finished&&m.pending.trim())await this.push(m,this.config.maxBubbles-this.bubbles<=1?m.pending:preview(m.pending,this.config));
     });
   }
   async push(m,text){

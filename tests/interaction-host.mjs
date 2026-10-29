@@ -68,7 +68,7 @@ export function apply(ctx,config){
    report.checks.push('Actual modified QQ outbound and middleware load with real SDK; outsider blocked without a gateway');
    const input=text=>{const message=createUserMessage({content:[{type:'text',text}],source:{kind:'user'}});manager.registerInteractionInput(record,message);return message;};
    const send=async text=>{a.followup(input(text));await a.whenIdle();await p.idle();};
-   await send('chat-case');assert.deepEqual(bubbles.map(b=>b.text),['嗯，今天还不错。','咖啡机终于修好了。']);assert(bubbles.every(b=>b.done));assert(!sent.length);
+   await send('chat-case');assert.deepEqual(bubbles.map(b=>b.text),['嗯，今天还不错。咖啡机终于修好了。']);assert(bubbles.every(b=>b.done));assert(!sent.length);
    assert(Array.from({length:a.session.seq},(_,i)=>a.session.eventAt(i)).some(e=>e?.type==='user/message'&&(e.data?.message??e.data)?.source?.kind==='time-context'),'Native time-context projection must actually run');
    report.checks.push('Official time-context projection preserves trusted QQ admission and reply delivery');
    report.checks.push('Actual native assistant-stream frames produce ordered bubbles, durable settlement does not duplicate');
@@ -108,8 +108,8 @@ export function apply(ctx,config){
    record.replyTarget={...record.replyTarget,msgId:'synthetic-second'};const second=input('chat-case steered');a.steer(second);
    releaseTool();await a.whenIdle();await p.idle();
    const steered=bubbles.slice(steerFrom);
-   assert.deepEqual(steered.map(b=>[b.input,b.msgId]),[[first.id,'synthetic-message'],[second.id,'synthetic-second'],[second.id,'synthetic-second']]);
-   assert.notEqual(steered[0].reply,steered[1].reply);assert.deepEqual(steered.slice(1).map(b=>b.bubble),[1,2]);
+   assert.deepEqual(steered.map(b=>[b.input,b.msgId]),[[first.id,'synthetic-message'],[second.id,'synthetic-second']]);
+   assert.notEqual(steered[0].reply,steered[1].reply);assert.deepEqual(steered.slice(1).map(b=>b.bubble),[1]);
    report.checks.push('Native steer opens a separate reply context routed to its own QQ input target');
    // Worker continuation: a settlement for a child catalogued in an admitted reply is delivered to that reply's target.
    let catalogued=false;
@@ -143,7 +143,7 @@ export function apply(ctx,config){
    const extra=input('chat-case 另外一个问题');p.intervene(extra);await settle();
    assert(!events().filter(e=>e.seq>=mark).some(e=>e.type==='turn/end'&&e.data.reason?.kind==='aborted'),'independent question never cancels');
    const order=bubbles.filter(b=>b.input===kept.id||b.input===extra.id).map(b=>b.input);
-   assert.deepEqual(order,[kept.id,kept.id,extra.id,extra.id]);assert(bubbles.filter(b=>b.input===kept.id).every(b=>b.done));
+   assert.deepEqual(order,[kept.id,extra.id]);assert(bubbles.filter(b=>b.input===kept.id).every(b=>b.done));
    report.checks.push('Judged independent question is queued: current reply completes first, then the new input');
    for(const kind of ['priority','revise']){
     mark=a.session.seq;toolStarted=false;

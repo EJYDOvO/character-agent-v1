@@ -4,7 +4,7 @@ import { Interaction, options, replyPolicy } from './policy.mjs';
 export const name='interaction-policy';
 export const inject=['systemPrompt','llm'];
 const PERSONA_SECTIONS=['deployment:persona-prefix','deployment:persona-suffix'];
-export const hangOnPrompt=persona=>`${persona?persona+'\n\n':''}【等待提示】当前请求仍在处理中，还没有结果。请沿用上面的 Persona 语气，写一句不超过 30 字的简短等待提示，只表达仍在处理、请对方稍等。不要描述进度、步骤、结果或剩余时间，不要承诺，不要提问，不使用数字、Markdown 或引号。只输出这一句话。`;
+export const hangOnPrompt=persona=>`${persona?persona+'\n\n':''}【等待提示】当前请求仍在处理中，还没有结果。请沿用上面的 Persona 语气，写一句不超过 30 字的简短等待提示，只表达仍在处理、请对方稍等；可以自然地贴合用户请求的话题，措辞不要与最近用过的提示雷同。不要描述进度、步骤、结果或剩余时间，不要承诺，不要提问，不使用数字、Markdown 或引号。只输出这一句话。`;
 export const judgePrompt=['你是对话调度助手，只做分类，不回答问题。助手正在处理用户的上一条请求时，用户又发来新消息。根据新消息的意图只输出一个英文单词：','revise：更正或否定上一条请求，要求按新要求改做（如“不对，我是想问……”“换成……”）。','priority：明确要求先处理另一个话题，当前任务可以暂缓（如“先别弄了，先帮我……”“等下，先说说……”）。','supplement：对当前任务补充条件、细节或约束（如“记得用中文”“再加一个对比表”）。','append：与当前任务无关、可以之后再回答的独立问题或闲聊。','不确定时输出 append。'].join('\n');
 const JUDGE_PHASES={text:'正在生成回复',tool:'正在执行工具',"waiting-user":'正在等待用户审批或回答'};
 // hangon-model.json holds exactly {provider, model}. Missing means inherit.
@@ -36,9 +36,12 @@ export function apply(ctx,input={}){
  };
  // No sessionId or purpose: the call stays outside Session checkpoints, titles
  // and history. The result is presentation only and is never persisted.
- const drafter=async({agent,state,signal})=>{
+ const drafter=async({agent,state,request='',recent=[],signal})=>{
   const target=route(agent),system=hangOnPrompt(persona(agent));
-  const message={id:randomUUID(),role:'user',source:{kind:'interaction-hang-on'},content:[{type:'text',text:state==='tool'?'当前状态：正在执行工具。':'当前状态：正在处理。'}]};
+  const lines=[state==='tool'?'当前状态：正在执行工具。':'当前状态：正在处理。'];
+  if(request.trim())lines.push('用户请求（节选）：'+request.trim().slice(-200));
+  if(recent.length)lines.push('最近用过的提示：'+recent.slice(-3).join(' / '));
+  const message={id:randomUUID(),role:'user',source:{kind:'interaction-hang-on'},content:[{type:'text',text:lines.join('\n')}]};
   let text='',finish;
   for await(const chunk of ctx.llm.stream({...target,system,messages:[message],maxTokens:256,signal:AbortSignal.any([signal,AbortSignal.timeout(15000)])})){
    if(chunk.type==='text-delta')text+=chunk.text;

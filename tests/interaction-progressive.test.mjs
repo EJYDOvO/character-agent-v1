@@ -59,11 +59,16 @@ test('code blocks, tables and continuing lists are never split by a streaming co
  const at=progressiveCut(list,config);if(at){const prev=list.slice(0,at).trimEnd().split('\n').at(-1);assert(!(/^- /.test(prev)&&/^\s*- /.test(list.slice(at))));}
 });
 
-test('the open tail keeps one bubble of the budget, including after a hang-on',async()=>{
- const f=fixture({maxBubbles:3});f.start();await f.advance(8000);await f.p.idle();assert.equal(f.p.bubbles,1);
+test('the open tail keeps one bubble of the budget; a hang-on does not consume it',async()=>{
+ const f=fixture({maxBubbles:3});f.start();await f.advance(8000);await f.p.idle();assert.equal(f.p.bubbles,0);
  const long=[...[1,2,3,4,5].map(n=>`## ${n}. 部分\n${body('部分'+n,300)}`)].join('\n\n');
- await f.stream(long);assert(f.bubbles.filter(b=>b.closed).length<=1,'hang-on + one committed bubble leaves one for the tail');
- f.message(long);await f.p.idle();assert.equal(f.bubbles.length,2);assert.equal(f.bubbles.map(b=>b.text).join(''),long);
+ await f.stream(long);assert(f.bubbles.filter(b=>b.closed).length<=2,'two committed bubbles leave one for the tail');
+ f.message(long);await f.p.idle();assert.equal(f.bubbles.length,3);assert.equal(f.bubbles.map(b=>b.text).join(''),long);
+});
+test('the last bubble of the budget previews its whole tail while streaming',async()=>{
+ const f=fixture({maxBubbles:1});f.start();const text='第一句。'.repeat(30)+'第二部分继续写。'.repeat(30);
+ await f.stream(text);assert.equal(f.bubbles.length,1);assert.equal(f.bubbles[0].text,text,'nothing can be split later, so nothing is held back');
+ f.message(text);await f.p.idle();assert.equal(f.bubbles.map(b=>b.text).join(''),text);
 });
 
 test('a retried attempt does not resend bubbles it already committed',async()=>{

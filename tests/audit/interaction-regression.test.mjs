@@ -80,7 +80,7 @@ test('A16 out-of-order native chunks must not silently drop text before a matchi
 });
 test('A17 slow sends retain FIFO and stop suppresses work that has not started',async t=>{
  const f=fixture(t);let release,entered=false;f.p.bind({key:f.key,sendText:async text=>{entered=true;await new Promise(r=>release=r);f.sent.push(text);}});
- f.start();f.settle('第一段完整文本。第二段完整文本。');await micro();assert(entered);f.p.stopOutput();release();await f.p.idle();assert.deepEqual(f.sent,['第一段完整文本。']);
+ f.start();f.settle('第一段完整文本，写得足够长。\n\n第二段完整文本，同样足够长。');await micro();assert(entered);f.p.stopOutput();release();await f.p.idle();assert.deepEqual(f.sent,['第一段完整文本，写得足够长。\n\n']);
 });
 test('A18 formatting control: code, links, lists and tables remain intact when complete',async t=>{
  for(const text of ['```js\nhello("内容。后文")\n```','[参考](https://example.invalid)。后文','- 第一项。后文','| 列一 | 列二 |\n|---|---|\n|内容。|后文|']){
