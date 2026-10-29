@@ -102,7 +102,7 @@ test.9 审计修复保留契约 v1、Schema 3 和现有工具参数。Host 的 `
 
 ## 可选通用 Interaction
 
-`packages/interaction-policy` 可独立安装到普通 DSH Preset，不需要 Character、QQTK 或 Memory。它使用原生作用域服务、Session/流式事件与 Inbox，平台通过小型 Sender 接口接入。声明必须提供服务隔离域；详见 [安装及契约](../packages/interaction-policy/README.md)。已完成隔离与本机部署检查，Web 额外气泡/状态 UI 未实现。
+`packages/interaction-policy` 可独立安装到普通 DSH Preset，不需要 Character、QQTK 或 Memory。它使用原生作用域服务、Session/流式事件与 Inbox，动态等待提示另用原生 `llm` 服务，平台通过小型 Sender 接口接入。声明必须提供服务隔离域；详见 [安装及契约](../packages/interaction-policy/README.md)。已完成隔离与本机部署检查，Web 额外气泡/状态 UI 未实现。
 
 ## 可选组件与 Session（test.13）
 

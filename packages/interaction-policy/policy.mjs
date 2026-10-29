@@ -1,12 +1,29 @@
-// Process-local presentation only: never appends Session events or calls a model.
+// Process-local presentation only: never appends Session events. The optional
+// hang-on drafter is an injected callback; this module never calls a model.
 export const replyPolicy = `Interaction Policy V1：沿用既定 Persona 的语言、语气与边界，自然交流，不因处理任务切换成另一人格。闲聊简洁，可以用自然段分开完整语义；不要为分气泡生造内容。复杂任务保留完整 Assistant 能力、必要细节、代码和依据，不受闲聊字数目标限制。需要工具或等待时，可先给一句符合 Persona 的简短进度，再执行并给完整结果；已有进度不要重复说稍等。只描述实际执行状态，不把计划或工具返回等同于成功。用户明确更正时采用新要求；不要自行假设已取消或撤销工具副作用。`;
 
 export function options(input={}) {
-  const result={enabled:input.enabled!==false,hangOnMs:input.hangOnMs??8000,throttleMs:input.throttleMs??180,maxBubbles:input.maxBubbles??3,chatMaxChars:input.chatMaxChars??240,bubbleTargetChars:input.bubbleTargetChars??300,hangOnText:input.hangOnText??'还在处理中，稍等一下。'};
+  const hangOnMs=input.hangOnMs??8000;
+  const result={enabled:input.enabled!==false,hangOnMs,hangOnDraftMs:input.hangOnDraftMs??(Number.isInteger(hangOnMs)?Math.round(hangOnMs*11/16):0),throttleMs:input.throttleMs??180,maxBubbles:input.maxBubbles??3,chatMaxChars:input.chatMaxChars??240,bubbleTargetChars:input.bubbleTargetChars??300,hangOnText:input.hangOnText??'还在处理中，稍等一下。'};
   for(const [key,min,max]of [['hangOnMs',10,300000],['throttleMs',0,5000],['maxBubbles',1,4],['chatMaxChars',20,1000]])if(!Number.isInteger(result[key])||result[key]<min||result[key]>max)throw Error('Invalid interaction option: '+key);
+  if(!Number.isInteger(result.hangOnDraftMs)||result.hangOnDraftMs<0||result.hangOnDraftMs>=result.hangOnMs)throw Error('Invalid interaction option: hangOnDraftMs');
   if(typeof result.hangOnText!=='string'||!result.hangOnText.trim()||result.hangOnText.length>200)throw Error('Invalid hangOnText');
   if(!Number.isInteger(result.bubbleTargetChars)||result.bubbleTargetChars<100||result.bubbleTargetChars>1000)throw Error('Invalid bubbleTargetChars');
+  // Location of the optional hangon-model.json route; not a feature switch.
+  if(input.hangOnModelFile!==undefined){
+    if(typeof input.hangOnModelFile!=='string'||!/^(?:[A-Za-z]:[\\/]|\/|\\\\)/u.test(input.hangOnModelFile))throw Error('Invalid interaction option: hangOnModelFile');
+    result.hangOnModelFile=input.hangOnModelFile;
+  }
   return Object.freeze(result);
+}
+
+// A drafted hang-on is one short plain line. Digits, links and Markdown are
+// rejected so a model cannot invent progress, ETAs or formatted content.
+export function hangOnLine(text) {
+  if(typeof text!=='string')return null;
+  const line=text.replace(/\s+/gu,' ').trim().replace(/^["'“”‘’「」『』]+|["'“”‘’「」『』]+$/gu,'').trim();
+  if(!line||[...line].length>60||/[`#*_~\[\]<>|{}]|https?:\/\/|[0-9０-９%％]/u.test(line))return null;
+  return line;
 }
 
 // Only committed text is segmented. Markdown blocks and inline constructs are
@@ -73,8 +90,10 @@ export function boundary(text) {
 }
 
 export class Interaction {
-  constructor(agent,config={},clock={now:Date.now,set:setTimeout,clear:clearTimeout}) {
-    this.agent=agent;this.config=options(config);this.clock=clock;this.chain=Promise.resolve();this.token={cancelled:false};this.active=false;this.closed=false;this.transport=null;this.tools=new Set();this.streams=new Map();this.seen=new WeakSet();this.revision=-1;this.errors=[];this.message=null;
+  // drafter({agent,state,signal}) resolves one candidate hang-on line. It must
+  // not append Session events, create Agents or touch Memory.
+  constructor(agent,config={},clock={now:Date.now,set:setTimeout,clear:clearTimeout},drafter) {
+    this.agent=agent;this.config=options(config);this.clock=clock;this.drafter=typeof drafter==='function'?drafter:null;this.draftControl=null;this.candidate=null;this.chain=Promise.resolve();this.token={cancelled:false};this.active=false;this.closed=false;this.transport=null;this.tools=new Set();this.streams=new Map();this.seen=new WeakSet();this.revision=-1;this.errors=[];this.message=null;
   }
   bind(transport) {
     if(this.closed||!this.config.enabled)return false;
@@ -93,21 +112,44 @@ export class Interaction {
   queue(fn,token=this.token) {
     this.chain=this.chain.then(()=>{if(!this.closed&&!token.cancelled)return fn();}).catch(()=>{this.errors.push('transport-failed');if(this.errors.length>10)this.errors.shift();});return this.chain;
   }
-  clearTimers(){for(const key of ['hangTimer','flushTimer']){if(this[key]!==undefined)this.clock.clear(this[key]);this[key]=undefined;}}
+  note(error){this.errors.push(error);if(this.errors.length>10)this.errors.shift();}
+  clearTimers(){for(const key of ['hangTimer','draftTimer','flushTimer']){if(this[key]!==undefined)this.clock.clear(this[key]);this[key]=undefined;}this.stopDraft();}
+  stopDraft(){const control=this.draftControl;this.draftControl=null;control?.abort();}
   start(turn){
     if(this.active)this.invalidate();else this.clearTimers();
-    this.token={cancelled:false};this.turn=turn;this.message=null;this.active=true;this.natural=false;this.delivered=false;this.prompted=false;this.toolSeen=false;this.tools.clear();this.bubbles=0;this.started=this.clock.now();this.reply=(this.reply??0)+1;this.segment=0;
+    this.token={cancelled:false};this.turn=turn;this.message=null;this.active=true;this.natural=false;this.delivered=false;this.prompted=false;this.drafted=false;this.candidate=null;this.toolSeen=false;this.tools.clear();this.bubbles=0;this.started=this.clock.now();this.reply=(this.reply??0)+1;this.segment=0;
     if(this.transport?.requireIngress)this.background=true;
     this.suppressSettlement=false;
+    if(this.drafter)this.draftTimer=this.clock.set(()=>{this.draftTimer=undefined;this.draft();},this.config.hangOnDraftMs);
     this.hangTimer=this.clock.set(()=>{this.hangTimer=undefined;this.hangOn();},this.config.hangOnMs);
   }
+  // Only a natural-reply receipt suppresses hang-on; SDK buffering does not.
+  // Hang-on never exceeds the bubble budget already claimed by settled text.
+  waiting(){return this.active&&!this.closed&&!this.background&&this.agent.status==='running'&&!this.delivered&&!this.prompted&&this.bubbles<this.config.maxBubbles&&!!this.transport&&!this.transport.waitingForUser?.();}
+  draft(){
+    if(this.drafted||!this.drafter||!this.waiting())return;
+    const token=this.token,control=new AbortController();this.drafted=true;this.draftControl=control;
+    let pending;try{pending=Promise.resolve(this.drafter({agent:this.agent,state:this.tools.size?'tool':'agent',signal:control.signal}));}catch(error){pending=Promise.reject(error);}
+    pending.then(text=>{
+      if(this.draftControl!==control||control.signal.aborted||this.token!==token||token.cancelled)return;
+      this.draftControl=null;const line=hangOnLine(text);
+      if(line)this.candidate=line;else this.note('hang-on-draft-rejected');
+    },()=>{if(this.draftControl===control){this.draftControl=null;this.note('hang-on-draft-failed');}});
+  }
   hangOn(){
-    if(!this.active||this.closed||this.background||this.agent.status!=='running'||this.delivered||this.prompted||!this.transport||this.transport.waitingForUser?.())return;
-    const token=this.token;this.prompted=true;
-    this.queue(async()=>{if(this.token===token&&this.active&&!this.delivered&&this.agent.status==='running'&&!this.transport.waitingForUser?.()){this.bubbles++;await this.transport.sendText(this.config.hangOnText,{...this.metadata(token),kind:'status',transient:true,state:this.tools.size?'tool':'agent'});}},token);
+    if(!this.waiting()){this.stopDraft();return;}
+    const token=this.token,text=this.candidate??this.config.hangOnText,state=this.tools.size?'tool':'agent';
+    // Reserve the bubble synchronously so a later split sees the shared budget.
+    this.prompted=true;this.bubbles++;this.stopDraft();this.candidate=null;
+    this.trace('hang-on',{state:state==='tool'?1:0,dynamic:text!==this.config.hangOnText});
+    this.queue(async()=>{
+      if(this.token===token&&this.active&&!this.delivered&&this.agent.status==='running'&&!this.transport.waitingForUser?.())await this.transport.sendText(text,{...this.metadata(token,undefined,'status'),transient:true,state});
+      else if(this.token===token)this.bubbles--;
+    },token);
   }
   trace(event,fields={}){try{this.transport?.trace?.(event,{turn:this.turn,reply:this.reply,...fields});}catch{}}
-  metadata(token=this.token,context={turn:this.turn,reply:this.reply}){return {...context,bubble:++this.segment,onDelivered:()=>{if(this.token===token&&!token.cancelled){this.delivered=true;this.trace('delivery-confirmed');}}};}
+  // Only assistant output confirms the natural reply; a status receipt never does.
+  metadata(token=this.token,context={turn:this.turn,reply:this.reply},kind='assistant'){return {...context,kind,bubble:++this.segment,onDelivered:()=>{if(kind!=='status'&&this.token===token&&!token.cancelled){this.delivered=true;this.stopDraft();this.trace('delivery-confirmed');}}};}
   newMessage(){return {full:'',pending:'',transport:this.transport,token:this.token,context:{turn:this.turn,reply:this.reply},stream:null,updated:'',failed:false,finished:false};}
   text(delta){
     if(!this.active||this.closed||this.background||typeof delta!=='string'||!delta)return;

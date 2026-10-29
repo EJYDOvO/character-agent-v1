@@ -6,7 +6,7 @@ test.16 的社区 Preset 修复只调整构建契约：`communityWorkerPresets` 
 
 Worker V2 使用官方 `subagent` 的 `agentPreset / allowedAgentPresets` 和 `spawn`。Core 声明 general、explore、librarian、oracle、metis、momus、planner；review 仍可选，社区引用经可信构建配置审查。Character 唯一 Root 保留完整 Creator，按需向 Planner 请求草案；Worker 是独立 Preset，工具/Skills 按原生 Scope 装配，不继承 QQ/Memory 或父历史，`maxDepth:1`。角色/白名单/Root 策略共用词表，不再默认装配 Character Worker Boundary，不增加 Manager、Spawn Provider 或 Agent Loop；隔离验收及部署边界见 STATUS。Inspector 是额外可选双端插件：原生 `dsh.client` 将 React 页面注册到 `settings.section`，复用 DSH 导航、组件与主题；通过 Connection RPC 与受控 Core API 访问记忆。四个核心插件与可选 Extras 边界保持；详见 [Worker](WORKERS.md) 和 [Inspector](MEMORY-INSPECTOR.md)。
 
-**test.10 交互增量**：独立可选 `dsh-interaction-policy` 通过原生 Agent-scoped 事件和 Preset 服务隔离管理表达与发送策略。QQTK 只接入 Sender 与可信修正入口；Character Identity 复用原入站校验和证据逻辑提供提前接入钩子。没有新数据库、Planner 或 Agent Loop，原四插件和 Core/Extras 保留。详细接口及当前验证见 [Interaction Policy](INTERACTION-POLICY.md)。下文为既有记忆架构。
+**test.10 交互增量**：独立可选 `dsh-interaction-policy` 通过原生 Agent-scoped 事件和 Preset 服务隔离管理表达与发送策略。QQTK 只接入 Sender 与可信修正入口；Character Identity 复用原入站校验和证据逻辑提供提前接入钩子。没有新数据库、Planner 或 Agent Loop，原四插件和 Core/Extras 保留。test.5 的动态等待提示由插件入口注入生成回调，只读取 Persona 段落、调用原生 `llm`（不带 Session 归属），不新增插件或服务。详细接口及当前验证见 [Interaction Policy](INTERACTION-POLICY.md)。下文为既有记忆架构。
 
 这是源码实现说明。test.8 增加分层记忆与可选人格化；部署和验收范围见 [发布记录](RELEASE-test8.md)，详细层次、生命周期和限制见 [分层记忆](MEMORY-LAYERS.md)。四个核心 Character 运行时包保留；Definition 是构建模块，Core/Extras 是项目 Bundle。Extras 仅含默认停用的自有长期任务声明，不是第二个 QQ Gateway。
 

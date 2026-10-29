@@ -9,7 +9,13 @@ export const name='interaction-host-probe';export const inject=['agents','agentP
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 export function apply(ctx,config){
  let toolStarted=false,toolAborted=false,releaseTool;const toolGate=new Promise(r=>releaseTool=r);
+ const hangOnRequests=[];let hangOnDelay=0;
  class Provider extends LlmAdapter{async *stream(request){
+  if(request.system?.includes('【等待提示】')){
+   hangOnRequests.push({model:request.model,sessionId:request.sessionId,purpose:request.purpose,tools:request.tools?.length??0,messages:request.messages.length});
+   await sleep(hangOnDelay);if(request.signal?.aborted){yield {type:'finish',reason:{kind:'aborted'}};return;}
+   yield {type:'text-delta',index:0,text:'嗯，再等我一下下。'};yield {type:'finish',reason:{kind:'stop'}};return;
+  }
   const users=request.messages.filter(m=>m.role==='user'&&m.source?.kind==='user'),text=JSON.stringify(users.at(-1)?.content??[]);
   if(text.includes('tool-case')&&!request.messages.some(m=>m.role==='tool')){
    yield {type:'text-delta',index:0,text:'嗯，我先检查。'};
@@ -61,9 +67,18 @@ export function apply(ctx,config){
    assert(Array.from({length:a.session.seq},(_,i)=>a.session.eventAt(i)).some(e=>e?.type==='user/message'&&(e.data?.message??e.data)?.source?.kind==='time-context'),'Native time-context projection must actually run');
    report.checks.push('Official time-context projection preserves trusted QQ admission and reply delivery');
    report.checks.push('Actual native assistant-stream frames produce ordered bubbles, durable settlement does not duplicate');
-   await send('slow-case');assert.equal(sent.filter(x=>x.t==='还在处理中，稍等一下。').length,1);
-   assert(!JSON.stringify(Array.from({length:a.session.seq},(_,i)=>a.session.eventAt(i))).includes('还在处理中，稍等一下。'));
-   report.checks.push('Real running loop delay produces one status outside Session history');
+   const history=()=>JSON.stringify(Array.from({length:a.session.seq},(_,i)=>a.session.eventAt(i)));
+   const agentsBefore=ctx.agents.store.size;
+   await send('slow-case');assert.equal(sent.filter(x=>x.t==='嗯，再等我一下下。').length,1);assert.equal(sent.filter(x=>x.t==='还在处理中，稍等一下。').length,0);
+   assert.equal(hangOnRequests.length,1);assert.deepEqual(hangOnRequests[0],{model:'fixture',sessionId:undefined,purpose:undefined,tools:0,messages:1});
+   assert(!history().includes('再等我一下下')&&!history().includes('【等待提示】'));assert.equal(ctx.agents.store.size,agentsBefore);
+   report.checks.push('Real running loop delay drafts one Persona hang-on through native llm on the inherited route, outside Session history');
+   hangOnDelay=900;await send('slow-case late draft');assert.equal(sent.filter(x=>x.t==='还在处理中，稍等一下。').length,1);assert.equal(sent.filter(x=>x.t==='嗯，再等我一下下。').length,1);hangOnDelay=0;
+   assert(!history().includes('还在处理中，稍等一下。'));
+   report.checks.push('Draft unfinished at the deadline falls back once to the fixed text');
+   fs.writeFileSync(config.hangOnModelFile,JSON.stringify({provider:'interaction-fixture',model:'hang-on-only'}));
+   await send('slow-case routed');assert.equal(hangOnRequests.at(-1).model,'hang-on-only');assert.equal(sent.filter(x=>x.t==='嗯，再等我一下下。').length,2);fs.rmSync(config.hangOnModelFile);
+   report.checks.push('hangon-model.json overrides the hang-on draft route and removal restores inheritance');
    const beforeWeb={sent:sent.length,bubbles:bubbles.length};
    a.followup(createUserMessage({content:[{type:'text',text:'slow-case native Web input'}],source:{kind:'user'}}));await a.whenIdle();await p.idle();
    assert.equal(sent.length,beforeWeb.sent);assert.equal(bubbles.length,beforeWeb.bubbles);
