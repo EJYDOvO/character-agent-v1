@@ -2,6 +2,8 @@
 
 实例版本统一见 [当前状态](STATUS.md)；源码默认与实例启用状态分开记录。
 
+test.21 开发候选：Conversation 路由/轮换由独立 Manager 服务管理，Core 声明 `conversation-manager.config.stateFile`；Identity 只提供权限、历史提醒证明和 Outbox。停用 Manager 会使 QQ Adapter 停用，不保留第二套旧路由管理器；重启、改路径或回滚前保留原 Session/Schedule 和状态文件，见 [集成前提](INTEGRATION.md#test21-候选的新增前提未部署)。此候选未部署。
+
 安装版本和验收范围以 [STATUS](STATUS.md) 为唯一当前入口。官方内置 Schedule 保持；旧项目记忆数据保留，但不自动导入新库。
 
 test.8 的分层记忆已完成隔离验证及授权生产部署，验证范围见 [发布记录](RELEASE-test8.md)。人格化模式、L3 预算、后台节奏和 Schema 3 回滚要求见 [分层记忆管理](MEMORY-LAYERS.md)。修改模式时必须保留完整 Identity 配置，不能只覆盖 memoryMode；旧工具名称继续兼容。

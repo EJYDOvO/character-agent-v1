@@ -1,6 +1,12 @@
 # Interaction Policy V1
 
-当前实现为 Interaction **0.1.0-test.5**，配套 Character test.19 与 QQTK 的 QQ Bot 0.5.2 / SDK 1.0.5 两份补丁。验证宿主为 DSH 0.2.1-rc.3，继续使用 rc.2 已有原生接口。部署与验收状态以 [STATUS](STATUS.md) 为准；历史结果见 test.10 发布记录。
+## test.7 开发候选（未部署）
+
+修复已知工具全部完成后仍粘在 tool 阶段的问题；只有匹配的真实 tool/result 才清除最后一个执行标记，未知/尚在执行的工具与审批等待继续保护。连续分类期间的显式更正及空闲切换将已有输入按到达顺序一次性处理，丢弃迟到分类结果。没有改变 cancel/steer/followup、渐进分泡、Worker 续轮、动态等待提示及回执契约。
+
+实际 rc.3 Host 已验证工具后 priority/revise 中断文本、执行中工具不取消，以及原 16 项交互检查。Provider/分类器与 Sender 为合成替身，不代表模型分类质量或手机送达。QQ Typing 生命周期由配套 Conversation Manager Adapter 清理。其余 test.5/test.6 内容保留历史语境。
+
+当前源码为 Interaction **0.1.0-test.7** 开发候选，配套 Character test.21、独立 Conversation Manager 和两份 QQTK 补丁，**未部署**。本轮在 DSH 0.2.1-rc.3 隔离验证；历史部署和实际验收见 [STATUS](STATUS.md)，不将旧版记录当作候选上线证明。
 
 ## 分工与启用
 

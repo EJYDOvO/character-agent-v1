@@ -2,6 +2,14 @@
 
 版本与部署状态统一见 [STATUS](STATUS.md)。本仓库不包含 DSH 本体，不是通用一键安装器；现有运维入口仍面向 desktop Profile、单 Owner 私聊及 QQTK 维护目录。普通 Agent 复用模块见 [REUSE](REUSE.md)。
 
+## test.21 候选的新增前提（未部署）
+
+Core 声明独立 `dsh-conversation-manager@0.1.0-test.1`，QQ 补丁和 Character Adapter 原生依赖该服务，Identity 要求公开 ownership 契约。包源码在独立 QQTK 仓库，不由 Character pack 隐式重打包。必须先审阅/打包并在离线 Profile 中安装固定 tarball，记录 `character-artifacts.json` 的 source/version/SHA-256，再准备 Character 候选。
+
+首次切换前清点并一致备份 Memory、配置、原生 Sessions/Schedule/storageDomain、旧 prefs、Identity binding/coordination 及通知账本；保留任务 ID、原提醒根及所有去重状态。Core 默认的 stateFile 为 Character 数据目录下的 `conversations.json`；经审查完整复制旧偏好，或明确调整该服务声明，不能以缺省空文件替代。准备脚本核对独立依赖的已安装版本/包元数据/哈希，并要求首次跨旧 Core 提供 `--conversation-state-reviewed` 以及存在的状态文件；缺失即阻断，不隐式迁移或授权。
+
+本轮未读取生产 Memory/路由账本，未准备生产候选、部署或重启。下一步上线仍需授权及上述离线清点。回滚须配套恢复 QQ 补丁、Identity/Core、Profile 和锁文件；保留新增 Memory/Session/任务/通知以及当前路由，禁止用旧 prefs 快照覆盖切换后的活动。SDK 补丁不变。新旧接口不兼容时停用入口并审查，不能回退 Creator。
+
 ## 构建与候选准备
 
 通过 `DSH_INSTALL_ROOT` / `DSH_CHARACTER_PROJECT` 指定安装与源码；`DSH_QQTK_PROJECT` 指定独立 QQTK 源码。官方 DSH 文件及内置 Bundle 不手工修改。Creator/SDK 从实际安装包读取，指纹变化后必须重新构建、测试。

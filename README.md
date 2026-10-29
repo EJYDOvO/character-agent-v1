@@ -2,7 +2,7 @@
 
 在 DeepSeek Harness 上运行的角色 Agent 扩展，提供私人 QQ 接入、可配置角色和带来源的长期记忆。Character 从官方 Creator Preset 构建派生，保留其工具能力；角色设定不会增加系统权限。
 
-这是测试版源码仓库，不包含 DSH 本体，也不是一键安装器。当前源码为 **test.20 / Interaction test.6**；实例部署状态统一见[当前状态](docs/STATUS.md)。QQ Session 生命周期、长期任务和 Interaction 均需显式配置。验证基线是 **Windows、Node.js 24.21.0、DSH 0.2.1-rc.2 / rc.3、QQ Bot 0.5.2 / SDK 1.0.5 及配套 QQTK 补丁**。其他版本和平台需要重新验证。
+这是测试版源码仓库，不包含 DSH 本体，也不是一键安装器。当前开发候选为 **test.21 / Interaction test.7，未部署**，使用独立 `dsh-conversation-manager@0.1.0-test.1` 与最新 QQTK 补丁。历史部署状态见 [STATUS](docs/STATUS.md)，安装/旧路由保护见 [集成说明](docs/INTEGRATION.md)。本轮验证基线为 **Windows、Node.js 24.21.0、DSH 0.2.1-rc.3、QQ Bot 0.5.2 / SDK 1.0.5**；其他构建需重新验证。
 
 可选 [Interaction Policy V1](docs/INTERACTION-POLICY.md) 提供自然表达、默认 8 秒无发送确认提示（5.5 秒起经原生模型并发生成 Persona 风格短句，未就绪则用固定文案）、短聊/长结果语义气泡（长回复边生成边分泡）、按输入归属回复与 Worker 续轮、执行期间新消息的更正/优先/补充/排队处理；工具调用不禁止分段。源码默认构建不启用；该通用插件不要求安装 Character 或 QQ。配套 QQTK 可开启限量、脱敏的本地投递诊断；真实重复气泡仍待复现。
 
@@ -15,7 +15,7 @@ test.14 已收紧历史 QQ Session：只有当前主路由获得完整身份；�
 ## 能做什么
 
 - **角色配置**：通过 YAML 定义身份、表达方式、背景和边界，构建为完整 Character Preset。
-- **私人 QQ 助手**：复用 QQTK 的 Gateway、Session、问答和审批；仅允许单 Owner 私聊，群聊关闭。
+- **私人 QQ 助手**：QQTK 负责单一 Gateway、发送和审批/问答展示；独立 Conversation Manager 负责 Session。仅允许单 Owner 私聊，群聊关闭。
 - **长期记忆**：SQLite + 中文 FTS5，支持保存、召回、检查、纠错、确认、合并、遗忘和来源追溯。
 - **分层整理**：L1 保存可信经历，L2 提取和巩固长期记忆，L3 为每轮对话提供少量核心记忆；L0 沿用 DSH Session 与 Compaction。
 - **可选人格化**：Off / Assistant / Character 三种模式，与通用记忆共用数据库，按 Agent 隔离；模式切换同时约束历史记录读取。形成带引用的用户画像、互动约定和自身经验，不修改固定角色设定；引用存在不代表推断一定正确。

@@ -6,7 +6,7 @@
 
 ## 普通 Agent + QQ
 
-只安装 `@tencent-connect/dsh-qqbot@0.5.2`，应用 [QQTK](https://github.com/EJYDOvO/harness-qq-toolkit-public) 的版本化补丁。Profile 加载原生 base/web-app；无需 Character、Remote Ops、项目记忆包。
+最新候选安装 QQ Bot 与独立 `dsh-conversation-manager@0.1.0-test.1`，应用 [QQTK](https://github.com/EJYDOvO/harness-qq-toolkit-public) 两份配套补丁。Profile 加载原生 base/web-app；无需 Character、Remote Ops、Memory。此轮只做 rc.3 隔离验收，未部署。
 
 ```yaml
 # Profile pnpm-workspace.yaml 的相关部分
@@ -14,11 +14,18 @@ nodeLinker: hoisted
 autoInstallPeers: false
 patchedDependencies:
   '@tencent-connect/dsh-qqbot@0.5.2': patches/dsh-qqbot@0.5.2.patch
+  '@tencent-connect/qqbot-nodejs@1.0.5': patches/qqbot-nodejs@1.0.5.patch
+overrides:
+  '@tencent-connect/qqbot-nodejs': 1.0.5
 ```
 
 ```yaml
 # Profile cordis.patch.yml；由 Host 安全配置提供凭据
 - insert:
+    - id: conversation-manager
+      name: dsh-conversation-manager
+      config:
+        stateFile: '<ABSOLUTE_PROJECT_DATA>/conversations.json'
     - id: ordinary-qq
       name: '@tencent-connect/dsh-qqbot'
       config:
@@ -35,7 +42,7 @@ patchedDependencies:
 
 不要同时加载 QQ Bundle 又 insert 第二个 QQ 插件。审批/问答由 QQ 自身处理；`/ops` 是可选 Remote Ops 的命令，不影响基本收发。跨进程只启动一套使用该 QQ 应用凭据的 Profile。
 
-补丁把 QQ 偏好放在 `$DSH_HOME/qqbot/model-prefs.json`；请为每个独立项目配置独立 DSH_HOME。不设置 DSH_HOME 时保留上游用户目录以兼容旧安装，可能跨项目共用，不能宣称隔离。升级前核对旧偏好文件是否需要显式迁移；本机旧目录已指向相同 data/qqbot，未搬迁数据。
+Manager 使用显式绝对 `stateFile`，各项目独立。旧 `$DSH_HOME/qqbot/model-prefs.json` 不会自动读取或迁移；先离线审查提醒、任务、身份和通知，再选择原文件或完整复制。接口与回滚见 [插件说明](https://github.com/EJYDOvO/harness-qq-toolkit-public/blob/main/plugin-sources/dsh-conversation-manager/README.md)。
 
 ## 普通 Agent + Memory
 

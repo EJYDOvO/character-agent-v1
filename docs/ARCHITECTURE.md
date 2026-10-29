@@ -1,4 +1,8 @@
-# 运行架构与复用边界（test.17 / 原生 Worker 权限）
+# 运行架构与复用边界
+
+test.21 候选将路由/生命周期从 QQTK 抽成独立 `dsh-conversation-manager`（源码在 QQTK 仓库的 `plugin-sources/`），只在隔离 rc.3 验证，未部署。它没有 QQ/Character/Memory 依赖；QQ Adapter 注入该服务。一个服务内各平台独占 namespace，共用唯一持久偏好实例。创建、恢复、Flush、Fork/Compaction 和 Schedule 均复用原生 API。
+
+Identity 通过公开 `records / ownershipState / isCurrentSession` 契约绑定真实 Agent，SQLite routes 仅保留历史证据，不再作为当前主路由权威。Owner、项目/角色和 Memory capability 仍由 Identity 授权；Manager 不发放权限。平台 pending approval/question、额外 prompt 和 Typing 清理通过 Adapter 回调提供。
 
 test.13 在既有原生分析 Worker、Memory Inspector 上引入可选 QQ Session 生命周期和独立长期任务；test.14 收紧历史根权限并补充存量提醒审计。隔离与当前实例部署的验收边界统一见 [STATUS](STATUS.md)。阶段对照见 [路线图](IMPLEMENTATION_ROADMAP.md)，任务契约见 [Long Tasks](../packages/long-tasks/README.md)。
 
@@ -12,7 +16,7 @@ Worker V2 使用官方 `subagent` 的 `agentPreset / allowedAgentPresets` 和 `s
 
 | 组件 | 之前 | 现在 |
 |---|---|---|
-| 版本化 QQ 基础适配 | `agents + qqRemoteOps` 必需 | `agents` 必需；原生 `agentPresets` 用于会话组合；Remote Ops 可不安装 |
+| 版本化 QQ 基础适配 | `agents + qqRemoteOps` 必需 | `agents + conversationManager`；原生 `agentPresets` 组合会话；Remote Ops 可选 |
 | Remote Ops | 显式安装根目录下的私人维护脚本 | 独立状态目录和 Owner；可选 Host `qqMaintenance` 后端；兼容旧 root 后端 |
 | Memory Core | `characterIdentity` | 标准 `memoryIdentity@1`、DSH LLM/Agent/默认模型；不导入 QQ/Character |
 | Memory Tools 默认入口 | Character 身份、提示词、通知查询 | `memoryIdentity@1 + dshMemory + tools + systemPrompt`，Agent-scoped |
@@ -26,7 +30,10 @@ Worker V2 使用官方 `subagent` 的 `agentPreset / allowedAgentPresets` 和 `s
 ```mermaid
 flowchart LR
   QQ[QQ SDK 与入口白名单] --> G[单一 QQ Gateway]
-  G --> S[Session / Sender / 审批 / 问答]
+  G --> S[Sender / 审批 / 问答展示]
+  G --> CM[Conversation Manager / 唯一路由]
+  P[第二平台 Adapter] --> CM
+  CM --> A
   S --> A[原生 DSH Agent]
   G -.可选.-> O[Remote Ops]
   O -.可选.-> M[可信维护后端]
@@ -45,7 +52,9 @@ flowchart LR
 
 Inspector 可以直接依赖 Core 的管理 API；Core 不反向依赖 Inspector，不新增接口服务。Character Adapter 对 Identity、Memory、Remote Ops 的组合依赖是项目边界，不能据此推断基础 QQ 或通用 Memory 也必须安装它们。旧 Worker 模块仅保留无操作兼容入口，新 Preset 不引用它。
 
-v0.7.8 的主体目标已有实现，但项目范围由可信 binding 固定配置；尚无任务级独立 grants 或项目管理 UI。主 Session 生命周期在 QQTK，稳定 Conversation 及 Outbox 在 Identity；原生 Schedule 仍指向原 Session，使用持久 qq_bindings 冷恢复原根，不迁移提醒。独立长期任务通过原生 storageDomain 保存任务/执行账本，使用独立任务根 Session 和受限 Preset；不新增 Coordinator、调度器或 Memory 数据库。旧 Task Memory 只有只读预览，未完成受控正式导入。
+v0.7.8 主体目标已有实现，但项目范围仍由可信 binding 固定；尚无任务级 grants 或项目管理 UI。主路由/生命周期现由独立 Manager 管理，稳定通知目的地和 Outbox 仍在 Identity。原生 Schedule 固定原 Session，经持久 qq_bindings 冷恢复原根，不迁移提醒；长期任务仍使用原生 storageDomain 和独立任务根。旧 Task Memory 只有只读预览，正式导入未开发。
+
+后续 NapCat/OneBot Adapter 可复用 Manager，只负责协议、可信入站/发送和审批展示；当前没有 NapCat 连接器。跨平台账号关联、多用户/群聊策略、Approval/Notification Router 尚未实现。未来审批必须沿用唯一原生 Approval，Identity 验证审批人，Router 选渠道；通知使用稳定 Conversation 目的地，不能绑定临时 msgId。namespace 不自动代表身份或跨平台共享权限。
 
 ## 可信契约
 

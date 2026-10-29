@@ -2,6 +2,16 @@
 
 本页是版本与验收状态的统一入口。历史发布记录说明当时结果，不代表最新运行状态。
 
+## test.21 / Interaction test.7 / Conversation Manager test.1（开发候选，未部署）
+
+- Interaction：工具全部完成后重置阶段；分类期间连续输入、显式更正和空闲切换保持顺序并消费一次，迟到结果无效。渐进分泡、Worker 续轮、动态等待提示与回执协议保留。
+- 会话管理：QQTK 的 SessionManager 变为薄适配；新独立包持有唯一当前路由与显式状态文件，复用原生 Sessions/Preset/模型与 Schedule。Identity 不再读 QQTK 私有 prefs/sessions，使用公开 Host 归属契约。没有新数据库、权限体系或 Agent Loop。
+- 可靠性：偏好写失败回退内存并报错；只有明确不存在才新建 Session，创建需 Flush 确认；清模型偏好不重置归属；Manager/Agent/QQ 卸载释放 Typing。部署入口增加已审阅状态和独立包 pin/哈希门禁。
+
+验证：Character 单元 201/201、安全审计 33/33；QQTK 轻量 43/43、SDK 隔离 33/33，两份补丁在原始代码快照上重建/应用一致。真实 rc.3 Interaction 17 项检查通过，包含工具后 priority/revise。两个真实 Host 进程验证模拟第二平台、并发、重启/12h 轮换、历史根禁权/提醒、Memory、独立任务/Outbox、Manager 卸载重载和身份重绑；10 个 Worker 配置的原生 Spawn/工具/冷恢复回归通过。Provider、判别器、Sender/SDK 网络均使用合成替身。
+
+没有连接真实 QQ、读取生产 Memory、迁移生产路由或部署。生产 Session/提醒/账本的离线清点、真实模型连续插话、手机投递/审批及 NapCat 协议尚未验证。旧路由审查和独立包安装完成前不能切换生产候选。ChatGPT Library 指定文档不可直接访问；本轮参考了工作区归档的 v0.7.8 路线图，同时以实际安装 SDK 为准。后续多平台及治理功能仍是路线图，未提前实现。
+
 ## Interaction test.6（Character test.20）部署记录
 
 已部署 Character test.20 / Interaction test.6（含下文第 1–3 阶段），配套更新的 QQ Bot 补丁（含 `inbound.js`）。候选 Profile 离线安装并冻结锁文件，产物校验通过；Profile 配置未改动，其他运行代码未变，官方 ASAR 未变，无 Memory 迁移，未发送真实 QQ 测试消息。
