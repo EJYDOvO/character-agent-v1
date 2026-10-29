@@ -2,9 +2,9 @@
 
 本页是版本与验收状态的统一入口。历史发布记录说明当时结果，不代表最新运行状态。
 
-## test.23 / Interaction test.8（源码，未部署）
+## test.23 / Interaction test.8（已授权部署）
 
-针对 test.22 实机审计的修复；当前实例仍运行 test.22 / Interaction test.7。
+针对 test.22 实机审计的修复。已按授权完成空闲门禁、停机一致性快照（367 个文件）与离线状态审计（无未完成 Turn/审批、无 active 提醒、Memory Schema 不变），候选离线安装及最终路径冻结锁文件校验通过后单活切换。启动后 13 个 Preset 健康、单一 QQ Gateway、Manager 与关键服务激活，官方 ASAR 未变；已部署的 Core 中七个内置 Worker 均装配工具范围、等待提示起草为 4 秒。Owner 上下文、只读 Inspector、未登录/外站拒绝、QQ 路由、提醒与 Outbox 保持不变。未发送 QQ 验收消息；旧 Profile 与快照留在本机。
 
 - **Worker 工具范围（安全）**：内置 Worker Preset 增加 `worker-scope.mjs`，在 Preset 自身组合内用原生 `ctx.tools.restrict({deny})` 屏蔽只读搜索以外的全部 Host 全局工具（Browser MCP 含 `run_code_unsafe`、`long_task_*`、`qqbot_send_file`、`working_directory` 等），并随 `tools/change` 刷新；刷新前由原生 `ctx.tools.guard()` 拒绝执行。Preset 自带工具、Root 与原生全局权限不变，未给 Worker 增加文件/终端/网络权限。详见 [Worker](WORKERS.md)。
 - **委派可靠性**：Root 策略说明 Worker 无文件工具（Root 先读材料并附来源）、`subagent` 返回子 Agent ID 而非 job、结果经 settlement 自动送达；blocked/needs_input 时如实说明，不把推测当结论，不复述内部工具细节；查看目录用 glob 或限定深度，不把递归全量列表放进对话。
