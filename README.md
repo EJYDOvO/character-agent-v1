@@ -2,7 +2,7 @@
 
 在 DeepSeek Harness 上运行的角色 Agent 扩展，提供私人 QQ 接入、可配置角色和带来源的长期记忆。Character 从官方 Creator Preset 构建派生，保留其工具能力；角色设定不会增加系统权限。
 
-这是测试版源码仓库，不包含 DSH 本体，也不是一键安装器。当前开发候选为 **test.21 / Interaction test.7，未部署**，使用独立 `dsh-conversation-manager@0.1.0-test.1` 与最新 QQTK 补丁。历史部署状态见 [STATUS](docs/STATUS.md)，安装/旧路由保护见 [集成说明](docs/INTEGRATION.md)。本轮验证基线为 **Windows、Node.js 24.21.0、DSH 0.2.1-rc.3、QQ Bot 0.5.2 / SDK 1.0.5**；其他构建需重新验证。
+这是测试版源码仓库，不包含 DSH 本体，也不是一键安装器。当前测试版为 **test.21 / Interaction test.7**，已在授权后部署到现有 Windows 实例，使用独立 `dsh-conversation-manager@0.1.0-test.1` 与最新 QQTK 补丁。历史部署状态见 [STATUS](docs/STATUS.md)，安装/旧路由保护见 [集成说明](docs/INTEGRATION.md)。本轮验证基线为 **Windows、Node.js 24.21.0、DSH 0.2.1-rc.3、QQ Bot 0.5.2 / SDK 1.0.5**；其他构建需重新验证。
 
 可选 [Interaction Policy V1](docs/INTERACTION-POLICY.md) 提供自然表达、默认 8 秒无发送确认提示（5.5 秒起经原生模型并发生成 Persona 风格短句，未就绪则用固定文案）、短聊/长结果语义气泡（长回复边生成边分泡）、按输入归属回复与 Worker 续轮、执行期间新消息的更正/优先/补充/排队处理；工具调用不禁止分段。源码默认构建不启用；该通用插件不要求安装 Character 或 QQ。配套 QQTK 可开启限量、脱敏的本地投递诊断；真实重复气泡仍待复现。
 

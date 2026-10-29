@@ -1,6 +1,6 @@
 # 运行架构与复用边界
 
-test.21 候选将路由/生命周期从 QQTK 抽成独立 `dsh-conversation-manager`（源码在 QQTK 仓库的 `plugin-sources/`），只在隔离 rc.3 验证，未部署。它没有 QQ/Character/Memory 依赖；QQ Adapter 注入该服务。一个服务内各平台独占 namespace，共用唯一持久偏好实例。创建、恢复、Flush、Fork/Compaction 和 Schedule 均复用原生 API。
+test.21 候选将路由/生命周期从 QQTK 抽成独立 `dsh-conversation-manager`（源码在 QQTK 仓库的 `plugin-sources/`），已在隔离 rc.3 验证并随 test.21 授权部署，实际验收边界见 STATUS。它没有 QQ/Character/Memory 依赖；QQ Adapter 注入该服务。一个服务内各平台独占 namespace，共用唯一持久偏好实例。创建、恢复、Flush、Fork/Compaction 和 Schedule 均复用原生 API。
 
 Identity 通过公开 `records / ownershipState / isCurrentSession` 契约绑定真实 Agent，SQLite routes 仅保留历史证据，不再作为当前主路由权威。Owner、项目/角色和 Memory capability 仍由 Identity 授权；Manager 不发放权限。平台 pending approval/question、额外 prompt 和 Typing 清理通过 Adapter 回调提供。
 

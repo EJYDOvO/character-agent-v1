@@ -2,7 +2,7 @@
 
 实例版本统一见 [当前状态](STATUS.md)；源码默认与实例启用状态分开记录。
 
-test.21 开发候选：Conversation 路由/轮换由独立 Manager 服务管理，Core 声明 `conversation-manager.config.stateFile`；Identity 只提供权限、历史提醒证明和 Outbox。停用 Manager 会使 QQ Adapter 停用，不保留第二套旧路由管理器；重启、改路径或回滚前保留原 Session/Schedule 和状态文件，见 [集成前提](INTEGRATION.md#test21-候选的新增前提未部署)。此候选未部署。
+test.21：Conversation 路由/轮换由独立 Manager 服务管理，Core 声明 `conversation-manager.config.stateFile`；Identity 只提供权限、历史提醒证明和 Outbox。停用 Manager 会使 QQ Adapter 停用，不保留第二套旧路由管理器；重启、改路径或回滚前保留原 Session/Schedule 和状态文件，见 [集成前提](INTEGRATION.md#test21-的新增部署前提)。本机已授权部署；其他实例仍需独立审查与备份。
 
 安装版本和验收范围以 [STATUS](STATUS.md) 为唯一当前入口。官方内置 Schedule 保持；旧项目记忆数据保留，但不自动导入新库。
 

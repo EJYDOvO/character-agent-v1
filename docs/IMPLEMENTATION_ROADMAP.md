@@ -1,6 +1,6 @@
 # 阶段状态与后续路线
 
-本页对照归档 v0.7.8 的 S0–S5；当前候选 test.21 / Interaction test.7，部署以 STATUS 为准。本轮抽离平台无关 Conversation Manager，未部署，不继承旧文档的授权。
+本页对照归档 v0.7.8 的 S0–S5；当前 test.21 / Interaction test.7 已授权部署，实际验收以 STATUS 为准。本轮抽离平台无关 Conversation Manager；其他实例不继承此次授权。
 
 | 顺序 | 现状与最小后续范围 | 验收/依赖与风险 |
 |---|---|---|

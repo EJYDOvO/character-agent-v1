@@ -6,7 +6,7 @@
 
 ## 普通 Agent + QQ
 
-最新候选安装 QQ Bot 与独立 `dsh-conversation-manager@0.1.0-test.1`，应用 [QQTK](https://github.com/EJYDOvO/harness-qq-toolkit-public) 两份配套补丁。Profile 加载原生 base/web-app；无需 Character、Remote Ops、Memory。此轮只做 rc.3 隔离验收，未部署。
+当前版本安装 QQ Bot 与独立 `dsh-conversation-manager@0.1.0-test.1`，应用 [QQTK](https://github.com/EJYDOvO/harness-qq-toolkit-public) 两份配套补丁。Profile 加载原生 base/web-app；无需 Character、Remote Ops、Memory。通用组合完成 rc.3 隔离验收；完整 Character 实例已授权部署，不能据此宣称普通 QQ 新装或其他平台已完成实机验收。
 
 ```yaml
 # Profile pnpm-workspace.yaml 的相关部分
