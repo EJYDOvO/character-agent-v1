@@ -2,6 +2,14 @@
 
 本页是版本与验收状态的统一入口。历史发布记录说明当时结果，不代表最新运行状态。
 
+## Interaction test.5（Character test.19）
+
+源码与隔离验证完成：约 5.5 秒仍无自然回复回执时，经原生 `ctx.llm` 并发生成一句 Persona 等待提示，8 秒复查后发送候选或固定文案；请求不带 Session 归属，不写历史或 Memory。默认继承当前 Agent 的 Provider/Model，`hangon-model.json` 可单独改路由。同时修复等待提示回执被当作正文送达，以及等待提示与正文分泡之间的 `maxBubbles` 计数竞态。QQTK 投递诊断新增 `kind`/`dynamic` 枚举字段，QQTK 不调用模型。
+
+验证：Character 单元 170/170（含新增 15 项）、审计 33/33，QQTK 轻量 31/31 及补丁重建校验；实际 rc.3 Host 12 项交互检查（含动态生成、超时回退、模型路由）及两进程生命周期/旧提醒/长期任务恢复通过。模型与 Sender 为合成替身，真实模型的提示质量、生成延迟和手机展示尚未验证。
+
+已部署 Character test.19 / Interaction test.5，配套更新的 QQ Bot 补丁；Profile 配置未改动，`hangon-model.json` 未创建，即继承主模型。冻结锁文件安装与产物校验通过，13 个 Preset 健康、单 QQ Gateway，官方 ASAR 未变。部署前保留离线一致性快照和旧 Profile，无 Memory 迁移，未发送真实 QQ 测试消息。Preset Manager / Inspector 保持 test.3，Inspector 仍只读。
+
 ## Interaction test.4（Character test.18）
 
 源码与隔离验证完成：长工具结果可按安全句界/段落分泡；8 秒未收到自然回复发送确认时加入一次等待提示；SDK 缓冲不算确认。QQTK 新增默认关闭的脱敏投递记录及只观察的 SDK 回执钩子。完整重复气泡尚未复现，本轮不宣称已修复其根因。
