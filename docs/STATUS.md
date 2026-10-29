@@ -2,6 +2,14 @@
 
 本页是版本与验收状态的统一入口。历史发布记录说明当时结果，不代表最新运行状态。
 
+## test.22 / Conversation Manager test.2（开发候选，尚未部署）
+
+隔离复现 test.21 遗留问题后，修复普通 ENOENT 被误判为缺失、Preset 查询吞异常、关闭重复释放/未等待旧句柄和清理异常中断收尾。Identity 保留现有包装方式，只增加 rebuild 前后 epoch 校验及卸载时的包装归属检查；旧操作完成不能授予新 epoch 权限。不修改 Memory Schema、Persona、Owner、Interaction 或 Worker 授权，也不增加服务。
+
+复现：同一组 Manager 回归在原 test.21 源码上出现 11 项失败；修复后 QQTK 54/54、SDK 隔离 33/33；Character 单元 204/204、安全审计 33/33。实际 rc.3 的最终 Manager tarball 双进程验证通过，包含真实持久化、依赖错误注入、冷恢复、轮换、Memory ACL、历史提醒、独立任务、Outbox 与服务重载。原生 Interaction 17 项及十个 Worker 配置/冷恢复通过；QQ/SDK 补丁未变且快照应用一致。模型、Sender及故障为合成替身。
+
+尚未部署；生产故障注入、真实 QQ 连续插话/手机收件及按钮验收未执行。没有开发新平台或更换权限模型。正式 QQ 验收仍需在本候选部署健康后进行。
+
 ## test.21 / Interaction test.7 / Conversation Manager test.1（已授权部署）
 
 - Interaction：工具全部完成后重置阶段；分类期间连续输入、显式更正和空闲切换保持顺序并消费一次，迟到结果无效。渐进分泡、Worker 续轮、动态等待提示与回执协议保留。

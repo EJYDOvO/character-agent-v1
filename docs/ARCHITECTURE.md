@@ -2,6 +2,8 @@
 
 test.21 候选将路由/生命周期从 QQTK 抽成独立 `dsh-conversation-manager`（源码在 QQTK 仓库的 `plugin-sources/`），已在隔离 rc.3 验证并随 test.21 授权部署，实际验收边界见 STATUS。它没有 QQ/Character/Memory 依赖；QQ Adapter 注入该服务。一个服务内各平台独占 namespace，共用唯一持久偏好实例。创建、恢复、Flush、Fork/Compaction 和 Schedule 均复用原生 API。
 
+test.22 收紧恢复：只有持久化 open/load 的原生同 ID 缺失错误允许创建，原生 resume 与 Preset 错误不再参与降级判断。关闭只释放每个生命周期一次，并等待先前的回收句柄；失败显式报告。Identity 保留现有包装，仅修复前置 epoch 和卸载归属检查。
+
 Identity 通过公开 `records / ownershipState / isCurrentSession` 契约绑定真实 Agent，SQLite routes 仅保留历史证据，不再作为当前主路由权威。Owner、项目/角色和 Memory capability 仍由 Identity 授权；Manager 不发放权限。平台 pending approval/question、额外 prompt 和 Typing 清理通过 Adapter 回调提供。
 
 test.13 在既有原生分析 Worker、Memory Inspector 上引入可选 QQ Session 生命周期和独立长期任务；test.14 收紧历史根权限并补充存量提醒审计。隔离与当前实例部署的验收边界统一见 [STATUS](STATUS.md)。阶段对照见 [路线图](IMPLEMENTATION_ROADMAP.md)，任务契约见 [Long Tasks](../packages/long-tasks/README.md)。

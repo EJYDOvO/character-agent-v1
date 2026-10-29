@@ -62,6 +62,19 @@ test('reattaching the exact Gateway object cannot revive a detached admission or
  try{const pending=manager.getOrCreate('c2c','owner','owner',{scope:'c2c',targetId:'owner'});detach();f.service.attach(f.runtime);detach();assert(f.service.forSession('session'));release();await assert.rejects(pending,/detached/);assert.equal(f.service.route(f.service.forSession('session')).session,'session');}
  finally{f.dispose();}
 });
+test('Identity detach does not overwrite a rebuild wrapper installed later',()=>{
+ const f=fixture();f.runtime.manager.rebuildSession=async()=>{};const detach=f.service.attach(f.runtime),later=async()=>{};f.runtime.manager.rebuildSession=later;
+ try{detach();assert.equal(f.runtime.manager.rebuildSession,later);}finally{f.dispose();}
+});
+test('a retained detached rebuild wrapper cannot start another model switch',async()=>{
+ const f=fixture();let called=0;f.runtime.manager.rebuildSession=async()=>called++;const detach=f.service.attach(f.runtime),wrapped=f.runtime.manager.rebuildSession;detach();
+ try{await assert.rejects(()=>wrapped(f.runtime.manager.record,{}),/detached/);assert.equal(called,0);}finally{f.dispose();}
+});
+test('an old rebuild completing after detach cannot grant authority in the new epoch',async()=>{
+ const f=fixture(),manager=f.runtime.manager;let release;manager.rebuildSession=async record=>{await new Promise(r=>release=r);manager.commit({...record,sessionId:'next',agent:f.makeAgent('next')});};
+ const detach=f.service.attach(f.runtime),rebuilding=manager.rebuildSession(manager.record,{});detach();f.service.attach(f.runtime);
+ try{release();await assert.rejects(rebuilding,/detached/);assert.throws(()=>f.service.forSession('next'));assert.throws(()=>f.service.forSession('session'));await manager.getOrCreate('c2c','owner','owner',{scope:'c2c',targetId:'owner'});assert(f.service.forSession('next'));}finally{f.dispose();}
+});
 
 test('evidenced binding repair is atomic, read-only audit changes nothing, and failed repair can be retried after restart',async()=>{
  const host={schedule:{catalog:async()=>[{id:'legacy',sessionId:'old-root',status:'active'}]},sessionPersistence:{stat:async id=>({header:{id,agentPreset:'qq-character',parentSession:id==='session'?'middle':id==='middle'?'old-root':undefined}})}};

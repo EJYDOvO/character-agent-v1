@@ -118,7 +118,8 @@ export function apply(ctx,config) {
     const record=await original.call(this,scope,peerId,senderId,target);if(runtime!==value||gatewayEpoch!==epoch)throw Error('Gateway detached during restore');bind(record);return record;
    };
    manager.getOrCreate=wrap;
-   if(rebuild)manager.rebuildSession=async function(record,options){const old=record.sessionId;const result=await rebuild.call(this,record,options);if(runtime!==value||gatewayEpoch!==epoch)throw Error('Gateway detached during model switch');identity.revoke(old);bound.delete(old);if(manager.isCurrentSession(record))bind(record);return result;};
+   const wrapRebuild=async function(record,options){if(runtime!==value||gatewayEpoch!==epoch)throw Error('Gateway detached before model switch');const old=record.sessionId;const result=await rebuild.call(this,record,options);if(runtime!==value||gatewayEpoch!==epoch)throw Error('Gateway detached during model switch');identity.revoke(old);bound.delete(old);if(manager.isCurrentSession(record))bind(record);return result;};
+   if(rebuild)manager.rebuildSession=wrapRebuild;
    try{for(const record of manager.records())bind(record);for(const row of db.prepare('SELECT session FROM qq_bindings WHERE conversation=?').all(conversationScope.conversationId)){const agent=ctx.get?.('agents')?.get(row.session);if(agent)restoreBinding(agent);}}catch(e){manager.getOrCreate=original;manager.rebuildSession=rebuild;runtime=undefined;identity.clear();bound.clear();throw e;}
    // Shared trusted ingress for the ordinary pipeline and explicit correction.
    // The early correction adapter must not bypass Owner binding or L1 evidence.
@@ -140,7 +141,7 @@ export function apply(ctx,config) {
    };
    manager.admitInteractionInput=admit;
    if(value.bot){let slot=ingressSlots.get(value.bot);if(!slot){slot={};ingressSlots.set(value.bot,slot);value.bot.use(async(m,next)=>{if(!slot.admit)throw Error('Character ingress detached');await slot.admit(m);return next();});}slot.admit=admit;}
-   detach=()=>{if(runtime!==value||gatewayEpoch!==epoch)return;runtime=undefined;gatewayEpoch++;const slot=value.bot&&ingressSlots.get(value.bot);if(slot?.admit===admit)slot.admit=null;if(manager.admitInteractionInput===admit){if(previousAdmission===undefined)delete manager.admitInteractionInput;else manager.admitInteractionInput=previousAdmission;}if(manager.preserveScheduledSession===preserve){if(previousScheduleBridge===undefined)delete manager.preserveScheduledSession;else manager.preserveScheduledSession=previousScheduleBridge;}if(manager.getOrCreate===wrap)manager.getOrCreate=original;if(rebuild)manager.rebuildSession=rebuild;identity.clear();bound.clear();inputs.clear();};
+   detach=()=>{if(runtime!==value||gatewayEpoch!==epoch)return;runtime=undefined;gatewayEpoch++;const slot=value.bot&&ingressSlots.get(value.bot);if(slot?.admit===admit)slot.admit=null;if(manager.admitInteractionInput===admit){if(previousAdmission===undefined)delete manager.admitInteractionInput;else manager.admitInteractionInput=previousAdmission;}if(manager.preserveScheduledSession===preserve){if(previousScheduleBridge===undefined)delete manager.preserveScheduledSession;else manager.preserveScheduledSession=previousScheduleBridge;}if(manager.getOrCreate===wrap)manager.getOrCreate=original;if(manager.rebuildSession===wrapRebuild)manager.rebuildSession=rebuild;identity.clear();bound.clear();inputs.clear();};
    void reconcile().catch(()=>ctx.logger?.warn('QQ Schedule ownership audit blocked; unproven Sessions remain unauthorized'));void pump();return detach;
   },
   async notify(trusted,event){authorize(trusted,'send');enqueue({...event,conversation:trusted.conversationId});await pump();return db.prepare('SELECT status FROM outbox WHERE id=?').get(event.eventId);},

@@ -24,6 +24,13 @@ export function apply(ctx,config){
     assert.throws(()=>ctx.memoryIdentity.forSession(a.sessionId));
     const saved=config.cwd+'/mock-session.json';if(restart)assert.equal(a.sessionId,JSON.parse(fs.readFileSync(saved)).id);else fs.writeFileSync(saved,JSON.stringify({id:a.sessionId}));
     assert.equal(mock.ownershipState(a.sessionKey).sessionId,a.sessionId);
+    await a.handle.dispose();assert.equal(mock.size,0);
+    const nativeCtx=mock.ctx,nativeAgents=mock.agents;let unexpectedCreates=0;
+    mock.ctx={get:n=>n==='sessionPersistence'?{async open(){throw Object.assign(Error('fixture persistence ENOENT'),{code:'ENOENT'});}}:nativeCtx.get(n)};
+    await assert.rejects(mock.getOrCreate('direct','user','user',{}),/persistence ENOENT/);assert.equal(mock.size,0);mock.ctx=nativeCtx;
+    mock.agents=new Proxy(nativeAgents,{get(target,key){if(key==='resume')return async()=>{throw Object.assign(Error('fixture Preset dependency ENOENT'),{code:'ENOENT'});};if(key==='create')return async()=>{unexpectedCreates++;throw Error('Must not create');};const v=Reflect.get(target,key);return typeof v==='function'?v.bind(target):v;}});
+    await assert.rejects(mock.getOrCreate('direct','user','user',{}),/dependency ENOENT/);assert.equal(unexpectedCreates,0);mock.agents=nativeAgents;
+    assert.equal((await mock.getOrCreate('direct','user','user',{})).sessionId,a.sessionId);
    }finally{await mock.disposeAll();}
    report.checks.push('Second non-QQ Adapter: namespace lease, concurrent root, cold resume and Memory denial');
    const {SessionManager}=await import(pathToFileURL(config.qqFixture+'/dist/session/session-manager.js').href),deliveries=[];
