@@ -28,7 +28,7 @@ test('Roster is trusted build configuration and rejects unsafe, duplicate or bui
  assert.equal(selectedWorkerIds().length,7);assert(!selectedWorkerIds().includes('worker-review'));
  for(const ids of [['cordis'],['worker-general'],['worker-explore'],['worker-a','worker-a'],['worker-../root'],[''],[{}]])assert.throws(()=>selectedWorkerIds([],ids));
  assert.throws(()=>selectedWorkerIds(['worker-planner']));assert.throws(()=>selectedWorkerIds(['worker-review','worker-review']));
- const policy=rootWorkerPolicy(selectedWorkerIds());for(const token of ['唯一','简单任务','WorkerResult V1','低信任','worker-planner'])assert(policy.includes(token));
+ const policy=rootWorkerPolicy(selectedWorkerIds());for(const token of ['唯一','简单任务','WorkerResult V1','低信任','worker-planner','不是后台 job ID','job_output','settlement','blocked 或 needs_input','先由你读取','不要向用户复述内部工具名'])assert(policy.includes(token),token);
  assert.throws(()=>rootWorkerPolicy(['cordis']));
 });
 test('Community real IDs and display aliases remain distinct from the native Spawn whitelist',()=>{

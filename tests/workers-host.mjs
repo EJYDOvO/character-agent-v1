@@ -86,7 +86,8 @@ export function apply(ctx,config){
     let worker;
     if(saved){const child=saved.children.find(c=>c.preset===id);assert(child);await ctx.subagents.sendMessage(root,child.id,[{type:'text',text:'Continue analysis with supplied evidence only.'}],{signal:AbortSignal.timeout(10000)});worker=ctx.agents.get(child.id);}
     else {const result=await spawn.execute({description:'Independent '+id,prompt:'Analyze only supplied fixture evidence; reference fixture:1.',agent_preset:id},exec);worker=ctx.agents.get(result.subagentId);}
-    assert(worker);await worker.whenIdle();assert.notEqual(worker.id,root.id);assert.equal(ctx.agentPresets.composedPreset(worker.ctx),id);
+    assert(worker);await worker.whenIdle();
+    assert.notEqual(worker.id,root.id);assert.equal(ctx.agentPresets.composedPreset(worker.ctx),id);
     assert(ctx.tools.get('worker_fixture_tool',worker));assert(!ctx.tools.get('root_only_fixture',worker));assert(!ctx.tools.get('character_recall',worker));// Host-global tools may be visible natively; visibility never grants task identity.
     // Host-global tools are masked on the Worker scope: lookup, schema and execution agree.
     assert(ctx.tools.get('long_task_create',root)&&ctx.tools.get('global_write_fixture',root));
@@ -118,9 +119,17 @@ export function apply(ctx,config){
     worker.followup(createUserMessage({content:[{type:'text',text:'attack-late-tool'}],source:{kind:'fixture'}}));await worker.whenIdle();remove();allow();
     const called=name=>worker.session.snapshotEvents().some(e=>e.type==='assistant/message'&&e.data?.message?.content?.some(b=>b.type==='tool-call'&&b.name===name));
     assert(called('late_worker_write'),'Attack was not actually submitted');assert.equal(effects,beforeLate+1);
+    // The WorkerResult reaches the Root as a native settlement, not via job_output.
+    if(!saved){
+     const settled=()=>root.session.snapshotEvents().find(e=>e.type==='user/message'&&(e.data?.message??e.data)?.source?.kind==='subagent-settled'&&(e.data?.message??e.data).source.senderSessionId===worker.id);
+     for(let i=0;i<200&&!settled();i++)await new Promise(r=>setTimeout(r,50));
+     const note=settled();assert(note,'Worker result must reach the Root as a native settlement for '+id);
+     assert(JSON.stringify((note.data?.message??note.data).content).includes(`\\"worker\\":\\"${id}\\"`),'Settlement must carry the WorkerResult');
+    }
     if(!saved){await ctx.subagents.drainChildren(root,[worker.id]);assert.equal(ctx.agents.get(worker.id),undefined);await ctx.subagents.sendMessage(root,worker.id,[{type:'text',text:'Cold resume analysis only.'}],{signal:AbortSignal.timeout(10000)});const cold=ctx.agents.get(worker.id);await cold.whenIdle();assert.equal(ctx.agentPresets.composedPreset(cold.ctx),id);assert.equal(ctx.tools.guardReason({agent:cold}),undefined);assert(ctx.tools.get('worker_fixture_tool',cold));const beforeCold=nativeToolExecutions.get(cold.id)??0;cold.followup(createUserMessage({content:[{type:'text',text:'invoke-configured-tool after cold recovery'}],source:{kind:'fixture'}}));await cold.whenIdle();assert.equal(nativeToolExecutions.get(cold.id),beforeCold+1);await ctx.sessions.flush(cold.session);}
    }
    report.checks.push(`${ids.length} actual native independent Presets: configured tools execute, no parent history/Persona or inherited QQ/Memory/Long Tasks authority`);
+   report.checks.push('Every WorkerResult reaches the Root as a native subagent-settled message');
    report.checks.push('Worker scope masks Host-global tools, including ones registered after spawn; model-submitted calls to them never execute; read-only search allowlist stays available');
    report.checks.push('Native whitelist, depth=1 and parent communication restrictions hold; configured and late scoped tools execute');
    report.checks.push('Real root-planner-worker ID spawns and persists; display alias and undeclared high-privilege roots rejected');

@@ -38,6 +38,8 @@ Root 的白名单/一级深度不变。Worker 默认没有委派插件；即使�
 
 结果契约 WorkerResult V1：`worker/status/summary/findings[{claim,evidence[{reference,quote}]}]/uncertainties/proposals`。这是提示与 Root 核验契约，不是运行时强制 JSON Schema。最终用户回复与决策由 Root 负责。
 
+Root 策略（test.23）：内置 Worker 没有文件工具，Root 先读取所需材料并随任务附上摘录与来源。`subagent` 返回子 Agent ID，不是 job ID；结果由原生 settlement 自动送达，不用 `job_output`/`list_agents` 轮询。Worker 返回 blocked/needs_input 时，Root 向用户说明缺什么和可选下一步，不把未核验推测当作结论，也不复述内部工具名、ID 或重试过程。真实 Host 探针验证每个 WorkerResult 以 `subagent-settled` 消息回到 Root。
+
 ## 社区真实 ID
 
 可信构建配置可显式声明已安装、已审查的第三方 Preset：
