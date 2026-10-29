@@ -1,6 +1,6 @@
 {
   "name": "dsh-character-memory-core",
-  "version": "0.1.0-test.20",
+  "version": "0.1.0-test.21",
   "private": true,
   "type": "module",
   "main": "index.mjs",

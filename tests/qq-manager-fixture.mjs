@@ -3,6 +3,8 @@
 export function managerFixture(){
  return {sessions:new Map(),sessionKey:(scope,peer)=>scope+':'+peer,
   currentSessionId(){return this.record?.sessionId;},
+  records(){return this.sessions.values();},
+  ownershipState(key){return {sessionId:this.currentSessionId(key),generation:1};},
   isCurrentSession(record){return record===this.record&&this.sessions.get(record.sessionKey)===record;},
   commit(record){record.sessionKey=this.sessionKey(record.scope,record.peerId);this.record=record;this.sessions.set(record.sessionKey,record);return record;},
   async getOrCreate(){return this.record;}};

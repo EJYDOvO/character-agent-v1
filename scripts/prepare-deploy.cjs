@@ -14,6 +14,7 @@ let rows=yaml.load(fs.readFileSync(live+'/cordis.patch.yml','utf8'));
 const core=yaml.load(fs.readFileSync(project+'/bundles/character-core/cordis.patch.yml','utf8')),extras=yaml.load(fs.readFileSync(project+'/bundles/character-extras/cordis.patch.yml','utf8'))||[];
 const workerUpgrade=require('./worker-upgrade.cjs');
 const oldCore=yaml.load(fs.readFileSync(live+'/node_modules/dsh-character-core/cordis.patch.yml','utf8'));
+const conversation=plan.verifiedConversation(live,core,oldCore);
 const workerMigration=workerUpgrade.upgrade(rows,oldCore,core);rows=workerMigration.value;
 const extrasEnabled=manifest.dsh.profile.bundles.includes('dsh-character-extras')||process.argv.includes('--extras');
 plan.verifyTaskExtras(live,extras,extrasEnabled,yaml);
@@ -37,6 +38,7 @@ for(const pkg of artifactPlan){const f=pkg.filename,source=project+'/artifacts/p
  assert(fs.existsSync(source),'Missing artifact: '+pkg.name);if(fs.existsSync(dest))assert.equal(hash(dest),hash(source),'Immutable artifact differs: '+pkg.name);else fs.copyFileSync(source,dest);
  manifest.dependencies[pkg.name]='file:'+dest.replaceAll('\\','/');record.artifacts[pkg.name]={source:manifest.dependencies[pkg.name],sha256:hash(dest),version:pkg.version};}
 manifest.dependencies[remote.name]=remote.source;record.artifacts[remote.name]=remote;
+if(conversation){manifest.dependencies[conversation.name]=conversation.source;record.artifacts[conversation.name]=conversation;}
 manifest.dsh.profile.bundles=manifest.dsh.profile.bundles.filter(x=>!['@tencent-connect/dsh-qqbot','dsh-remote-ops-local','dsh-task-memory-local','dsh-character-core','dsh-character-extras'].includes(x));manifest.dsh.profile.bundles.push('dsh-character-core');if(extrasEnabled)manifest.dsh.profile.bundles.push('dsh-character-extras');
 qq.config.preset='qq-character';delete qq.name;plan.disableLegacyMemory(rows);
 fs.writeFileSync(candidate+'/package.json',JSON.stringify(manifest,null,2));fs.writeFileSync(candidate+'/cordis.patch.yml',yaml.dump(rows,{noRefs:true,lineWidth:120}));

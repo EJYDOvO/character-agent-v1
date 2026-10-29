@@ -36,18 +36,25 @@ function verifyTaskExtras(live,nextRows,enabled,yaml){
  }
 }
 function localFile(profile,source){assert(typeof source==='string'&&source.startsWith('file:'),'Reviewed local artifact required');return path.resolve(profile,source.slice(5));}
-function verifiedRemote(live){
- const name='dsh-remote-ops-local',manifest=JSON.parse(fs.readFileSync(path.join(live,'package.json'))),source=manifest.dependencies?.[name];
+function verifiedArtifact(live,name){
+ const manifest=JSON.parse(fs.readFileSync(path.join(live,'package.json'))),source=manifest.dependencies?.[name];
  const installed=JSON.parse(fs.readFileSync(path.join(live,'node_modules',name,'package.json')));
  const pin=JSON.parse(fs.readFileSync(path.join(live,'character-artifacts.json')))[name],file=localFile(live,source);
- assert.equal(installed.name,name);assert(pin&&pin.source===source,'Remote Ops artifact is not pinned to this Profile');
- assert.equal(hash(file),pin.sha256,'Remote Ops artifact hash changed');
- if(pin.version)assert.equal(pin.version,installed.version,'Remote Ops installed version differs from pin');
+ assert.equal(installed.name,name);assert(pin&&pin.source===source,name+' artifact is not pinned to this Profile');
+ assert.equal(hash(file),pin.sha256,name+' artifact hash changed');
+ if(pin.version)assert.equal(pin.version,installed.version,name+' installed version differs from pin');
  // Inspect the tarball metadata too: filenames alone are not version evidence.
  const tar=require('node:zlib').gunzipSync(fs.readFileSync(file));let pkg;
  for(let offset=0;offset+512<=tar.length;){const header=tar.subarray(offset,offset+512),size=parseInt(header.subarray(124,136).toString().replace(/\0/g,'').trim()||'0',8),entry=header.subarray(0,100).toString().replace(/\0.*$/s,'');if(!entry)break;if(entry==='package/package.json')pkg=JSON.parse(tar.subarray(offset+512,offset+512+size));offset+=512+Math.ceil(size/512)*512;}
- assert.equal(pkg?.name,name,'Invalid Remote Ops tarball');assert.equal(pkg?.version,installed.version,'Remote Ops tarball would change installed version; explicit upgrade required');
+ assert.equal(pkg?.name,name,'Invalid '+name+' tarball');assert.equal(pkg?.version,installed.version,name+' tarball would change installed version; explicit upgrade required');
  return {name,source:'file:'+file.replaceAll('\\','/'),sha256:pin.sha256,version:installed.version};
+}
+const verifiedRemote=live=>verifiedArtifact(live,'dsh-remote-ops-local');
+function verifiedConversation(live,core,oldCore,args=process.argv){
+ const row=entries(core).find(r=>r.name==='dsh-conversation-manager');if(!row)return;
+ assert(entries(oldCore).some(r=>r.name==='dsh-conversation-manager')||args.includes('--conversation-state-reviewed'),'Conversation extraction requires an offline routing/Schedule/notification inventory and explicit --conversation-state-reviewed');
+ assert(path.isAbsolute(row.config?.stateFile)&&fs.existsSync(row.config.stateFile),'Reviewed Conversation state missing; never silently reset legacy routes');
+ return verifiedArtifact(live,'dsh-conversation-manager');
 }
 function patchPlan(live,toolkit,yaml){
  const workspace=yaml.load(fs.readFileSync(path.join(live,'pnpm-workspace.yaml'),'utf8'))??{},patches={};
@@ -88,4 +95,4 @@ function entryYaml(yaml){
  const schema=yaml.JSON_SCHEMA.extend(type);
  return {load:(text,options)=>yaml.load(text,{...options,schema}),dump:(value,options)=>yaml.dump(value,{...options,schema})};
 }
-module.exports={select,disableLegacyMemory,verifyTaskExtras,verifiedRemote,patchPlan,verifyCandidate,entryYaml,hash};
+module.exports={select,disableLegacyMemory,verifyTaskExtras,verifiedRemote,verifiedConversation,patchPlan,verifyCandidate,entryYaml,hash};

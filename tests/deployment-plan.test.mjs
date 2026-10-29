@@ -10,7 +10,7 @@ import {gzipSync} from 'node:zlib';
 const require=createRequire(import.meta.url),plan=require('../scripts/deployment-plan.cjs'),packages=require('../scripts/package-plan.cjs');
 const write=(file,value)=>{mkdirSync(dirname(file),{recursive:true});writeFileSync(file,typeof value==='string'?value:JSON.stringify(value));};
 // Real gzip/tar metadata: do not substitute a filename assertion for package version.
-function tarball(file,version){const body=Buffer.from(JSON.stringify({name:'dsh-remote-ops-local',version})),header=Buffer.alloc(512);header.write('package/package.json');header.write(body.length.toString(8).padStart(11,'0'),124);writeFileSync(file,gzipSync(Buffer.concat([header,body,Buffer.alloc(Math.ceil(body.length/512)*512-body.length+1024)])));}
+function tarball(file,version,name='dsh-remote-ops-local'){const body=Buffer.from(JSON.stringify({name,version})),header=Buffer.alloc(512);header.write('package/package.json');header.write(body.length.toString(8).padStart(11,'0'),124);writeFileSync(file,gzipSync(Buffer.concat([header,body,Buffer.alloc(Math.ceil(body.length/512)*512-body.length+1024)])));}
 function fixture(){
  const root=mkdtempSync(join(tmpdir(),'deployment-contract-')),live=join(root,'data/profiles/desktop'),project=join(root,'source');
  const binding={appId:'synthetic-app',ownerId:'synthetic-owner',characterId:'character-a',projectId:'preserve-project'};
@@ -57,6 +57,17 @@ test('Remote Ops requires matching installed version, pinned artifact hash and t
  const f=fixture();assert.equal(plan.verifiedRemote(f.live).version,'1.1.1-test.1');
  tarball(f.remote,'1.1.0');assert.throws(()=>plan.verifiedRemote(f.live),/hash/);
  write(join(f.live,'character-artifacts.json'),{'dsh-remote-ops-local':{source:'file:'+f.remote,sha256:plan.hash(f.remote)}});assert.throws(()=>plan.verifiedRemote(f.live),/version/);
+});
+test('Conversation extraction refuses unreviewed routes, missing state and unpinned dependencies',()=>{
+ const f=fixture(),stateFile=join(f.root,'conversations.json'),core=[{insert:[{id:'conversation-manager',name:'dsh-conversation-manager',config:{stateFile}}]}];
+ assert.throws(()=>plan.verifiedConversation(f.live,core,[],[]),/offline routing/);
+ assert.throws(()=>plan.verifiedConversation(f.live,core,[],['--conversation-state-reviewed']),/state missing/);
+ write(stateFile,{});assert.throws(()=>plan.verifiedConversation(f.live,core,[],['--conversation-state-reviewed']));
+ const name='dsh-conversation-manager',file=join(f.root,'manager.tgz');tarball(file,'0.1.0-test.1',name);
+ const manifest=JSON.parse(readFileSync(join(f.live,'package.json')));manifest.dependencies[name]='file:'+file;write(join(f.live,'package.json'),manifest);
+ const pins=JSON.parse(readFileSync(join(f.live,'character-artifacts.json')));pins[name]={source:'file:'+file,sha256:plan.hash(file),version:'0.1.0-test.1'};write(join(f.live,'character-artifacts.json'),pins);write(join(f.live,'node_modules',name,'package.json'),{name,version:'0.1.0-test.1'});
+ assert.equal(plan.verifiedConversation(f.live,core,[],['--conversation-state-reviewed']).name,name);
+ assert.equal(plan.verifiedConversation(f.live,core,core,[]).version,'0.1.0-test.1');
 });
 test('Real preparation CLI accepts absent, disabled and active legacy memory without optional packages or identity changes',()=>{
  for(const state of ['absent','disabled','active']){

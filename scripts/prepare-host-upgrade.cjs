@@ -17,6 +17,7 @@ let rows=yaml.load(fs.readFileSync(live+'/cordis.patch.yml','utf8'));
 const plan=require('./deployment-plan.cjs'),sourceDigest=require('./source-digest.cjs')();
 const core=yaml.load(fs.readFileSync(project+'/bundles/character-core/cordis.patch.yml','utf8')),extras=yaml.load(fs.readFileSync(project+'/bundles/character-extras/cordis.patch.yml','utf8'))||[];
 const workerUpgrade=require('./worker-upgrade.cjs'),oldCore=yaml.load(fs.readFileSync(live+'/node_modules/dsh-character-core/cordis.patch.yml','utf8'));
+const conversation=plan.verifiedConversation(live,core,oldCore);
 const migration=workerUpgrade.upgrade(rows,oldCore,core);rows=migration.value;
 const extrasEnabled=manifest.dsh.profile.bundles.includes('dsh-character-extras');
 plan.verifyTaskExtras(live,extras,extrasEnabled,yaml);
@@ -36,6 +37,7 @@ for(const pkg of artifacts){
  manifest.dependencies[name]='file:'+dest.replaceAll('\\','/');record.artifacts[name]={source:manifest.dependencies[name],sha256:hash(dest),version};
 }
 manifest.dependencies[remote.name]=remote.source;record.artifacts[remote.name]=remote;
+if(conversation){manifest.dependencies[conversation.name]=conversation.source;record.artifacts[conversation.name]=conversation;}
 if(nativeSchedule)manifest.dsh.profile.bundles=manifest.dsh.profile.bundles.filter(n=>n!=='@deepseek-ai/dsh-experimental-schedule-bundle');
 plan.disableLegacyMemory(rows);
 manifest.dsh.profile.bundles=manifest.dsh.profile.bundles.filter(n=>n!=='dsh-task-memory-local');

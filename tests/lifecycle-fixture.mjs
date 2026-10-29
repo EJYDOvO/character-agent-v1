@@ -6,6 +6,9 @@ export const name='isolated-task-fixture';
 export const inject=['llm',...Tasks.inject];
 export async function apply(ctx,config){
  const control={waiting:false,release(){}};
+ const Conversations=await import(config.conversationModule);
+ let conversations=await ctx.plugin(Conversations,{stateFile:config.conversationStateFile});
+ control.reloadConversations=async()=>{await conversations.dispose();conversations=await ctx.plugin(Conversations,{stateFile:config.conversationStateFile});};
  globalThis[Symbol.for('fixture.tasks.read.calls')]=0;
  globalThis[Symbol.for('fixture.tasks.llm.calls')]=0;
  class Fixture extends LlmAdapter{async *stream(request){

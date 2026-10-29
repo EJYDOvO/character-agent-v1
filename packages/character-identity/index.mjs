@@ -31,20 +31,19 @@ export function apply(ctx,config) {
  function isCurrentId(id){
   if(closed||!runtime)return false;
   const manager=runtime.manager,key=manager.sessionKey('c2c',binding.ownerId);
-  return manager.currentSessionId(key)===id&&db.prepare('SELECT session FROM routes WHERE conversation=?').get(conversationScope.conversationId)?.session===id;
+  return manager.ownershipState(key).sessionId===id;
  }
  function authorize(c,a){const trusted=identity.authorize(c,a);if(!isCurrentId(trusted.sessionId))throw Error('Historical QQ Session is not authorized');return trusted;}
  function forSession(id){const trusted=identity.forSession(id);authorize(trusted,'read');return trusted;}
  function hasReminderBinding(id){return !!db.prepare('SELECT 1 FROM qq_bindings WHERE session=? AND conversation=? AND preset=?').get(id,conversationScope.conversationId,presetId);}
  function protect(agent){if(ctx.get?.('agentPresets')?.composedPreset(agent.ctx)===presetId)protectSession(agent);}
  function evidence(){
-  const manager=runtime?.manager,key=manager?.sessionKey('c2c',binding.ownerId),prefs=manager?.modelResolver?.prefs;
+  const manager=runtime?.manager,key=manager?.sessionKey('c2c',binding.ownerId),state=manager?.ownershipState(key);
   // scope fingerprint pins routes/qq_bindings; QQ prefs and native parentSession
   // are Host persistence. A matching Preset without this chain grants nothing.
-  if(prefs?.loadError)throw Error('QQ preferences unreadable; ownership audit blocked');
   return {bindings:db.prepare('SELECT session FROM qq_bindings WHERE conversation=? AND preset=?').all(conversationScope.conversationId,presetId).map(r=>r.session),
    roots:[db.prepare('SELECT session FROM routes WHERE conversation=?').get(conversationScope.conversationId)?.session,
-    manager?.currentSessionId(key),prefs?.getLifecycle(key)?.previousSessionId].filter(Boolean)};
+    state?.sessionId,state?.previousSessionId].filter(Boolean)};
  }
  async function auditSchedules(){
   if(closed)throw Error('Identity disposed');
@@ -106,21 +105,21 @@ export function apply(ctx,config) {
   // Host-only stable scope descriptors are not Memory capabilities.
   conversationScope:()=>conversationScope,
   validateConversation(scope){if(closed||['principalId','characterId','projectId','conversationId'].some(k=>scope?.[k]!==conversationScope[k]))throw Error('Foreign task conversation');return conversationScope;},
-  current(){if(!runtime)throw Error('Gateway unavailable');for(const record of runtime.manager.sessions?.values()??[]){try{return forSession(record.sessionId);}catch{}}throw Error('No active trusted owner session');},
+  current(){if(!runtime)throw Error('Gateway unavailable');for(const record of runtime.manager.records()){try{return forSession(record.sessionId);}catch{}}throw Error('No active trusted owner session');},
   latestInput(trusted){authorize(trusted,'read');return inputs.get(trusted.sessionId);},
-  route(trusted){authorize(trusted,'read');const row=db.prepare('SELECT session,generation FROM routes WHERE conversation=?').get(trusted.conversationId);return row?{conversation:trusted.conversationId,...row,automaticRotation:runtime?.config?.sessionLifecycle?.enabled===true,scheduleTarget:'original_session',blockers:[]}:null;},
+  route(trusted){authorize(trusted,'read');const manager=runtime.manager,state=manager.ownershipState(manager.sessionKey('c2c',binding.ownerId));return {conversation:trusted.conversationId,session:state.sessionId,generation:state.generation,automaticRotation:runtime.config.sessionLifecycle?.enabled===true,scheduleTarget:'original_session',blockers:state.blocker?[state.blocker]:[]};},
   onIngress(fn){listeners.add(fn);return()=>listeners.delete(fn);},
   attach(value){
    if(closed||runtime)throw Error('Duplicate Character QQ gateway');validateGateway(value.config);
-   const manager=value.manager;if(!['sessionKey','currentSessionId','isCurrentSession'].every(k=>typeof manager[k]==='function'))throw Error('QQTK current-session admission patch required');
+   const manager=value.manager;if(!['sessionKey','currentSessionId','isCurrentSession','ownershipState','records'].every(k=>typeof manager[k]==='function'))throw Error('Conversation Manager ownership contract required');
    runtime=value;const epoch=++gatewayEpoch,original=manager.getOrCreate,rebuild=manager.rebuildSession;
    const wrap=async function(scope,peerId,senderId,target){
     if(runtime!==value||gatewayEpoch!==epoch||scope!=='c2c'||peerId!==binding.ownerId||senderId!==binding.ownerId||target?.scope!=='c2c'||target.targetId!==binding.ownerId)throw Error('Owner-only gateway');
     const record=await original.call(this,scope,peerId,senderId,target);if(runtime!==value||gatewayEpoch!==epoch)throw Error('Gateway detached during restore');bind(record);return record;
    };
    manager.getOrCreate=wrap;
-   if(rebuild)manager.rebuildSession=async function(record,options){const old=record.sessionId;const result=await rebuild.call(this,record,options);if(runtime!==value||gatewayEpoch!==epoch)throw Error('Gateway detached during model switch');identity.revoke(old);bound.delete(old);if(manager.sessions?.get(record.sessionKey)===record)bind(record);return result;};
-   try{for(const record of manager.sessions?.values()??[])bind(record);for(const row of db.prepare('SELECT session FROM qq_bindings WHERE conversation=?').all(conversationScope.conversationId)){const agent=ctx.get?.('agents')?.get(row.session);if(agent)restoreBinding(agent);}}catch(e){manager.getOrCreate=original;manager.rebuildSession=rebuild;runtime=undefined;identity.clear();bound.clear();throw e;}
+   if(rebuild)manager.rebuildSession=async function(record,options){const old=record.sessionId;const result=await rebuild.call(this,record,options);if(runtime!==value||gatewayEpoch!==epoch)throw Error('Gateway detached during model switch');identity.revoke(old);bound.delete(old);if(manager.isCurrentSession(record))bind(record);return result;};
+   try{for(const record of manager.records())bind(record);for(const row of db.prepare('SELECT session FROM qq_bindings WHERE conversation=?').all(conversationScope.conversationId)){const agent=ctx.get?.('agents')?.get(row.session);if(agent)restoreBinding(agent);}}catch(e){manager.getOrCreate=original;manager.rebuildSession=rebuild;runtime=undefined;identity.clear();bound.clear();throw e;}
    // Shared trusted ingress for the ordinary pipeline and explicit correction.
    // The early correction adapter must not bypass Owner binding or L1 evidence.
    const previousAdmission=manager.admitInteractionInput,previousScheduleBridge=manager.preserveScheduledSession;
