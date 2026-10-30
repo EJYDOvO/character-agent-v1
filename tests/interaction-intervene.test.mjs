@@ -32,8 +32,7 @@ function fixture(judge){
  const agent={status:'running',cancel:(...a)=>actions.push(['cancel',...a]),followup:m=>actions.push(['followup',m.id]),steer:m=>actions.push(['steer',m.id])};
  const j=judge===null?undefined:(input=>{judged.push(input);return judge(input);});
  const p=new Interaction(agent,{hangOnMs:60000,throttleMs:10},clock,undefined,j);
- const transport={key:agent,trace:(e,f)=>traces.push([e,f]),async sendText(text,meta){sent.push([text,meta]);},
-  openStream(meta){const b={text:'',closed:false,meta};bubbles.push(b);return {async update(t){b.text=t;},async complete(){b.closed=true;},cancel(){b.cancelled=true;}};}};
+ const transport={key:agent,trace:(e,f)=>traces.push([e,f]),async sendText(text,meta){sent.push([text,meta]);if(meta?.kind==='assistant')bubbles.push({text,meta});}};
  p.bind(transport);
  let rev=0,attempt=0;const event=(type,data={})=>p.event({type,data});
  const start=(text='讲讲 Rust 所有权')=>{event('turn/start');event('user/message',{message:{id:'q1',source:{kind:'user'},content:[{type:'text',text}]}});p.frame({type:'start',attemptId:++attempt,revision:++rev});};
@@ -41,7 +40,7 @@ function fixture(judge){
  const message=text=>{event('assistant/message',{message:{content:[{type:'text',text}]}});p.frame({type:'end',attemptId:attempt,revision:++rev,outcome:{eventType:'assistant/message'}});};
  const advance=async ms=>{time+=ms;for(const [k,t]of [...timers])if(t.at<=time){timers.delete(k);t.fn();}for(let i=0;i<5;i++)await Promise.resolve();};
  const msg=(mid,text)=>({id:mid,source:{kind:'user'},content:[{type:'text',text}]});
- const shown=()=>[...bubbles.map(b=>b.text),...sent.map(s=>s[0])].join('');
+ const shown=()=>sent.map(s=>s[0]).join('');
  const decision=()=>traces.filter(([e])=>e==='intervene').map(([,{decision,phase,why}])=>JSON.parse(JSON.stringify({decision,phase,why})));
  return {p,agent,event,start,chunk,message,advance,msg,sent,bubbles,actions,traces,judged,shown,decision};
 }
@@ -58,12 +57,12 @@ test('a judged correction during text generation withholds stale output, cancels
  const verdict=deferred();const f=fixture(()=>verdict.promise);f.start();f.chunk('所有权的第一句。');await f.advance(11);await f.p.idle();
  assert.equal(f.p.intervene(f.msg('q2','不对，我是想问借用检查器原理')),'judging');
  f.chunk('过期的第二句。');await f.advance(11);
- assert.equal(f.shown(),'所有权的第一句。','nothing new is sent while the judge runs');
+ assert.equal(f.shown(),'','nothing is sent while the judge runs');
  assert.equal(f.judged[0].current,'讲讲 Rust 所有权');assert.equal(f.judged[0].incoming,'不对，我是想问借用检查器原理');assert.equal(f.judged[0].phase,'text');
  verdict.resolve('revise');await f.advance(0);await f.p.idle();
  assert.deepEqual(f.actions,[['cancel',{kind:'user'},{keepInbox:true}],['followup','q2']]);
  f.message('所有权的第一句。过期的第二句。');await f.p.idle();
- assert.equal(f.shown(),'所有权的第一句。','already visible text stays, stale text is never sent');
+ assert.equal(f.shown(),'','the uncommitted stale reply is never sent');
 });
 
 test('a correction while a tool runs steers without cancelling and withdraws only unsent output',async()=>{
@@ -90,7 +89,7 @@ test('a supplement steers at the next boundary and keeps the current reply intac
 test('an independent question is queued and held output resumes in order after the judge',async()=>{
  const verdict=deferred();const f=fixture(()=>verdict.promise);f.start();f.chunk('原回答一。');await f.advance(11);await f.p.idle();
  f.p.intervene(f.msg('q2','另外，周末天气怎么样'));f.message('原回答一。原回答二。');await f.advance(0);
- assert.equal(f.shown(),'原回答一。');verdict.resolve('append');await f.advance(0);await f.p.idle();
+ assert.equal(f.shown(),'','held while the judge runs');verdict.resolve('append');await f.advance(0);await f.p.idle();
  assert.deepEqual(f.actions,[['followup','q2']]);assert.equal(f.shown(),'原回答一。原回答二。');
 });
 

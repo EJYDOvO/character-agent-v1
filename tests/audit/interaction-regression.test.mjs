@@ -55,18 +55,15 @@ test('A10 a previous turn end cannot cancel a newly started turn',async t=>{
 test('A11 background/Schedule turn without interactive origin must not use retained QQ transport for hang-on',async t=>{
  const f=fixture(t);f.event('user/message',{source:{kind:'schedule'}});f.event('turn/start',{turn:2});f.p.hangOn();await f.p.idle();assert.deepEqual(f.sent,[]);
 });
-test('A12 SDK pending text must not be published on stop as a new DONE frame',async t=>{
- // Simulates SDK throttling: update may return before text has left its buffer.
- const f=fixture(t);let pending='';f.p.bind({key:f.key,sendText:async()=>{},openStream:()=>({async update(s){pending=s;},async complete(){f.sent.push(pending);},cancel(){pending='';}})});
- f.start();f.p.text('SDK尚未发送的尾巴');f.p.update(f.p.message);await f.p.idle();f.p.stopOutput();await f.p.idle();assert.deepEqual(f.sent,[]);
+test('A12 generated text that is not a complete bubble is never published, also on stop',async t=>{
+ const f=fixture(t);f.start();f.p.text('尚未成为气泡的尾巴');f.p.update(f.p.message);await f.p.idle();assert.deepEqual(f.sent,[]);f.p.stopOutput();await f.p.idle();assert.deepEqual(f.sent,[]);
 });
 test('A13 transport drain is bounded even if a platform send never settles',async t=>{
  const f=fixture(t);let release;f.p.bind({key:f.key,sendText:()=>new Promise(r=>release=r)});f.start();f.settle('慢网络');await micro();
  const disposed=f.p.dispose();const outcome=await Promise.race([disposed.then(()=> 'closed'),new Promise(r=>setTimeout(()=>r('blocked'),60))]);release();await disposed;assert.equal(outcome,'closed');
 });
-test('A14 transient stream failure must not silently lose the final suffix',async t=>{
- const f=fixture(t);let current='',calls=0;f.p.bind({key:f.key,sendText:async s=>f.sent.push(s),openStream:()=>({async update(s){if(++calls===1)throw Object.assign(Error('definitively rejected before write'),{delivery:'rejected'});current=s;},async complete(){f.sent.push(current);}})});
- f.start();f.p.text('前缀');f.p.update(f.p.message);await f.p.idle();f.p.text('和最终尾巴');f.settle('前缀和最终尾巴');await f.p.idle();assert.equal(f.sent.join(''),'前缀和最终尾巴');
+test('A14 a reply generated in pieces is committed whole, the final suffix included',async t=>{
+ const f=fixture(t);f.start();f.p.text('前缀');f.p.update(f.p.message);await f.p.idle();f.p.text('和最终尾巴');f.settle('前缀和最终尾巴');await f.p.idle();assert.deepEqual(f.sent,['前缀和最终尾巴']);
 });
 test('A15 rehydrated active Agent must not silently swallow durable settlement on plugin reload',async t=>{
  const handlers=new Map(),agent={session:{},status:'running'};let service,cleanup;
@@ -87,16 +84,19 @@ test('A18 formatting control: code, links, lists and tables remain intact when c
   const f=fixture(t);f.start();f.settle(text);await f.p.idle();assert.deepEqual(f.sent,[text]);
  }
 });
-test('A19 slow platform coalesces superseded cumulative updates instead of replaying backlog',async t=>{
- const f=fixture(t);let release,updates=0;const gate=new Promise(r=>release=r);
- f.p.bind({key:f.key,sendText:async()=>{},openStream:()=>({async update(){if(++updates===1)await gate;},async complete(){}})});
- f.start();f.p.text('头');f.p.update(f.p.message);await micro();
- for(let i=0;i<100;i++){f.p.text('字');f.p.update(f.p.message);}f.settle('头'+'字'.repeat(100));release();await f.p.idle();assert(updates<=3,`replayed ${updates} cumulative updates`);
+test('A19 slow platform coalesces generation updates instead of replaying backlog',async t=>{
+ const f=fixture(t);let release,sends=0;const gate=new Promise(r=>release=r),sent=[];
+ f.p.bind({key:f.key,sendText:async s=>{sends++;sent.push(s);if(sends===1)await gate;}});
+ const long='头'+'甲乙丙丁戊己庚辛。'.repeat(30)+'\n\n'+'子丑寅卯辰巳午未。'.repeat(10)+'\n';
+ f.start();f.p.text(long);f.p.update(f.p.message);await micro();
+ for(let i=0;i<100;i++){f.p.text('字');f.p.update(f.p.message);}f.settle(long+'字'.repeat(100));release();await f.p.idle();
+ assert(sends<=3,`sent ${sends} bubbles`);assert.equal(sent.join(''),long+'字'.repeat(100));
 });
 
-test('A20 ambiguous delivery is not blindly retried or completed',async t=>{
- const f=fixture(t);let updates=0,completed=0;f.p.bind({key:f.key,sendText:async s=>f.sent.push(s),openStream:()=>({async update(){updates++;throw Error('response lost after possible delivery');},async complete(){completed++;},cancel(){}})});
- f.start();f.p.text('前缀');f.p.update(f.p.message);await f.p.idle();f.settle('前缀和尾巴');await f.p.idle();assert.equal(updates,1);assert.equal(completed,0);assert.deepEqual(f.sent,[]);assert(f.p.errors.includes('stream-delivery-unknown'));
+test('A20 ambiguous delivery is not blindly retried, and the rest of that reply is withheld',async t=>{
+ const f=fixture(t);let calls=0;f.p.bind({key:f.key,sendText:async s=>{calls++;f.sent.push(s);throw Object.assign(Error('response lost after possible delivery'),{delivery:'unknown'});}});
+ f.start();f.settle('第一段完整文本，写得足够长。\n\n第二段完整文本，同样足够长。');await f.p.idle();
+ assert.equal(calls,1);assert.deepEqual(f.sent,['第一段完整文本，写得足够长。\n\n']);assert(f.p.errors.includes('bubble-delivery-unknown'));
 });
 
 test('A21 steer ignores a late settlement from the superseded attempt until the next attempt starts',async t=>{

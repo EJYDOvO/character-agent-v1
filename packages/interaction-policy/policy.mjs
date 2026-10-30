@@ -97,14 +97,6 @@ export function progressiveCut(text,config){
   return (item.test(prev)&&item.test(next[1]))||(row.test(prev)&&row.test(next[1]))?0:p;
 }
 
-// The preview never extends beyond the earliest point any split could cut — a
-// paragraph break, or a sentence end past half the bubble target — so final
-// segmentation cannot retract visible text.
-function preview(text,config){
-  const {points,paragraphs}=splitPoints(text),min=Math.floor(config.bubbleTargetChars/2);
-  const stop=points.find(p=>paragraphs.has(p)||p>=min);return stop===undefined?text:text.slice(0,stop);
-}
-
 // Conservative plain-text boundaries; code, lists, links and tables stay intact.
 export function boundary(text) {
   if(/[`~\[\]<>|]|https?:\/\/|(?:^|\n)\s*(?:[-*+#]|\d+[.)])\s/u.test(text))return 0;
@@ -122,6 +114,9 @@ export function boundary(text) {
 
 const JUDGE_MS=2500,DECISIONS=['revise','priority','supplement','append'],CHAT_MIN=12;
 const textOf=message=>(message?.content??[]).filter(b=>b?.type==='text').map(b=>b.text??'').join('\n');
+// One cancellation ticket per reply generation; its signal lets the platform
+// side stop parts it has not sent yet.
+const ticket=()=>{const control=new AbortController();return {cancelled:false,signal:control.signal,cancel(){this.cancelled=true;control.abort();}};};
 
 export class Interaction {
   // drafter({agent,state,signal}) resolves one candidate hang-on line. It must
@@ -129,7 +124,7 @@ export class Interaction {
   // judge({agent,current,incoming,phase,signal}) classifies an input that arrives
   // mid-run as revise/priority/supplement/append. It routes only; it never answers.
   constructor(agent,config={},clock={now:Date.now,set:setTimeout,clear:clearTimeout},drafter,judge) {
-    this.agent=agent;this.config=options(config);this.clock=clock;this.drafter=typeof drafter==='function'?drafter:null;this.judge=typeof judge==='function'?judge:null;this.intervention=null;this.hold=null;this.draftControl=null;this.candidate=null;this.chain=Promise.resolve();this.token={cancelled:false};this.active=false;this.closed=false;this.transport=null;this.tools=new Set();this.streams=new Map();this.seen=new WeakSet();this.revision=-1;this.errors=[];this.message=null;this.children=new Map();this.replyCtx=null;
+    this.agent=agent;this.config=options(config);this.clock=clock;this.drafter=typeof drafter==='function'?drafter:null;this.judge=typeof judge==='function'?judge:null;this.intervention=null;this.hold=null;this.draftControl=null;this.candidate=null;this.chain=Promise.resolve();this.token=ticket();this.active=false;this.closed=false;this.transport=null;this.tools=new Set();this.seen=new WeakSet();this.revision=-1;this.errors=[];this.message=null;this.children=new Map();this.replyCtx=null;
   }
   bind(transport) {
     if(this.closed||!this.config.enabled)return false;
@@ -154,7 +149,7 @@ export class Interaction {
   stopDraft(){const control=this.draftControl;this.draftControl=null;control?.abort();}
   start(turn){
     if(this.active)this.invalidate();else this.clearTimers();
-    this.token={cancelled:false};this.turn=turn;this.message=null;this.active=true;this.natural=false;this.delivered=false;this.prompted=false;this.drafted=false;this.draftState=undefined;this.candidate=null;this.toolSeen=false;this.tools.clear();this.started=this.clock.now();this.beginReply();
+    this.token=ticket();this.turn=turn;this.message=null;this.active=true;this.natural=false;this.delivered=false;this.prompted=false;this.drafted=false;this.draftState=undefined;this.candidate=null;this.toolSeen=false;this.tools.clear();this.started=this.clock.now();this.beginReply();
     if(this.transport?.requireIngress)this.background=true;
     this.suppressSettlement=false;
     if(this.drafter)this.draftTimer=this.clock.set(()=>{this.draftTimer=undefined;this.draft();},this.config.hangOnDraftMs);
@@ -186,17 +181,17 @@ export class Interaction {
     if(dynamic){this.recentHangOns=[...(this.recentHangOns??[]),text].slice(-3);}
     this.trace('hang-on',{state:state==='tool'?1:0,dynamic,draft});
     this.queue(async()=>{
-      if(this.token===token&&this.active&&!this.delivered&&this.agent.status==='running'&&!this.transport.waitingForUser?.())await this.transport.sendText(text,{...this.metadata(token,undefined,'status'),transient:true,state,dynamic});
+      if(this.token===token&&this.active&&!this.delivered&&this.agent.status==='running'&&!this.transport.waitingForUser?.())await this.transport.sendText(text,{...this.metadata(token,undefined,'status'),transient:true,state,dynamic,cancelled:()=>token.cancelled});
     },token);
   }
   trace(event,fields={}){try{this.transport?.trace?.(event,{turn:this.turn,reply:this.reply,...fields});}catch{}}
   // One reply context per admitted input: its own bubble budget and numbering,
   // so a late tail never borrows the next input's counters. `input` is the
   // native UserMessage id; platforms map it to their own reply target.
-  beginReply(input){this.reply=(this.reply??0)+1;this.bubbles=0;this.replyCtx={turn:this.turn,reply:this.reply,input,seq:0};if(this.message&&!this.message.full&&!this.message.stream)this.message.context=this.replyCtx;}
+  beginReply(input){this.reply=(this.reply??0)+1;this.bubbles=0;this.replyCtx={turn:this.turn,reply:this.reply,input,seq:0};if(this.message&&!this.message.full)this.message.context=this.replyCtx;}
   // Only assistant output confirms the natural reply; a status receipt never does.
-  metadata(token=this.token,context=this.replyCtx,kind='assistant'){const c=context??{turn:this.turn,reply:this.reply};c.seq=(c.seq??0)+1;return {turn:c.turn,reply:c.reply,...(c.input===undefined?{}:{input:c.input}),kind,bubble:c.seq,onDelivered:()=>{if(kind!=='status'&&this.token===token&&!token.cancelled){this.delivered=true;this.stopDraft();this.trace('delivery-confirmed',{turn:c.turn,reply:c.reply});}}};}
-  newMessage(){return {full:'',pending:'',transport:this.transport,token:this.token,context:this.replyCtx,stream:null,updated:'',failed:false,finished:false};}
+  metadata(token=this.token,context=this.replyCtx,kind='assistant'){const c=context??{turn:this.turn,reply:this.reply};c.seq=(c.seq??0)+1;return {turn:c.turn,reply:c.reply,...(c.input===undefined?{}:{input:c.input}),kind,bubble:c.seq,signal:token.signal,onDelivered:()=>{if(kind!=='status'&&this.token===token&&!token.cancelled){this.delivered=true;this.stopDraft();this.trace('delivery-confirmed',{turn:c.turn,reply:c.reply});}}};}
+  newMessage(){return {full:'',pending:'',transport:this.transport,token:this.token,context:this.replyCtx,finished:false};}
   text(delta){
     if(!this.active||this.closed||this.background||typeof delta!=='string'||!delta)return;
     if(delta.trim())this.natural=true;
@@ -211,52 +206,46 @@ export class Interaction {
     if(!this.transport)return;
     if(final){
       const parts=semanticParts(m.pending,this.config,Math.max(1,this.config.maxBubbles-this.bubbles));
-      // A legacy transport may have exposed a longer prefix before an upgrade.
-      while(parts.length>1&&m.updated.length>parts[0].length)parts.splice(0,2,parts[0]+parts[1]);
       for(const part of parts){this.finishBubble(m,part);if(part.trim())this.bubbles++;}
       m.pending='';m.finished=true;
     }
   }
+  // Bubbles are committed whole: nothing is shown before it is final. While the
+  // reply streams, each bubble the final split would cut is committed as soon
+  // as it is complete, keeping one bubble of the reply budget for the open tail;
+  // the rest is committed at settlement.
   update(m){
-    if(!this.transport||m.finished||!m.pending.trim())return;
-    if(m.queued)return;
+    if(!this.transport||m.finished||!m.pending.trim()||m.queued)return;
     m.queued=true;
     // Read the latest cumulative snapshot when execution begins, not at enqueue.
-    // A long reply commits finished bubbles while it streams, keeping one
-    // bubble of the reply budget for the open tail.
     this.queue(async()=>{
-      m.queued=false;if(m.finished)return;
-      const cut=this.config.maxBubbles-this.bubbles>1?progressiveCut(m.pending,this.config):0;
-      if(cut){const head=m.pending.slice(0,cut);m.pending=m.pending.slice(cut);m.committed=(m.committed??0)+cut;this.bubbles++;await this.deliver(m,head,m.token??this.token);}
-      // The last bubble of the budget is never split again: show all of it.
-      if(!m.finished&&m.pending.trim())await this.push(m,this.config.maxBubbles-this.bubbles<=1?m.pending:preview(m.pending,this.config));
+      m.queued=false;
+      while(!m.finished&&this.config.maxBubbles-this.bubbles>1){
+        const cut=progressiveCut(m.pending,this.config);if(!cut)break;
+        const head=m.pending.slice(0,cut);m.pending=m.pending.slice(cut);m.committed=(m.committed??0)+cut;this.bubbles++;
+        await this.deliver(m,head,m.token??this.token);
+      }
     });
   }
-  async push(m,text){
-    if(m.token?.cancelled||m.failed&&!m.retrySafe||!text.trim()||!m.transport?.openStream)return;
-    if(!m.stream){try{m.metadata??=this.metadata(m.token,m.context);m.stream=m.transport.openStream(m.metadata);this.streams.set(m.stream,m.token??this.token);}catch{m.failed=true;return;}}
-    if(m.updated===text)return;
-    try{await m.stream.update(text);if(!m.transport.deliveryReceipts)m.metadata?.onDelivered();m.updated=text;m.failed=false;}catch(error){m.failed=true;m.retrySafe=error?.delivery==='rejected'||(error?.httpStatus>=400&&error.httpStatus<500&&error.httpStatus!==408);this.errors.push(m.retrySafe?'stream-delivery-rejected':'stream-delivery-unknown');}
-  }
   finishBubble(m,text){
-    if(!text.trim()&&!m.stream)return;
+    if(!text.trim())return;
     const token=this.token;this.queue(()=>this.deliver(m,text,token));
   }
-  // Detach the open stream as one bubble; subsequent tokens get a separate stream.
+  // One complete bubble is handed to the transport once; the platform side owns
+  // reliable delivery. A bubble that was not confirmed is never resent, and the
+  // later bubbles of its reply are withheld so the user never sees a gap. A
+  // partial or unknown result may be visible, so it counts as the natural reply.
   async deliver(m,text,token){
-    const segment={transport:m.transport,token,context:m.context,stream:null,updated:'',failed:false};
-    {
-      segment.stream=m.stream;segment.updated=m.updated;segment.failed=m.failed;segment.retrySafe=m.retrySafe;segment.metadata=m.metadata??this.metadata(token,m.context);
-      m.stream=null;m.updated='';m.failed=false;m.metadata=null;
-      if(!segment.transport)return;
-      if(!segment.stream&&!segment.transport.openStream){await segment.transport.sendText(text,{...segment.metadata,kind:'assistant',cancelled:()=>token.cancelled});segment.metadata.onDelivered();return;}
-      await this.push(segment,text);
-      if(token.cancelled){if(this.streams.delete(segment.stream))segment.stream?.cancel?.();return;}
-      if(segment.stream&&!segment.failed){try{await segment.stream.complete();}catch{this.errors.push('stream-close-failed');}}
-      else if(!segment.stream){await segment.transport.sendText(text,{...segment.metadata,kind:'assistant',cancelled:()=>token.cancelled});segment.metadata.onDelivered();}
-      // Unknown delivery is never retried blindly; record that this part was withheld.
-      else this.trace('stream-withheld',{turn:segment.metadata.turn,reply:segment.metadata.reply,bubble:segment.metadata.bubble});
-      if(segment.stream)this.streams.delete(segment.stream);
+    const transport=m.transport,context=m.context;
+    if(!transport||token.cancelled||!text.trim())return;
+    const metadata=this.metadata(token,context),where={turn:metadata.turn,reply:metadata.reply,bubble:metadata.bubble};
+    if(context?.failed){this.trace('bubble-withheld',where);return;}
+    try{await transport.sendText(text,{...metadata,cancelled:()=>token.cancelled});metadata.onDelivered();}
+    catch(error){
+      if(token.cancelled)return;
+      if(error?.delivery==='partial'||error?.delivery==='unknown')metadata.onDelivered();
+      if(context)context.failed=true;
+      this.note(error?.delivery==='unknown'?'bubble-delivery-unknown':'bubble-delivery-failed');this.trace('bubble-failed',where);
     }
   }
   finish(text){
@@ -276,9 +265,7 @@ export class Interaction {
     this.split(m,true);this.message=null;
   }
   invalidate(){
-    this.clearTimers();this.token.cancelled=true;this.suppressSettlement=true;this.message=null;this.attempt=null;
-    // complete() may flush unsent SDK buffers. Cancellation must never do that.
-    for(const [pending,token]of this.streams)if(token.cancelled){try{pending.cancel?.();}catch{this.errors.push('stream-cancel-failed');}this.streams.delete(pending);}
+    this.clearTimers();this.token.cancel();this.suppressSettlement=true;this.message=null;this.attempt=null;
   }
   frame(frame){
     if(this.closed||!this.config.enabled)return;
@@ -289,14 +276,14 @@ export class Interaction {
     if(frame.type==='start'){
       this.trace('attempt-start',{attempt:String(frame.attemptId)});
       const shown=this.message?.committed?this.message.full.slice(0,this.message.committed):undefined;
-      if(this.message){this.invalidate();this.token={cancelled:false};this.errors.push('retried-attempt');}
+      if(this.message){this.invalidate();this.token=ticket();this.errors.push('retried-attempt');}
       this.attempt=frame.attemptId;this.message=this.newMessage();if(shown)this.message.skip=shown;
       this.suppressSettlement=false;
     }else if(frame.attemptId===this.attempt&&frame.type==='chunk'){
       if(frame.chunk?.type==='tool-call-delta')this.toolSeen=true;
       if(frame.chunk?.type==='text-delta')this.text(frame.chunk.text);
     }else if(frame.attemptId===this.attempt&&frame.type==='end'){
-      if(frame.outcome?.eventType!=='assistant/message'&&this.message){this.invalidate();this.token={cancelled:false};}
+      if(frame.outcome?.eventType!=='assistant/message'&&this.message){this.invalidate();this.token=ticket();}
       this.attempt=null;
     }
   }
@@ -316,7 +303,7 @@ export class Interaction {
         this.inputs?.delete(key);
         this.background=!child&&(!admitted||this.clock.now()-admitted.at>300000);
       }else this.background=!child&&incoming.source?.kind!==undefined&&incoming.source.kind!=='user';
-      if(this.background)this.invalidate();else if(this.token.cancelled){this.token={cancelled:false};this.suppressSettlement=false;}
+      if(this.background)this.invalidate();else if(this.token.cancelled){this.token=ticket();this.suppressSettlement=false;}
       if(!this.background&&this.active){const input=child?child.input:key;if(this.replyCtx&&(this.replyCtx.input!==undefined||this.replyCtx.seq>0))this.beginReply(input);else if(this.replyCtx)this.replyCtx.input=input;if(!child&&this.replyCtx)this.replyCtx.text=textOf(incoming).slice(-1500);}
     }
     if(event.type!=='turn/start'&&d.turn!==undefined&&this.turn!==undefined&&d.turn!==this.turn)return;
@@ -384,7 +371,7 @@ export class Interaction {
     if(decision==='supplement'){for(const m of messages)this.agent.steer(m);return 'steered';}
     if(!this.active||phase!=='text'){
       // Only a correction withdraws the old reply's unsent output.
-      if(decision==='revise'){this.invalidate();this.token={cancelled:false};}
+      if(decision==='revise'){this.invalidate();this.token=ticket();}
       for(const m of messages)this.agent.steer(m);return 'steered';
     }
     this.invalidate();this.active=false;this.agent.cancel({kind:'user'},{keepInbox:true});for(const m of messages)this.agent.followup(m);return 'restarted';
@@ -396,7 +383,7 @@ export class Interaction {
     if(this.hold===pending.hold)this.hold=null;pending.hold.release();this.trace('intervene',{decision:'dropped'});
   }
   stopOutput(){this.dropIntervention();this.active=false;this.invalidate();}
-  external(text,meta={}){if(this.background||this.suppressSettlement)return Promise.resolve();const transport=this.transport;const token=this.token;return this.queue(()=>transport?.sendText(text,{...meta,cancelled:()=>token.cancelled}));}
+  external(text,meta={}){if(this.background||this.suppressSettlement)return Promise.resolve();const transport=this.transport;const token=this.token;return this.queue(()=>transport?.sendText(text,{...meta,signal:token.signal,cancelled:()=>token.cancelled}));}
   async idle(){await this.chain;}
   async dispose(){this.dropIntervention();this.active=false;this.invalidate();this.closed=true;this.transport=null;}
 }

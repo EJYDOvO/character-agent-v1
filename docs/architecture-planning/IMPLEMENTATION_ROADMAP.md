@@ -9,7 +9,7 @@
 | --- | --- | --- |
 | 运行装配 | Character **test.23** / QQTK **test.23** 已有授权部署记录；DSH **0.2.1-rc.3**、Node **24.21.0**、Windows | 不等于 Mac/其他 DSH 构建可安装或验收 |
 | 会话 | 独立 Conversation Manager **test.2**，QQTK 为薄会话适配；隔离恢复/唯一路由已有验证 | 模拟第二平台不代表真实第二平台；旧提醒根/单写入者约束保留 |
-| Interaction | **test.8**；长回复渐进分泡、插话、Worker 续轮、4 秒 Hang-on 起草/8 秒检查、回执诊断；当前 bind sendText / 可选 openStream | 尚未改用 sendMessage；自然短泡、真实模型与手机效果另验 |
+| Interaction | **test.8** 已部署；源码 **test.9**（Iteration 04，未部署）只提交完整气泡，`bind` 只用 `sendText`，QQ 侧经 `sendMessage()` 发送 | 真实 QQ 手机收件与实机分泡节奏未验收 |
 | Worker | 原生 Creator/Worker Preset、显式委派、工具范围守卫；test.23 记录 13 Preset 健康 | 部分 Host 探针限时未完成；真实任务质量另验 |
 | Memory/Inspector | SQLite Schema 3、记忆 L1/L2/L3、来源治理及可选 Inspector | 与通信 L1/L2/L3 无关；长期效果/桌面体验/大库性能另验 |
 | 通知/Long Tasks | 原生 Schedule + 既有持久 Outbox、稳定目标/去重及可选 Long Tasks | 通用 Notification 尚未抽离；手机投递未全验 |
@@ -85,7 +85,23 @@ Character 单元 215、安全审计 33、QQTK 轻量 55/审批 6 是 [STATUS](..
 
 **验收证据**：QQTK 新增 `conversation-io.test.mjs`（真实 Conversation Manager、不含 QQ 代码的合成第二平台）覆盖普通 Agent 收发、跨平台/账号/direct-group 隔离、冷恢复、自动轮换与显式重置后的迟到输出、Manager/接线关闭竞态、准入拒绝与 Owner-only 包装、伪造来源、入站去重、出站分片间复核与 Interaction；QQ 测试经 Gateway 自己的接线代码运行；关键校验经变异检查确认会被测试捕获。隔离 rc.3 探针确认已安装包从 Agent I/O 插件上下文取到原生 Interaction 服务、用 Host `dsh-llm` 创建原生输入，QQ 入站/出站经新接口各一次且重复推送/陌生人不产生输入。
 
-**未覆盖**：Interaction 出站迁移（04，`sendText`/`openStream` 与 SDK stream 照旧）；Remote Ops 启动路由恢复与 Character Identity 准入仍直接调用 Manager（非 Agent 输入）；命令/问答/审批（05/06）；通知与历史提醒（07）；持久发送状态；真实第二平台（只有合成夹具）；真实 QQ 手机收件；部署与回滚演练（Character 部署计划会拒绝缺 `openConversation` 的 `dsh-agent-io`，但尚不能升级已安装的 test.3，部署前需补该步骤）。
+**未覆盖**：Interaction 出站迁移（04，见 3.3）；Remote Ops 启动路由恢复与 Character Identity 准入仍直接调用 Manager（非 Agent 输入）；命令/问答/审批（05/06）；通知与历史提醒（07）；持久发送状态；真实第二平台（只有合成夹具）；真实 QQ 手机收件；部署与回滚演练（Character 部署计划会拒绝缺 `openConversation` 的 `dsh-agent-io`，但尚不能升级已安装的 test.3，部署前需补该步骤）。
+
+### 3.3 Iteration 04：Interaction 出站迁移
+
+**状态**：源码完成（Character Interaction `0.1.0-test.9` + QQTK 补丁；Agent I/O 仍为 `0.1.0-test.4`，公共接口不变），自动化测试与隔离 rc.3 Host 探针通过；**未部署**，真实 QQ/手机未验收。
+
+**实现**：
+
+- Interaction 只负责语义分泡、Hang-on、插话与回复节奏，只提交完整气泡：不再预览未定稿文本，不再使用 `openStream`；长回复在生成期间按与 settlement 一致的定稿点提前提交（保留一泡给开放尾部），工具调用前已结算的气泡在工具执行期间提交，其余在 settlement 后提交。
+- QQ 桥接层把每个气泡、等待提示和工具/轮次错误提示都作为一条逻辑消息交给 `agentIO.sendMessage()` → QQ 文本 Adapter → Gateway Sender；稳定逻辑 ID `qq:<Session>:<Turn>:<策略实例>:<回复>.<气泡>:<kind>`；按原生输入 ID 选择回复目标（仍须属于该 Conversation）；被动回复额度与主动降级不变。
+- 可靠性：Agent I/O 负责同 Conversation 顺序、逻辑 ID 去重、逐片复核访问配置与 Manager 当前 Session、取消（策略令牌与原生 Turn 的 `AbortSignal`）及诚实结果；只有 `sent` 计为确认，`not-sent`/`partial`/`unknown` 回报给 Interaction，不重发并扣留同一回复的后续气泡。
+- 移除：Interaction 专属的 QQ SDK Stream 发送（`boundedStream`、Gateway Sender `openStream`）以及普通回复的 SDK 流式输出（`StreamingWriter`；`streaming` 配置项停用）。QQ 聊天输出不再有 `sendMarkdown` 直发路径；审批/问答/文件发送仍走 Gateway Sender（05/06）。
+- 兼容：新 QQ 补丁配旧 Interaction（test.8）仍可工作（旧策略在无 `openStream` 时只用 `sendText`）；新 Interaction 配旧 QQ 补丁会绕过 I/O，因此两者须配套部署。
+
+**验收证据**：Character Interaction 单元测试改为只提交完整气泡的语义（生成期间提前提交、无预览、取消信号、未确认气泡扣留、工具执行中/后的分泡）；QQTK 桥接测试覆盖开启/关闭 Interaction 均经 `sendMessage()`、稳定 ID 与重复提交、按输入回复目标、`/stop`/策略撤回/Turn 中止、部分失败/未知结果、轮换与撤权、诊断字段；SDK 审计以真实 Interaction + 桥接 + I/O + QQ 文本 Adapter + SDK MessageApi 覆盖限额、被动额度、提前提交、取消与轮换；关键保护经变异检查确认会被测试捕获；隔离 rc.3 探针确认真实 Agent/Interaction 的全部气泡、等待提示与 steer 回复都经已安装的 Agent I/O 发送。
+
+**未覆盖**：气泡发送状态不持久（进程重启后不识别重复）；实机手机消息格式、分泡节奏与被动额度；审批/问答/通知（05–07）；部署（Agent I/O 已安装版本升级仍受部署保护限制，见 [STATUS](../STATUS.md)）。
 
 ## 4. 后续验收矩阵与停止条件
 

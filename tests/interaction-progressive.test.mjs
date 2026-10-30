@@ -7,8 +7,8 @@ function fixture(config={}){
  const clock={now:()=>time,set(fn,ms){timers.set(++id,{fn,at:time+ms});return id;},clear:i=>timers.delete(i)};
  const agent={status:'running',cancel(){},followup(){},steer(){}};
  const p=new Interaction(agent,{hangOnMs:8000,throttleMs:10,...config},clock);
- const transport={key:agent,trace:(e,f)=>traces.push([e,f]),async sendText(text,meta){sent.push([text,meta]);},
-  openStream(meta){const b={text:'',closed:false,meta};bubbles.push(b);return {async update(t){assert(!b.closed);b.text=t;},async complete(){b.closed=true;},cancel(){b.cancelled=true;}};}};
+ // Commit-only transport: every assistant send is one complete, final bubble.
+ const transport={key:agent,trace:(e,f)=>traces.push([e,f]),async sendText(text,meta){sent.push([text,meta]);if(meta?.kind==='assistant')bubbles.push({text,meta,closed:true});}};
  p.bind(transport);
  let rev=0,attempt=0;const event=(type,data={})=>p.event({type,data});
  const start=()=>{event('turn/start');p.frame({type:'start',attemptId:++attempt,revision:++rev});};
@@ -65,10 +65,10 @@ test('the open tail keeps one bubble of the budget; a hang-on does not consume i
  await f.stream(long);assert(f.bubbles.filter(b=>b.closed).length<=2,'two committed bubbles leave one for the tail');
  f.message(long);await f.p.idle();assert.equal(f.bubbles.length,3);assert.equal(f.bubbles.map(b=>b.text).join(''),long);
 });
-test('the last bubble of the budget previews its whole tail while streaming',async()=>{
+test('the last bubble of the budget is committed whole at settlement, never cut or shown early',async()=>{
  const f=fixture({maxBubbles:1});f.start();const text='第一句。'.repeat(30)+'第二部分继续写。'.repeat(30);
- await f.stream(text);assert.equal(f.bubbles.length,1);assert.equal(f.bubbles[0].text,text,'nothing can be split later, so nothing is held back');
- f.message(text);await f.p.idle();assert.equal(f.bubbles.map(b=>b.text).join(''),text);
+ await f.stream(text);assert.equal(f.bubbles.length,0,'one bubble left: it waits for the whole reply');
+ f.message(text);await f.p.idle();assert.deepEqual(f.bubbles.map(b=>b.text),[text]);
 });
 
 test('a retried attempt does not resend bubbles it already committed',async()=>{
