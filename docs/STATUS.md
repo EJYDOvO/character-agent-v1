@@ -2,6 +2,14 @@
 
 本页是版本与验收状态的统一入口。历史发布记录说明当时结果，不代表最新运行状态。
 
+## test.25（已授权部署）
+
+起因：test.24 上线后的真实 QQ 对话里，被问到“今年的年度游戏提名”时，模型虽有 `web_search`/`research` 等工具却未调用，直接给出虚构名单；工具、模型路由（`navigator/gemma-4-31b-it`）与提示均与部署前相同，系统提示也没有“先查证”的要求。
+
+修复：所有 Character 共用的 Root 执行策略（系统提示 `character:execution`，由 `dsh-character-memory-tools` 注入；不进入 Worker，也不改私有 Persona）新增一条：涉及当年、最新、实时或近期的具体事实（作品与名单、奖项提名、发售、价格、版本、新闻等）或不确定的作品归属，先用可用的搜索工具查证并说明来源；“猜猜看”也先查已知事实，再把推测标为推测；查不到、搜索失败或无搜索工具时如实说明，不编造名称或细节。原有文字不变，策略文本移入可测试的 `root-policy.mjs`。这只提高主动搜索的概率，是否调用工具仍由模型决定。
+
+已按授权完成空闲门禁、停机一致性快照（393 个文件）与离线状态审计（无未完成 Turn/审批、无 active 提醒、Memory Schema 3 不变），候选离线安装与最终路径冻结锁文件校验通过后单活切换；Core 与 test.24 完全相同，QQ 补丁与 Agent I/O 不变，仅同步一份 QQTK 文档。启动后 13 个 Preset 健康、单一 QQ Gateway、`agent-io` 与 Manager 激活、官方 ASAR 未变；部署后复核（Owner 上下文、只读 Inspector、未登录/外站拒绝、QQ 路由、提醒与 Outbox）不变，启动日志无错误。Character 单元 219、安全审计 33。未发送 QQ 验收消息；模型实际是否改为先搜索待真实对话确认。旧 Profile 与快照留在本机。
+
 ## test.24 / Agent I/O test.3（已授权部署）
 
 Unified Agent I/O Iteration 01/02 上线：Core 新增 `dsh-agent-io@0.1.0-test.3`（首次安装，tarball 与隔离 rc.3 Interaction 探针入站/出站实测的包逐字节一致），QQ 包装声明 `agentIO`，QQTK 补丁为 QQTK main `ebc2568`。未绑定 Interaction 的普通文本出站（回复、Streaming 静态降级、工具错误、轮次错误）改经 `sendMessage()`，带稳定消息 ID、Turn 取消与发送前当前 Session/访问复核；普通聊天入站经 `openInbound()` 去重后由 QQ 会话入口复核访问并在交接前复核当前 Session，再经 Conversation Manager 创建原生输入。Character 其余包只升版本号，运行代码与 test.23 一致；Core 仅新增 `agent-io` 一行；Interaction test.8、Manager test.2、Persona、Owner、Extras 不变。
