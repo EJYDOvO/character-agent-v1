@@ -52,6 +52,7 @@ Core 和 Extras 在同一仓库，分别打包。核心仍为四个 Character �
 
 | 你的目标 | 阅读入口 |
 |---|---|
+| 查看 v0.8 架构工作稿与中间层待决问题 | [架构规划导航](docs/architecture-planning/README.md) |
 | 只在普通 DSH Agent 中使用记忆或 QQ | [跨项目复用](docs/REUSE.md) |
 | 配置完整 Character、私有角色或功能开关 | [功能管理](docs/MANAGEMENT.md) |
 | 理解分层记忆、人格化、预算与遗忘 | [记忆设计与配置](docs/MEMORY-LAYERS.md) |
