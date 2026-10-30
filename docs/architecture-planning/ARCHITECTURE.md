@@ -1,17 +1,13 @@
 # DSH Character Agent：架构设计与现状 v0.8（工作稿）
 
-> **更新日期：2026-10-29｜状态：现状同步 + 已确认的两端边界；中间通用层继续讨论。**  
-> GitHub 是今后的唯一主维护入口，本目录用于维护 v0.8 架构工作稿；旧 ChatGPT Library v0.7.8 只是历史快照。旧 Library 历史快照中的完整设计名为 `ARCHITECTURE_v0.7.8.md`（2026-10-16），其当时的「尚未部署」及版本假设属于历史语境，不代表目前状态。项目源码以 [Character 状态记录](https://github.com/EJYDOvO/character-agent-v1/blob/main/docs/STATUS.md) 和 [QQTK](https://github.com/EJYDOvO/harness-qq-toolkit-public) 为实施证据；当前文档不代表已经进行了新的架构迁移。
+> 更新：2026-10-30。GitHub 是后续文档维护的唯一主入口；旧 ChatGPT Library v0.7.8 仅为历史快照。
+> 本文的目标章节均为**设计决定，尚未实现**，不是 test.23 的功能或现有 API。当前事实单列在第 1 节；本轮仅改文档，不进行开发、数据迁移或部署。
 
-## 0. 先给结论
+## 0. 阅读边界
 
-**[已决定] 上层 Character 应用归一个仓库；下层所有交互平台 Adapter 归一个仓库。** 这两端的组织方向基本确定。平台仓库可以同时有 QQ Official、QQ Personal 和未来其他平台，每个平台仍应作为可单独安装、启用的 Package/DSH 入口，不要求把所有 SDK 装到一起。**该统一平台仓库目前尚未建立。**
+Character 应用保持一个仓库；所有交互平台 Adapter 未来统一进入一个仓库，各平台单独 Package/安装，独立 SDK、配置和启停，避免安装无关平台依赖。**目标平台仓库尚未建立。** 中间层职责已决定，分包、分库及 DSH Plugin 数量仍待定；此前“五个通用插件/三仓库”等候选不能作为已批准施工方案。
 
-**[待定] 中间八类能力的分层、必要性、Package 数量、DSH Plugin 数量、仓库数量和命名仍需讨论。** 保留八类功能地图，但**八类功能不等于八个仓库，也不等于八个必装插件**。相关且需要共同维护/发布的功能可以合库；适合独立安装的能力仍应能独立启停。
-
-**[已决定] 本阶段只做架构与文档工作，不开始重构、部署、平台迁移。** 中间层讨论定稿后再写完整接口和迁移验收设计，然后进入开发。迁移时可按模块一次性切换，不长期维持两套生产路径；安全状态必须备份、审计、单写入者。
-
-**[目标] 普通 DSH Agent + QQ 小号能够独立运行，不需要安装 Character；Character 则在通用基础能力上叠加角色专属身份、Persona、Memory 策略和 Worker。** 不代表 QQ 小号 Adapter 已存在或已验证。
+普通 DSH Agent 未来应能通过通用基础层独立接 QQ 个人号，不要求安装 Character；这只是目标。当前 Character 仍为单可信 Owner 私聊，群聊关闭；概念契约支持 direct/group 不表示开放群聊、多用户或扩大权限。
 
 ## 1. 当前实现基线（事实，不是未来目标）
 
@@ -30,74 +26,130 @@
 
 **证据边界**：仓库记录 Character 215 项单元、33 项安全审计、QQTK 55 项轻量与 6 项审批检查，以及若干 rc.3 Host 隔离探针；模型、Sender 等多为合成替身。**不能把 Gateway ready、API 回执或自动测试等同真实 QQ 手机送达与按钮验收。** `--workers --manager` 在 55 秒加载时限内未完成；真实手机流式撤回残留等仍待验收。具体以 `STATUS.md` 为准。
 
-## 2. 已确认的组织方向（头尾固定，中间不预设）
+
+**源码核对**：
+
+- [Interaction policy](../../packages/interaction-policy/policy.mjs) 的 `bind(transport)` 要求 `sendText`，允许可选 `openStream`；[原生事件装配](../../packages/interaction-policy/index.mjs) 订阅 Agent/Session 事件。它已处理部分渐进分泡，但不是新的公共 I/O v1。
+- [QQTK bootstrap](https://github.com/EJYDOvO/harness-qq-toolkit-public/blob/2e8fd2299e8fb2358ac1c4e04d5b287dae1e6181/maintenance/qqbot-src/dist/gateway/bootstrap.js) 的 `createInteractionOutbound` 完成 `policy.bind`、回复目标、`sendText` 和条件 `openStream` 接线，仍包含 SDK stream。迁移需兼容/隔离这些旧路径，不能把它们提升为新公共契约。
+- QQTK 的 [QuestionChannel](https://github.com/EJYDOvO/harness-qq-toolkit-public/blob/2e8fd2299e8fb2358ac1c4e04d5b287dae1e6181/maintenance/qqbot-src/dist/features/question-channel.js) 仍包装共享 `userQuestions.ask()`；多平台不能分别照搬包装。
+- [Character Identity](../../packages/character-identity/index.mjs) 同时管理 Owner/当前路由门禁、历史提醒绑定、QQ bindings 和 SQLite Outbox；[Character QQ lifecycle](../../packages/character-qq-adapter/lifecycle.mjs) 仍包装 `qqRemoteOps.attach`。这些耦合是迁移依据，尚未抽离。
+
+## 2. 职责分层与组织边界（设计决定，尚未实现）
+
+| 层/横切能力 | 职责 | 必需/可选及组织边界 |
+| --- | --- | --- |
+| 上层 Character | Persona、角色 Identity/Memory 策略、Worker 规则、应用组合 | 一个现有仓库；普通 Agent 不必安装 |
+| L1 基础通信 | Messaging/薄 Unified Agent I/O；复用已有独立 Conversation Manager | 外部即时聊天的基础；不另造会话运行时 |
+| L2 Interaction | 输入插话处理；可选出站气泡/呈现与 Hang-on 策略 | 可选，关闭则透传；两类职责分别验证 |
+| L3 可选服务 | HITL Bridge、Notification、Commands、高级 Media | 业务按需；是否分别成为插件尚未定 |
+| Identity（横切） | 可信证据交接、平台账号隔离、Host 授权与 Character Owner/ACL 边界 | 安全校验不可因未装可选服务而省略 |
+| Diagnostics（横切） | 入站/Turn/气泡/发送关联、成功/失败/未知及脱敏诊断 | 不预设独立运行服务 |
+| 下层 Platform Adapters | 平台真实收发、协议、附件传输、限速/分片/回复目标 | 一个未来统一仓库，各平台独立 Package/安装 |
+
+这里的 L1/L2/L3 是**通信职责层**，与现有 Memory 的 L1/L2/L3 无关，也不等于仓库或插件数量。Repository 是协作边界，Package 是版本/安装边界，DSH Plugin 是 Host/Agent/Preset 装配入口；可移植普通模块无需强制成为插件。已有 Conversation Manager 和 Interaction 的独立形态是现状，是否迁仓/合包另议。
+
+## 3. D1：即时聊天通用数据契约（设计决定，尚未实现）
+
+第一版以 QQ 官方 Bot 和 QQ 个人号聊天场景为基准，只覆盖即时聊天的 direct/group、消息、引用、文字、基础附件与发送关联。先验证两种 QQ 接入在同一聊天模型下的适配，不提前设计 Twitter/B站评论、帖子、动态或主动社交流水线；其他行为以后通过额外插件或契约扩展支持。
+
+以下是**待实现的概念结构，不是现有 API、Schema 或可直接调用示例**；必填性、类型细节、版本和 Sender 返回值仍需后续契约设计：
 
 ```text
-上层：Character 应用仓库（一个，确定）
-  definition / Persona / Character Identity & Memory policy
-  Worker policy / 应用装配 / Character-only 扩展
-                 ↑  依赖并组合
-中间：通用能力层（继续设计，不预定仓库数）
-  可移植普通 JS 模块 + 可选 DSH Plugins + DSH 运行时集成
-  Conversation Manager（已独立）、Interaction（已独立）等
-                 ↑↓  稳定公共契约
-下层：Platform Adapters 统一仓库（一个，确定为目标）
-  qq-official / qq-personal（未来） / 其他交互平台（未来）
-  各平台独立 Package/SDK/配置/启用/测试
-                 ↕
-        平台原生协议与外部事件
-
-DSH Native Host：目前提供 Agent/Session/Tools/Approval/Schedule
-（运行基础，不是再建一套 Agent 框架）。
+{
+  platform,
+  adapter,
+  accountId,
+  conversation: { id, type: direct | group },
+  message: { id, text, attachments, replyTo },
+  sender: { id, displayName },
+  timestamp,
+  platformData
+}
 ```
 
-说明：图表达**逻辑归属与协作**，不是说 DSH Host 位于平台协议之下，也不是已建立的 Monorepo。平台 Adapter（QQ/Telegram 协议）和 DSH Adapter（把通用逻辑接入 Host）是不同概念。一个仓库可包含多个 Package；Package 可包含普通逻辑与 DSH Plugin 入口；**仓库 ≠ Package ≠ DSH Plugin ≠ Character 挂件**。
+`accountId` 表达 Adapter 所接入的账号/应用范围，`sender.id` 表达该范围下的实际发言主体，不能混为同一 ID。`replyTo`、基础附件描述和发送关联需要能回到正确平台消息/目标，具体结构仍待设计。平台协议分片可把一条逻辑消息映射为多个物理发送，关联和失败必须可追踪，不要求模型处理 QQ 配额。
 
-## 3. 八类功能地图（确认分类，尚未确认分包）
+平台原始专有字段保留在**受控可信边界**；`platformData` 不是把完整平台事件、令牌或权限证据默认塞给模型的通道。平台入口校验真实来源，Host 校验可信性并负责授权；模型可见投影与安全证据分离。任何不可信 Adapter 提交的数据都不能自行证明 Owner 或获取 Host 权限。
 
-| 分类 | 负责的问题 | 当前实现线索 | 中间层待决事项 |
-| --- | --- | --- | --- |
-| **1 Messaging** | 消息模型、可信入站交接、发送关联、出站回执 | QQTK `gateway/bootstrap.js`、`transport/inbound.js`、`reply-target.js` | 最小消息契约、平台 Sender 能力、归属唯一性 |
-| **2 Interaction** | 插话/更正、回复生命周期、气泡计划、Hang-on、Worker 续轮 | Character `interaction-policy` + QQTK 出站桥 | DSH 原生事件与纯策略边界；可选安装；恢复自然短泡 |
-| **3 Identity** | 平台真实主体、角色授权、Session/Memory 权限 | Character `character-identity` + QQ 可信中间件 | 可信平台证明与 Character Owner/历史根 ACL 分界；不自动关联跨平台身份 |
-| **4 Human Input** | 工具审批、Agent 向用户提问、选项/文字回答、取消/超时 | QQTK `ApprovalChannel` / `QuestionChannel` | DSH 原生 Approval 唯一权威；不让多个 Adapter 重复接管全局服务 |
-| **5 Notification** | Outbox、稳定收件目标、去重、投递状态、恢复 | Character Identity SQLite、Remote Ops 通知 | 唯一持久写入者、旧状态兼容、`unknown` 不重放 |
-| **6 Commands** | 命令准入、解析、分发与 Host 动作 | QQTK slash middleware、Remote Ops `/ops` | 是否作为通信内部模块；业务动作须经过 Host 授权 |
-| **7 Media** | 图片/音频/视频/文件内容与发送 | QQTK 附件、视觉工具、`qqbot_send_file` | 通用媒体消息契约与平台传输/路径权限分层 |
-| **8 Diagnostics** | 事件、响应关联、性能与投递诊断 | Interaction trace、QQTK 脱敏日志 | 横向事件约定，避免新增不必要的运行服务 |
+身份/Conversation 键需带平台、Adapter/接入范围、账号和主体/会话的命名空间，使用无歧义编码避免相似 ID、分隔符或多账号冲突；具体编码与兼容映射待设计，不用这个概念结构静默重算已有 `principalId` / `conversationId`。以后按实际平台需求扩展字段，不先穷举所有社交行为。
 
-Conversation Manager 是**已独立的基础设施**，不需要为了凑八类重新实现。Memory Core、Worker/Long Tasks、Remote Ops、Inspector 也是既有能力；是否迁仓另议，不应在架构讨论阶段默认重写。
+## 4. D2：薄 Unified Agent I/O 与原生权威（设计决定，尚未实现）
 
-## 4. 关键边界与不变量
+```text
+外部聊天出站：
+DSH Agent → Interaction（启用则加工，未启用则透传）
+          → 薄 Unified Agent I/O → 对应 Platform Adapter → QQ/其他外部聊天平台
 
-- **平台负责真实来源及协议限制**：OpenID/QQ 消息 ID、被动配额、按钮、Typing、流式编辑/撤回、限速及文件上传归平台实现；通用层只接受经可信入口证明的消息与能力声明。不以模型生成的字段作为身份授权凭据。
-- **Conversation Manager 负责路由，不发权限**：唯一当前 Session、原生持久恢复/轮换、模型与 Preset 偏好继续由其负责；Character Identity 掌握 Owner、Memory ACL 与历史根门禁。一个 Session ID 不足以证明可重新授权。
-- **Interaction 负责响应策略，不假定所有平台支持更新消息**：`openStream` 必须是能力可选项，累计 `update` 不能被简单转换成多条重复消息；真实发送回执与手机接收也不应混淆。
-- **Human Input 不复制 Approval 权威**：原生 DSH 进行审批决定，外层只验证响应身份、路由到请求、展示状态。不能由每个平台任意猴子补丁共享 `userQuestions.ask()`。
-- **Notification 不复制 Schedule**：原生提醒仍绑定历史 Session；通知应有持久的 Conversation 目标，不使用短期 msgId 作为长期地址；不确定发送状态 `unknown` 不自动重试。
-- **旧身份及数据不可静默迁移**：保留 `principalId`、`conversationId`、`qq_bindings`、Memory Schema/ACL、原生 Session/Schedule、事件 ID 与通知账本；切换前需审核映射及数据、保留可恢复快照，生产每项状态只有一个权威写入者。
-- **Character 不是 QQ 的子插件**：Persona、Memory 治理、Worker 权限和角色业务仅在上层；普通 DSH Agent 可以不加载 Character 而安装所需通用能力。
-- **V1 已实现与未来社交目标分开**：当前仅单 Owner 私聊；多用户/群聊、跨平台账号关联、主动社交和其他平台均非 test.23 已交付能力。
+外部聊天入站：
+QQ/其他外部聊天平台 → 对应 Platform Adapter → 薄 Unified Agent I/O
+                    → Interaction（启用时处理运行中插话）→ DSH Agent
 
-## 5. 目前明确的代码耦合（后续设计依据）
+原生会话与路由：
+DSH 原生 Agent / Session ← 已有独立 Conversation Manager 的唯一当前路由
+Host 保留 Tools / Approval / Schedule 和身份授权权威
+```
 
-1. QQTK `bootstrap.js` 同时构造 SDK/Gateway、Interaction Sender 接线、Approval/Question、Remote Ops 钩子、媒体工具和诊断，平台细节与部分通用职责混合。
-2. `QuestionChannel.install()` 包装共享 `userQuestions.ask()`；未来多平台不能直接各自安装同类包装。
-3. Character Identity 同时持有 Owner/Session 权限、QQ Gateway 绑定、原生 Schedule 历史根审查和持久 Outbox；通知拆分要先规划数据归属。
-4. Character `character-qq-adapter/lifecycle.mjs` 仍通过 `qqRemoteOps.attach` 拦截/包裹 Gateway；通用平台接口不应继承这层偶然耦合。
-5. QQTK 已把 `SessionManager` 缩成 `conversationManager.openAdapter()` 薄适配，这部分不应该再回退成 QQ 私有 Session 管理器。
+I/O 只负责标准消息交接、路由与发送；Conversation Manager 继续维护 Conversation→原生 Session 的唯一当前路由、恢复和轮换，不被 I/O 替换。平台 Adapter 负责真实收发、协议校验、平台限速、分片、上传、回复目标及私有能力兼容。Host 权限和 Owner ACL 不下放给不可信 Adapter。
 
-## 6. 待讨论的中间层问题（未决，不提前写为结论）
+接入本聊天流水线的外部平台聊天事件，按普通实时会话处理；运行中输入反向经 I/O 交 Interaction 使用原生 cancel/steer/followup 等机制处理。输入插话调度与出站气泡呈现是不同职责，不能因关闭分泡就丢弃输入正确性。审批回应、通知、命令和专门服务事件由已验证的业务路由处理，不自动当普通用户聊天输入。
 
-1. 哪些属于**最小可用聊天**的必要模块，哪些按需安装？Messaging / Interaction / Human Input / Notification / Commands / Media / Diagnostics 的层级与生命周期如何划分？
-2. 各模块的唯一权威、调用方向、失败隔离和接口契约是什么？是否有可移植核心，还是更适合维持 DSH Plugin？
-3. 目前已独立的 Conversation Manager、Interaction 应否共仓？哪些功能因共同版本、强关联而合库，哪些因状态生命周期或可选性保持独立包？
-4. 统一 Platform Adapters 仓库怎样保证**每个平台只安装自己的依赖**，以及平台鉴权/消息表示/发送能力如何做契约测试？
-5. Identity 的通用身份接口与 Character 专属 Owner/Memory/旧根保护如何界定？跨平台关联须经哪些显式授权？
-6. 一旦定稿，先制定数据兼容、回滚、模拟第二平台和真实 QQ 验收矩阵，再拆解成开发任务。
+复用 DSH 原生 Agent/Session/Approval/Tools/Schedule 和独立 Conversation Manager，不新建 Runtime、Session、消息总线或第二套审批/调度系统。不直接修改官方 DSH 发布文件及内置 Bundle。
 
-## 7. 文档与开发顺序
+## 5. D3：账号身份默认隔离（设计决定，尚未实现）
 
-当前：**架构讨论 → 记录决定/开放问题 → 中间层正式接口定稿 → 修订路线图与验收计划 → 才开始开发**。不新建平台仓库、不改 QQ、Character 或运行数据、不部署。开发阶段逐功能迁移，完成隔离测试后受控切换，**不维持长期双轨**。
+默认每个平台、每个实际账号身份独立；不按昵称、相似 ID 或模型推断自动共享用户主体、Session、Memory 或权限。群会话本身也不能替代具体发送者身份。平台证据进入 Host 后仍需通过对应授权策略，恢复 Session 不代表恢复完整身份。
 
-有关已确认决策见 `DECISIONS.md`，阶段与验收见 `IMPLEMENTATION_ROADMAP.md`，模块讨论契约见 `MODULE_IMPLEMENTATION_PLAN.md`。旧 `v0.7.8` 及更早版本保留为历史设计记录。
+管理员身份授权声明、显式跨平台账号关联及授予额外权限均是后续可选设计，暂不实施。**账号关联≠授权**；即使未来确认同一人，也不自动合并会话、记忆 ACL 或工具授权。Character Owner、`memoryIdentity@1`、Worker/工具权限和历史根提醒门禁继续有效。
+
+## 6. D4：统一 Sender、完整气泡与原生窗口（设计决定，尚未实现）
+
+最终出站链路固定为 **DSH Agent → Interaction（启用则加工，未启用则透传）→ Unified Agent I/O → Platform Adapter**。所有外部通道共用 I/O Sender（Channel Sender 是同一发送职责），不另立 Interaction 专用 IO；HITL/Notification 等服务也复用发送通道，但保留各自业务准入和状态所有权。
+
+### 6.1 I/O v1 只发送已确定消息
+
+公共发送契约**只提供 `sendMessage()`**，不提供 `updateMessage()` / `openStream()` / streaming-ability flag，不要求“支持或不支持流式”的公共分类。Agent 内部 Token Streaming 与 DSH 原生窗口 Streaming 保留；外部平台聊天消息不做原地流式更新。
+
+QQ 官方 Bot 当前 SDK stream、test.8 `sendText` / 可选 `openStream` 是现状和迁移兼容/隔离问题，不是新目标能力。此次不修改 SDK、旧绑定或运行配置。禁用 Interaction 时，默认等原生回复完成发一条逻辑消息；Adapter 仍可按平台硬性限制分片并记录关联。
+
+### 6.2 生成过程中可以逐泡提交
+
+Interaction **允许在 Agent 仍生成时**，对可靠、语义完整、可独立成立且不依赖未完成工具结果的气泡，逐条提前调用 `sendMessage()`。不必等整个回复或整个 Turn settlement 才能发所有泡；这属于多个已确定消息的增量提交。
+
+必须区分“模型已经生成的片段”和“Interaction 已确认可以对外提交的完整气泡”。未完成、可被重试改写或仍是推测的文本不能自动被视为已提交；工具成功/失败必须等真实工具结果确认，不能先宣告。不能为早发破坏 DSH 原生执行、工具或审批正确性；工具期间可发与未完成结果无关的可靠完整内容。
+
+- 每条已提交消息只发送一次、不可修改；不把累计 Token 片段重复发送为新泡，也不在 settlement 重发已经提交的正文。
+- 取消/插话时停止待发送气泡，阻止迟到的旧 Turn/旧 attempt 内容继续外发；不声称撤回已发泡或取消已经发生的副作用。
+- 同一 Conversation 按序串行发送；记录每条气泡的来源 Turn/输入、发送关联及成功/失败，避免跨 Turn 混泡和重复。
+- 发送失败或状态未知时避免盲目重放；重试必须依据可证明的状态。超时不证明未发送，API 回执不证明手机已收件。
+- “确认可提交”“Sender 接受/确认”“平台回执”“手机实际收件”不是同一事实。返回/错误语义、确认点、排队取消与重试细则仍待讨论，不在此定成状态机或新 API。
+
+### 6.3 DSH 原生窗口保留原生链路
+
+DSH 原生 Web/Desktop 聊天窗继续用 DSH 原生消息 UI、Session、渲染与 Token Streaming，**不强制绕 Unified I/O 或 Platform Adapter**。Interaction 对原生窗口的出站分泡/Hang-on 目前尚未完整适配；已订阅原生事件、能处理插话或 QQ 路径有分泡，均不能证明原生窗口出站呈现已支持。后续需要单独评估和验收。
+
+## 7. D5：L3 可选服务（设计决定，尚未实现）
+
+| 服务 | 目标职责与权威边界 | 仍待定 |
+| --- | --- | --- |
+| HITL Bridge | HITL = Human-in-the-Loop，人工介入；展示原生 Approval / `userQuestions.ask`，路由已验证回应，处理取消/超时；共享发送通道，原生服务唯一裁决 | 建议名称；是否独立插件、Host 集成方式 |
+| Notification | 复用 Channel Sender、稳定 Conversation 目的地与持久 Outbox；去重、恢复和明确事件投递；复用原生 Schedule，不重造调度 | 是否独立插件、持久状态迁移归属 |
+| Commands | 命令入口解析/分发，Host 执行授权；不让平台字段授予能力 | 哪些内置、哪些可选 |
+| Media | 基础消息附件属于 D1/L1；高级图片/音频/视频等工具按需，平台传输/路径权限留 Adapter/Host | 哪些内置、哪些独立服务/工具 |
+
+HITL 是统一术语；HITL Bridge 不是已发布插件。不能让多个平台分别猴子补丁共享的全局问答/审批服务；可信回应只能关联到原生待决请求，由 Host 验证身份、目标和有效期。HITL、Notification 是否各自独立插件尚未决定。通知是服务输出，不作为普通聊天输入；审批/问答回应也不自动产生普通聊天 Turn。
+
+## 8. D6：持久数据与受控迁移（设计决定，尚未实现）
+
+保留旧 `principalId`、`conversationId`、原生 Session/历史链、Memory ACL/治理状态、Schedule 原 Session 归属、Character Identity QQ bindings（含 `qq_bindings`）、Outbox 事件 ID、去重与 `unknown` 不重放语义。新字段和接口不能静默改变它们，也不能让旧根重新得到完整 Owner/Memory/工具权限。
+
+每类持久状态只有一个权威写入者；现有数据所在地不等于未来分包结论。升级前盘点与审计、停机一致备份、映射/ACL 验证、隔离恢复与回滚验证，然后受控切换；废止旧写入口，不长期双轨。回滚保全切换后新增的 Session、Memory 和通知记录，不以旧快照直接覆盖。具体迁移方式、SQL、Schema 和切换脚本留后续设计/开发，此次不提供或执行。
+
+## 9. 剩余待决与下一步
+
+主要待讨论：
+
+1. Sender 返回/错误语义：何时能证明接受/成功/拒绝/未知，物理分片如何关联，哪些错误可以安全重试。
+2. 已提交气泡的确认与队列行为：提交边界、取消竞态、旧 Turn/attempt 失效、崩溃恢复、跨业务发送排序/背压；不预设 exactly-once 传输保证。
+3. 中间 Package/Plugin/仓库分组：HITL 与 Notification 是否独立、Commands/Media 内置范围；保留既有模块的生命周期和唯一状态所有者。
+
+QQ Personal 协议、管理员授权声明、跨平台关联及非即时聊天扩展留后续专项。方向已确认并不等于这些细节已定稿。依次完成契约/队列讨论、模块与状态归属、迁移验收设计，再进入另行授权的开发。详见 [决策](DECISIONS.md)、[路线图](IMPLEMENTATION_ROADMAP.md)、[模块计划](MODULE_IMPLEMENTATION_PLAN.md)。
