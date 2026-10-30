@@ -1,11 +1,11 @@
 # DSH Character Agent：架构设计与现状 v0.8（工作稿）
 
-> 更新：2026-10-30。GitHub 是后续文档维护的唯一主入口；旧 ChatGPT Library v0.7.8 仅为历史快照。
-> 本文的目标章节均为**设计决定，尚未实现**，不是 test.23 的功能或现有 API。当前事实单列在第 1 节；本轮仅改文档，不进行开发、数据迁移或部署。
+> 更新：2026-10-30（增补中间层模块组织、出入站可靠性与渐进式重构，对应 ADR-057–062）。GitHub 是后续文档维护的唯一主入口；旧 ChatGPT Library v0.7.8 仅为历史快照。
+> 本文的目标章节均为**设计决定，尚未实现**，不是 test.23 的功能或现有 API。当前事实单列在第 1 节。开发按 [路线图](IMPLEMENTATION_ROADMAP.md) 的功能切片逐轮进行，文档本身不表示实现、迁移或部署已完成。
 
 ## 0. 阅读边界
 
-Character 应用保持一个仓库；所有交互平台 Adapter 未来统一进入一个仓库，各平台单独 Package/安装，独立 SDK、配置和启停，避免安装无关平台依赖。**目标平台仓库尚未建立。** 中间层职责已决定，分包、分库及 DSH Plugin 数量仍待定；此前“五个通用插件/三仓库”等候选不能作为已批准施工方案。
+Character 应用保持一个仓库；所有交互平台 Adapter 未来统一进入一个仓库，各平台单独 Package/安装，独立 SDK、配置和启停，避免安装无关平台依赖。**目标平台仓库尚未建立，切片迭代期间不创建。** 中间层的模块组织已由 ADR-057 决定（第 2 节）；具体 Package 名称和是否迁仓随各切片实现确定。此前“五个通用插件/三仓库”等候选不能作为已批准施工方案。
 
 普通 DSH Agent 未来应能通过通用基础层独立接 QQ 个人号，不要求安装 Character；这只是目标。当前 Character 仍为单可信 Owner 私聊，群聊关闭；概念契约支持 direct/group 不表示开放群聊、多用户或扩大权限。
 
@@ -34,19 +34,25 @@ Character 应用保持一个仓库；所有交互平台 Adapter 未来统一进�
 - QQTK 的 [QuestionChannel](https://github.com/EJYDOvO/harness-qq-toolkit-public/blob/2e8fd2299e8fb2358ac1c4e04d5b287dae1e6181/maintenance/qqbot-src/dist/features/question-channel.js) 仍包装共享 `userQuestions.ask()`；多平台不能分别照搬包装。
 - [Character Identity](../../packages/character-identity/index.mjs) 同时管理 Owner/当前路由门禁、历史提醒绑定、QQ bindings 和 SQLite Outbox；[Character QQ lifecycle](../../packages/character-qq-adapter/lifecycle.mjs) 仍包装 `qqRemoteOps.attach`。这些耦合是迁移依据，尚未抽离。
 
-## 2. 职责分层与组织边界（设计决定，尚未实现）
+## 2. 职责分层与模块组织（设计决定，尚未实现）
 
-| 层/横切能力 | 职责 | 必需/可选及组织边界 |
+| 层/横切能力 | 模块 | 职责与组织边界 |
 | --- | --- | --- |
-| 上层 Character | Persona、角色 Identity/Memory 策略、Worker 规则、应用组合 | 一个现有仓库；普通 Agent 不必安装 |
-| L1 基础通信 | Messaging/薄 Unified Agent I/O；复用已有独立 Conversation Manager | 外部即时聊天的基础；不另造会话运行时 |
-| L2 Interaction | 输入插话处理；可选出站气泡/呈现与 Hang-on 策略 | 可选，关闭则透传；两类职责分别验证 |
-| L3 可选服务 | HITL Bridge、Notification、Commands、高级 Media | 业务按需；是否分别成为插件尚未定 |
-| Identity（横切） | 可信证据交接、平台账号隔离、Host 授权与 Character Owner/ACL 边界 | 安全校验不可因未装可选服务而省略 |
-| Diagnostics（横切） | 入站/Turn/气泡/发送关联、成功/失败/未知及脱敏诊断 | 不预设独立运行服务 |
-| 下层 Platform Adapters | 平台真实收发、协议、附件传输、限速/分片/回复目标 | 一个未来统一仓库，各平台独立 Package/安装 |
+| 上层 Character | Character 应用 | Persona、角色 Identity/Memory 策略、Worker 规则、应用组合；一个现有仓库，普通 Agent 不必安装 |
+| L1 基础通信 | Unified Agent I/O | 统一聊天消息交接与发送；公共出站只有 `sendMessage()` |
+| L1 | Conversation Manager | 保留已有独立 Host Plugin；Conversation → DSH Session 唯一当前路由、恢复、轮换、偏好 |
+| L1 | Commands | 默认作为 I/O 内部的解析/分发模块；执行授权由 Host/业务插件负责 |
+| L1 | 基础 Media | 消息契约中的附件描述与平台上传/下载；高级媒体工具（看图、发文件等）保持为现有可选工具，不另立 L3 服务 |
+| L2 可选 | Interaction | 保留独立 Interaction Policy Plugin：输入插话、回复节奏、完整气泡分割、Hang-on。启用时加工 Agent 回复，关闭时透传；外部消息最终都经 I/O Sender 发送，不创建 Interaction 专属 I/O |
+| L3 可选 | HITL Bridge | 建议独立可选 Plugin；只桥接原生 Approval 与 `userQuestions.ask()` 的展示及可信回应，不创建第二个审批权威 |
+| L3 可选 | Notification | 建议独立可选 Plugin；复用 I/O 发送，保留稳定接收目标、持久 Outbox、去重状态与原生 Schedule |
+| Identity（横切） | 各模块分担 | Platform Adapter 验证实际平台连接与身份来源；Host 校验可信来源并执行准入、工具及会话权限；Character Identity 保留 Owner、Memory ACL、Worker、历史 Session 的专属安全策略。不建立取代现有身份系统的大型 Identity Plugin；默认各平台实际账号独立 |
+| Diagnostics（横切） | 各模块分担 | 统一事件关联字段与脱敏要求；各模块负责自己产生的事件；暂不建独立日志服务或强制安装的 Diagnostics Plugin |
+| 下层 Platform Adapters | 每平台一个 Package | 平台真实收发、协议、附件传输、限速/分片/回复目标；未来统一平台仓库 |
 
-这里的 L1/L2/L3 是**通信职责层**，与现有 Memory 的 L1/L2/L3 无关，也不等于仓库或插件数量。Repository 是协作边界，Package 是版本/安装边界，DSH Plugin 是 Host/Agent/Preset 装配入口；可移植普通模块无需强制成为插件。已有 Conversation Manager 和 Interaction 的独立形态是现状，是否迁仓/合包另议。
+**安装原则**：Conversation Manager、Unified I/O、Interaction、HITL、Notification 能按职责独立装配和启停。个人部署可以提供“全部默认安装/启用”的组合，但不能因此造成模块间不必要的强依赖（例如 I/O 不依赖 Character 或 Interaction，Interaction 关闭时普通回复仍可发送）。仓库、Package、DSH Plugin 和普通 JS Module 不需要一一对应。
+
+这里的 L1/L2/L3 是**通信职责层**，与现有 Memory 的 L1/L2/L3 无关。Repository 是协作边界，Package 是版本/安装边界，DSH Plugin 是 Host/Agent/Preset 装配入口；可移植普通模块无需强制成为插件。已有 Conversation Manager 和 Interaction 的独立形态继续保留，是否迁仓/合包另议。
 
 ## 3. D1：即时聊天通用数据契约（设计决定，尚未实现）
 
@@ -109,7 +115,7 @@ I/O 只负责标准消息交接、路由与发送；Conversation Manager 继续�
 
 公共发送契约**只提供 `sendMessage()`**，不提供 `updateMessage()` / `openStream()` / streaming-ability flag，不要求“支持或不支持流式”的公共分类。Agent 内部 Token Streaming 与 DSH 原生窗口 Streaming 保留；外部平台聊天消息不做原地流式更新。
 
-QQ 官方 Bot 当前 SDK stream、test.8 `sendText` / 可选 `openStream` 是现状和迁移兼容/隔离问题，不是新目标能力。此次不修改 SDK、旧绑定或运行配置。禁用 Interaction 时，默认等原生回复完成发一条逻辑消息；Adapter 仍可按平台硬性限制分片并记录关联。
+QQ 官方 Bot 当前 SDK stream、test.8 `sendText` / 可选 `openStream` 是现状和迁移兼容/隔离问题，不是新目标能力，在 Interaction 切片（Iteration 04）统一改用 `sendMessage()`，此前保持现有用户可见行为，不删除其所需 SDK 代码。禁用 Interaction 时，默认等原生回复完成发一条逻辑消息；Adapter 仍可按平台硬性限制分片并记录关联。
 
 ### 6.2 生成过程中可以逐泡提交
 
@@ -121,22 +127,33 @@ Interaction **允许在 Agent 仍生成时**，对可靠、语义完整、可独
 - 取消/插话时停止待发送气泡，阻止迟到的旧 Turn/旧 attempt 内容继续外发；不声称撤回已发泡或取消已经发生的副作用。
 - 同一 Conversation 按序串行发送；记录每条气泡的来源 Turn/输入、发送关联及成功/失败，避免跨 Turn 混泡和重复。
 - 发送失败或状态未知时避免盲目重放；重试必须依据可证明的状态。超时不证明未发送，API 回执不证明手机已收件。
-- “确认可提交”“Sender 接受/确认”“平台回执”“手机实际收件”不是同一事实。返回/错误语义、确认点、排队取消与重试细则仍待讨论，不在此定成状态机或新 API。
+- “确认可提交”“Sender 接受/确认”“平台回执”“手机实际收件”不是同一事实。发送语义、串行与取消原则见 6.4；Interaction 的可提交确认点在 Iteration 04 设计。
 
 ### 6.3 DSH 原生窗口保留原生链路
 
 DSH 原生 Web/Desktop 聊天窗继续用 DSH 原生消息 UI、Session、渲染与 Token Streaming，**不强制绕 Unified I/O 或 Platform Adapter**。Interaction 对原生窗口的出站分泡/Hang-on 目前尚未完整适配；已订阅原生事件、能处理插话或 QQ 路径有分泡，均不能证明原生窗口出站呈现已支持。后续需要单独评估和验收。
 
-## 7. D5：L3 可选服务（设计决定，尚未实现）
+### 6.4 出入站可靠性（ADR-058–061）
+
+| 主题 | 决定 |
+| --- | --- |
+| 入站去重 | 同一平台范围内重复投递的外部消息不重复触发 Agent 输入；去重键保留平台、Adapter、接入账号及平台消息的完整范围，不同账号/平台的相同消息 ID 互不抑制；状态有界，并说明重启后的保证范围 |
+| 出站授权有效性 | 实际发送前复核有效目标、来源会话与目标 Conversation 的关系及适用授权；权限撤销、会话轮换、旧 Turn 失效不能导致错误投递。合法历史提醒按其自身授权规则检查，不要求原始 Session 仍是当前主聊天 Session，但规则须由对应模块显式提供 |
+| 发送语义 | 一条逻辑消息不因 settlement、模型重试或内部队列重复生成有效发送任务；区分“API 前未发送/被拒”“平台已接受”“可能已发生但未知”，部分分片成功单独表达；不保证物理 exactly-once，未知禁止盲目重发，失败不伪装成功；诊断不写凭据、原始身份、正文 |
+| 串行与取消 | 同一 Conversation 按序发送，不同 Conversation 不被全局串行阻塞，队列与并发有界；取消/过期 Turn 不继续提交待发内容，多分片在分片之间复核；已进入平台 API 的调用不假定可撤销 |
+
+这些规则是从 Iteration 01 起逐步实现的门禁：每个切片只对自己迁移的路径声明满足，跨 Interaction/HITL/Notification 的统一排序与背压在对应切片完成前不宣称已保证。Iteration 01 只对“未绑定 Interaction 的 QQ 普通文本出站”满足出站授权有效性、发送语义、串行与取消（稳定 ID 来自原生 Session ID + 事件 seq；进程内去重不跨重启）；入站去重属 Iteration 02。
+
+## 7. D5：L3 可选服务与相关 L1 能力（设计决定，尚未实现）
 
 | 服务 | 目标职责与权威边界 | 仍待定 |
 | --- | --- | --- |
-| HITL Bridge | HITL = Human-in-the-Loop，人工介入；展示原生 Approval / `userQuestions.ask`，路由已验证回应，处理取消/超时；共享发送通道，原生服务唯一裁决 | 建议名称；是否独立插件、Host 集成方式 |
-| Notification | 复用 Channel Sender、稳定 Conversation 目的地与持久 Outbox；去重、恢复和明确事件投递；复用原生 Schedule，不重造调度 | 是否独立插件、持久状态迁移归属 |
-| Commands | 命令入口解析/分发，Host 执行授权；不让平台字段授予能力 | 哪些内置、哪些可选 |
-| Media | 基础消息附件属于 D1/L1；高级图片/音频/视频等工具按需，平台传输/路径权限留 Adapter/Host | 哪些内置、哪些独立服务/工具 |
+| HITL Bridge | HITL = Human-in-the-Loop，人工介入；展示原生 Approval / `userQuestions.ask`，路由已验证回应，处理取消/超时；共享 I/O Sender，原生服务唯一裁决 | 建议独立可选 Plugin（ADR-057）；Host 集成方式在 Iteration 06 设计 |
+| Notification | 复用 I/O Sender、稳定 Conversation 目的地与持久 Outbox；去重、恢复和明确事件投递；复用原生 Schedule，不重造调度 | 建议独立可选 Plugin（ADR-057）；持久状态归属与切换在 Iteration 07 设计 |
+| Commands（L1） | 默认为 I/O 内部的命令入口解析/分发，Host 执行授权；不让平台字段授予能力 | 具体命令集在 Iteration 05 盘点 |
+| Media（L1 基础/可选工具） | 基础消息附件属于 D1/L1；高级图片/音频/视频等工具保持现有可选工具，平台传输/路径权限留 Adapter/Host | 基础附件契约在 Iteration 05 设计 |
 
-HITL 是统一术语；HITL Bridge 不是已发布插件。不能让多个平台分别猴子补丁共享的全局问答/审批服务；可信回应只能关联到原生待决请求，由 Host 验证身份、目标和有效期。HITL、Notification 是否各自独立插件尚未决定。通知是服务输出，不作为普通聊天输入；审批/问答回应也不自动产生普通聊天 Turn。
+HITL 是统一术语；HITL Bridge 不是已发布插件。不能让多个平台分别猴子补丁共享的全局问答/审批服务；可信回应只能关联到原生待决请求，由 Host 验证身份、目标和有效期。Commands 与基础 Media 按 ADR-057 归入 L1，表中保留以说明与 L3 的分工。通知是服务输出，不作为普通聊天输入；审批/问答回应也不自动产生普通聊天 Turn。
 
 ## 8. D6：持久数据与受控迁移（设计决定，尚未实现）
 
@@ -146,10 +163,11 @@ HITL 是统一术语；HITL Bridge 不是已发布插件。不能让多个平台
 
 ## 9. 剩余待决与下一步
 
-主要待讨论：
+已由本次决定收敛：中间层模块组织（ADR-057）、发送语义与串行/取消原则（ADR-060/061）、入站去重与出站授权有效性（ADR-058/059）、开发方式改为渐进式重构（ADR-062）。仍待讨论：
 
-1. Sender 返回/错误语义：何时能证明接受/成功/拒绝/未知，物理分片如何关联，哪些错误可以安全重试。
-2. 已提交气泡的确认与队列行为：提交边界、取消竞态、旧 Turn/attempt 失效、崩溃恢复、跨业务发送排序/背压；不预设 exactly-once 传输保证。
-3. 中间 Package/Plugin/仓库分组：HITL 与 Notification 是否独立、Commands/Media 内置范围；保留既有模块的生命周期和唯一状态所有者。
+1. 结果结构在附件、引用、Interaction 确认点接入后的扩展（Iteration 04/05 复核）。
+2. 逐泡发送状态是否持久化、崩溃恢复，以及与 Notification Outbox 的边界；不预设 exactly-once 传输保证。
+3. 聊天、HITL、Notification 共用 Sender 时的跨服务排序与背压。
+4. 具体 Package/Plugin 命名、是否迁仓。
 
-QQ Personal 协议、管理员授权声明、跨平台关联及非即时聊天扩展留后续专项。方向已确认并不等于这些细节已定稿。依次完成契约/队列讨论、模块与状态归属、迁移验收设计，再进入另行授权的开发。详见 [决策](DECISIONS.md)、[路线图](IMPLEMENTATION_ROADMAP.md)、[模块计划](MODULE_IMPLEMENTATION_PLAN.md)。
+QQ Personal 协议、管理员授权声明、跨平台关联及非即时聊天扩展留后续专项。Iteration 01（普通文本出站 Unified I/O）源码已完成、未部署；下一步为 Iteration 02：入站标准化与可信身份交接（范围见 [路线图](IMPLEMENTATION_ROADMAP.md) 第 3 节）。详见 [决策](DECISIONS.md)、[模块计划](MODULE_IMPLEMENTATION_PLAN.md)。

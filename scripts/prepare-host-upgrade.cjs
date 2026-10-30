@@ -24,6 +24,7 @@ plan.verifyTaskExtras(live,extras,extrasEnabled,yaml);
 if(process.argv.includes('--inspector'))require('./inspector-declaration.cjs')(rows,extrasEnabled?extras:[]);
 const artifacts=require('./package-plan.cjs').verifiedPlan(project,sourceDigest,plan.select({profile:rows,core,extras,extrasEnabled}));
 const remote=plan.verifiedRemote(live),patchPlan=plan.patchPlan(live,path.resolve(process.env.DSH_QQTK_PROJECT||install),yaml);
+const agentIO=plan.verifiedAgentIO(live,core,patchPlan.patches);
 const qq=rows.find(r=>r.id==='im-qqbot');
 assert.equal(qq?.config?.access?.c2cMode,'allowlist');assert.equal(qq.config.access.c2cAllow.length,1);assert.equal(qq.config.access.groupMode,'disabled');
 const record={at:new Date().toISOString(),runtime:version,release,candidate,baseline:{},artifacts:{},sourceDigest,patches:patchPlan.patches};
@@ -38,6 +39,7 @@ for(const pkg of artifacts){
 }
 manifest.dependencies[remote.name]=remote.source;record.artifacts[remote.name]=remote;
 if(conversation){manifest.dependencies[conversation.name]=conversation.source;record.artifacts[conversation.name]=conversation;}
+if(agentIO){const pin=plan.pinAgentIO(agentIO,install);manifest.dependencies[pin.name]=pin.source;record.artifacts[pin.name]=pin;}
 if(nativeSchedule)manifest.dsh.profile.bundles=manifest.dsh.profile.bundles.filter(n=>n!=='@deepseek-ai/dsh-experimental-schedule-bundle');
 plan.disableLegacyMemory(rows);
 manifest.dsh.profile.bundles=manifest.dsh.profile.bundles.filter(n=>n!=='dsh-task-memory-local');

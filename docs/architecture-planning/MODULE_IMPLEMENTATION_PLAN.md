@@ -1,13 +1,18 @@
 # DSH Character Agent：模块边界与后续实施计划 v0.8
 
-> 更新：2026-10-30。GitHub 是后续文档维护的唯一主入口；旧 ChatGPT Library v0.7.8 仅为历史快照。
-> 目标接口与迁移均为**设计决定，尚未实现**。本轮只更新文档，不修改代码、配置、测试、CI、依赖、部署或持久数据。以下是后续讨论/实施依据，不是 test.23 API 清单。
+> 更新：2026-10-30（按 ADR-057 定模块组织，补入出入站可靠性要求与 Iteration 01 模块边界）。GitHub 是后续文档维护的唯一主入口；旧 ChatGPT Library v0.7.8 仅为历史快照。
+> 目标接口与迁移均为**设计决定，尚未实现**，按 [路线图](IMPLEMENTATION_ROADMAP.md) 的功能切片逐轮实施。以下是实施依据，不是 test.23 API 清单。
 
 ## 1. 分层与安装边界
 
-Character 应用保留一个仓库；全部交互平台 Adapter 统一进入一个尚未建立的目标仓库，各平台单独 Package/安装、配置/启停和依赖。中间采用 L1 基础通信（Messaging/薄 Unified Agent I/O + 已有独立 Conversation Manager）、L2 可选 Interaction、L3 可选服务（HITL、Notification、Commands、高级 Media），Identity/Diagnostics 横切。
+Character 应用保留一个仓库；全部交互平台 Adapter 统一进入一个尚未建立的目标仓库，各平台单独 Package/安装、配置/启停和依赖。中间按 ADR-057 组织：
 
-Repository、Package、DSH Plugin 和可移植普通模块是不同边界；上述职责层不决定数量，也不决定既有 Manager/Interaction 是否共仓。通信 L1/L2/L3 与 Memory 分层无关。HITL = Human-in-the-Loop（人工介入），建议名称 HITL Bridge；是否独立插件待决。
+- **L1 基础通信**：Unified Agent I/O（统一交接与发送）；已有独立 Conversation Manager（唯一 Conversation → Session 路由）；Commands（默认为 I/O 内部解析/分发模块）；基础 Media（消息契约附件描述与平台适配）。
+- **L2 可选**：Interaction（保留独立 Plugin，启用加工、关闭透传，不另设 I/O）。
+- **L3 可选**：HITL Bridge、Notification（均建议独立可选 Plugin）。
+- **横切**：Identity 由 Adapter（平台来源）、Host（可信校验与权限）、Character Identity（Owner/Memory ACL/Worker/历史 Session）分担，不建大型 Identity Plugin；Diagnostics 统一关联字段与脱敏要求，各模块负责自己的事件，不建独立日志服务。
+
+上述模块应能按职责独立装配和启停；个人部署可提供全部默认启用的组合，但不能产生不必要的强依赖。Repository、Package、DSH Plugin 和可移植普通模块是不同边界，不需要一一对应。通信 L1/L2/L3 与 Memory 分层无关。HITL = Human-in-the-Loop（人工介入）。
 
 ## 2. 当前实现映射与目标职责
 
@@ -16,14 +21,14 @@ Repository、Package、DSH Plugin 和可移植普通模块是不同边界；上�
 | 层/模块 | 当前实现事实 | 目标职责与迁移边界 |
 | --- | --- | --- |
 | Character | Core/Extras；Identity、Memory、Persona、Worker；QQ lifecycle 包装 qqRemoteOps.attach | 保留角色组合/Owner/Memory 策略；不直接承担通用 QQ SDK 适配 |
-| L1 Messaging/薄 Unified Agent I/O | QQTK bootstrap 的 createInteractionOutbound、transport/inbound、reply-target 等，尚无新统一 I/O | 标准交接/路由/发送；只公开 sendMessage()；与平台协议分离 |
+| L1 Unified Agent I/O | QQTK bootstrap 的 createInteractionOutbound、transport/inbound、reply-target 等；Iteration 01 开始抽离出站 | 标准交接/路由/发送；只公开 sendMessage()；与平台协议分离；Commands 为其内部模块 |
 | L1 Conversation Manager | QQTK plugin-sources 独立 Host Plugin test.2；QQTK SessionManager 已为薄适配 | 继续唯一当前 Conversation→原生 Session 路由、恢复/轮换/偏好；不授予 Character/Memory 权限，不重写 |
 | L2 Interaction | Character packages/interaction-policy，独立可选 test.8；原生事件、judge、cancel/steer/followup；bind sendText / 可选 openStream | 输入插话与出站呈现分责；共用 I/O Sender；完整泡可生成中提交，未启用透传；不另设 IO |
 | Identity 横切 | Character identity/index/boundary/bindings/schedule，memoryIdentity@1、Owner/历史根保护 | 可信平台证据交接与 Host 授权分离，默认平台实际账号独立；不自动合并或重算旧身份 |
 | L3 HITL Bridge | QQTK ApprovalChannel/QuestionChannel；后者包装全局 userQuestions.ask；尚无独立通用桥 | 只展示/路由原生请求与已验证回应、取消/超时；原生唯一权威；禁止多 Adapter 分别猴子补丁全局服务 |
 | L3 Notification | Character Identity SQLite Outbox/通知泵；Remote Ops/Long Tasks 复用通知 | 共用 Channel Sender、稳定 Conversation、持久 Outbox、原生 Schedule；唯一写入者，不当聊天输入 |
-| L3 Commands | QQTK middleware slash commands、Remote Ops /ops；部分业务已有插件 | 命令入口解析/分发与 Host 授权分离；内置范围待定 |
-| 基础附件/高级 Media | QQTK 附件解析、图片/语音与 send-file-tool | 基础附件归消息契约/L1；高级工具为可选 L3；平台上传/协议及 Host 路径权限各自负责 |
+| L1 Commands（I/O 内部） | QQTK middleware slash commands、Remote Ops /ops；部分业务已有插件 | 命令入口解析/分发与 Host 授权分离；Iteration 05 盘点命令集 |
+| L1 基础 Media / 可选媒体工具 | QQTK 附件解析、图片/语音与 send-file-tool | 基础附件归消息契约/L1；高级媒体工具保持现有可选工具，不另立 L3 服务；平台上传/协议及 Host 路径权限各自负责 |
 | Diagnostics 横切 | Interaction trace、QQTK createDeliveryRecorder | 关联输入/Turn/attempt/气泡/平台发送、状态/时延，脱敏且不泄露安全证据；不预设独立服务 |
 | Platform Adapters | 当前 QQ Official/QQTK test.23、Bot/SDK 版本化补丁与 SDK stream | 真实收发、协议限速/分片/回复目标与附件传输；各平台独立 Package。QQ Personal 未实现 |
 
@@ -61,13 +66,16 @@ DSH 原生 Agent/Session/Approval/Tools/Schedule 与 Conversation Manager 保留
 
 | 事项 | 已确认要求 | 尚未定稿细节 |
 | --- | --- | --- |
-| 公共发送 | v1 只提供 sendMessage() 发送已确定消息；不提供 updateMessage()/openStream()/streaming-ability flag；所有外部通道同用 I/O Sender/Channel Sender | 参数类型、返回/错误结构、成功/拒绝/未知证明 |
+| 公共发送 | v1 只提供 sendMessage() 发送已确定消息；不提供 updateMessage()/openStream()/streaming-ability flag；所有外部通道同用 I/O Sender/Channel Sender | 参数与返回结构由 Iteration 01 提出并测试，后续切片复核扩展 |
+| 发送语义（ADR-060） | 同一逻辑消息不重复生成有效发送任务；区分 API 前未发送/被拒、平台已接受、未知、部分分片；不保证物理 exactly-once；未知不盲重发；失败不伪装成功 | 持久化与崩溃恢复 |
+| 授权有效性（ADR-059） | 实际发送前复核目标、来源会话关系与授权；轮换/撤权/旧 Turn 失效阻止发送；历史提醒按其模块显式规则 | 提醒授权规则在 Notification 切片接入 |
 | 默认回复 | Interaction 关闭时透传，默认原生回复完成后发一条逻辑消息；平台可按硬限制分片 | 原生完成事件映射、物理发送关联及部分失败处理 |
 | 提前完整泡 | Interaction 启用时，可在生成期间对可靠、完整、独立、不依赖未完成工具结果的泡逐条 sendMessage()，不等整个回复/Turn settlement | 候选到可提交的确认点、与原生 attempt/重试对齐 |
 | 工具正确性 | 工具成功/失败等真实结果；未完成/重试中的推测片段不可自动当已提交；不破坏原生执行/审批 | 按原生事件可证明的确认/失效条件 |
 | 已提交消息 | 每条只发一次、不可修改；不重复发送累计片段或 settlement 全文；取消不声称撤回已发泡 | Sender 接受/平台回执/用户实收的区分和记录 |
-| 队列 | 同 Conversation 按序串行；取消/插话停待发送泡，防旧 Turn/attempt 迟到混泡；每条记录关联、成功/失败 | 并发提交仲裁、背压、取消竞态、服务间排序、崩溃恢复 |
-| 重试 | 失败/未知避免盲重放，超时不能证明未发送；不承诺网络 exactly-once | 明确拒绝如何安全重试、去重证明和恢复边界 |
+| 队列（ADR-061） | 同 Conversation 按序串行，不同 Conversation 不全局串行；队列/并发有界；取消/插话停待发送泡，多分片间复核，防旧 Turn/attempt 迟到混泡；已进入平台 API 的调用不假定可撤销 | 服务间排序与背压、崩溃恢复 |
+| 重试 | 失败/未知避免盲重放，超时不能证明未发送；不承诺网络 exactly-once | 明确拒绝后由调用方决定是否以新逻辑消息重试，规则随调用方切片定 |
+| 入站去重（ADR-058） | 平台、Adapter、账号、平台消息完整范围内重复投递只触发一次 Agent 输入；状态有界 | Iteration 02 盘点现有 QQ 去重后迁移 |
 | 旧 QQ stream | 当前 test.8 bind sendText/可选 openStream + QQTK Outbound/SDK stream 属当前事实，后续兼容/隔离 | 切换点、兼容方式，不能成为新公共能力 |
 | 原生窗口 | Web/Desktop 保留原生 UI/Session/渲染/Token Streaming，不强制绕 I/O/Adapter；Agent 内部 Streaming 保留 | Interaction 原生窗口出站分泡/Hang-on 尚未完整适配，需单独设计/验收 |
 
@@ -85,7 +93,7 @@ DSH 原生 Agent/Session/Approval/Tools/Schedule 与 Conversation Manager 保留
 | 逐泡发送关联/状态 | 需要可靠关联与可审计的唯一写入职责 | 持久性/恢复与 Outbox 的边界，不能未经设计就认定现有通知 Outbox 已支持所有聊天泡 |
 | Commands/Media | 命令入口不越过 Host 授权；基础附件与高级工具分层 | 哪些内置、插件入口及路径/媒体权限 |
 
-HITL、Notification 最终是否各自独立插件，Commands/Media 哪些内置仍待定。HITL/Notification 共用 Channel Sender，但不共用审批权威或随意互写账本；通知有稳定 Conversation 目的地，不依赖短期 msgId，复用原生 Schedule。审批、问答回应与通知不自动作为普通聊天输入。
+HITL Bridge、Notification 按 ADR-057 建议各自为独立可选 Plugin，Commands 与基础 Media 归入 L1；具体命名在对应切片确定。HITL/Notification 共用 I/O Sender，但不共用审批权威或随意互写账本；通知有稳定 Conversation 目的地，不依赖短期 msgId，复用原生 Schedule。审批、问答回应与通知不自动作为普通聊天输入。
 
 ## 6. D6：兼容与受控切换清单（设计决定，尚未实现）
 
@@ -99,19 +107,31 @@ HITL、Notification 最终是否各自独立插件，Commands/Media 哪些内置
 
 后续顺序为状态归属审查 → 映射/权限审计 → 停机一致备份 → 隔离升级与冷恢复/回滚验证 → 授权受控切换 → 废止旧写入口，不长期双轨。回滚保全切换后新增 Session、Memory 和通知记录，不能直接覆盖旧快照。具体迁移方式、SQL/Schema、脚本及切换窗口留后续设计/开发；此次不执行。
 
-## 7. 讨论、开发及验收顺序
+## 7. Iteration 01 模块边界（普通文本出站）
 
-按 [路线图](IMPLEMENTATION_ROADMAP.md) P1–P8：先定 Sender 返回/错误与气泡确认/队列，再定中间包/插件及状态所有权，然后设计兼容/迁移验收；后续授权后在隔离环境实现薄 I/O/QQ Official 与模拟第二平台，迁移 Interaction，再按最终分组接入 L3/横切职责，验证后受控切换。QQ Personal 协议与真实账号接入留后续，不以模拟结果冒充实现。
+| 部分 | 职责 | 不负责 |
+| --- | --- | --- |
+| Unified I/O 出站核心 | `sendMessage()`；逻辑目标校验（平台、接入账号、Conversation）；按 Conversation 串行、跨 Conversation 有界并行；取消与分片间复核；同一逻辑消息去重；结果区分未发送/已接受/未知/部分分片；不依赖 QQ SDK、Character 或 Interaction | 平台协议、回复目标、限额、分片规则；Agent Runtime/Session/路由；持久状态 |
+| QQ Official 文本 Adapter | 由可信 Conversation Manager 记录解析目标并复核来源会话；回复目标与被动回复限额（复用现有实现）；按平台限额分片；API 调用；QQ 专属错误分类（明确拒绝 vs 结果未知） | 通用队列/取消；授予权限；读模型自报 ID |
+| 首个调用方 | 一条现有普通文本出站路径改用 `sendMessage()`，删除其旧直接发送代码 | Interaction 的 Streaming/渐进分泡（Iteration 04） |
+
+具体目录、Package/Plugin 组合与对象结构由实现切片结合 DSH Host 机制提出，并在 QQTK 文档记录；本表只固定职责划分。Iteration 01 不新增持久数据库、消息总线或服务框架。
+
+已实现的落点：出站核心为 QQTK `plugin-sources/dsh-agent-io`（与 Conversation Manager 同为可独立安装的 Host Plugin，服务名 `agentIO`）；QQ Official 文本 Adapter 在 QQ 补丁 `dist/transport/qq-text-adapter.js`，复用 Gateway Sender 与 Manager 的 `isCurrentSession`；首个调用方为原 QQ 出站路由（未绑定 Interaction 的普通回复、Streaming 静态降级、工具错误与轮次错误）。QQ 补丁原生 `inject` `agentIO`，缺失即拒绝启动；Character 的 QQ 包装与 Core 同步声明，候选首次装配须显式提供已审查的 `dsh-agent-io` 包。
+
+## 8. 讨论、开发及验收顺序
+
+按 [路线图](IMPLEMENTATION_ROADMAP.md) 的 Iteration 01–10 逐切片实施：每轮实现或抽离 → 单元/集成测试 → 局部替换旧路径 → 清理旧代码；Identity 与权限验证从第一轮起即为门禁。QQ Personal 协议与真实账号接入留后续，不以模拟结果冒充实现。
 
 后续验证须覆盖：
 
 1. D1 direct/group、引用/附件/发送关联、多账号 ID 冲突、受控 platformData、伪造身份/Owner 授权拒绝。
 2. sendMessage-only、所有通道共享 Sender、启用时完整泡提前提交/关闭时一条默认回复、工具成功/失败真实确认。
-3. 同 Conversation 串行、不同 Turn/attempt 隔离、取消与迟到结果、发送明确失败/未知、重试/部分分片失败/冷恢复；不盲重放、不修改已发泡。
+3. 同 Conversation 串行、不同 Conversation 独立、不同 Turn/attempt 隔离、取消与迟到结果、取消与在途请求竞态、发送明确失败/未知、部分分片失败/冷恢复；不盲重放、不修改已发泡；会话轮换/撤权后阻止发送；入站重复投递只触发一次。
 4. HITL 原生请求关联/验证回应/取消/超时，多平台无重复全局包装；Notification 不变聊天输入、Outbox 去重/unknown 与稳定目标。
 5. 老 Session/Memory ACL/Schedule/QQ bindings 保留、单写入者、恢复/回滚保全新数据、历史根不重新获权。
 6. 平台独立依赖/安装/启停、普通 Agent 无 Character；真实 QQ 手机收件/按钮/回复目标与原生 Web/Desktop 独立验收。
 
-以上均是**未来验收要求**，不是本次通过记录。当前事实仍是 Character test.23 / Interaction test.8 / Conversation Manager test.2 / QQTK test.23；新 IO、统一平台仓库、QQ Personal 未实现，手机收件/审批按钮未完整验收。
+以上均是**验收要求**，各切片只对已迁移路径声明通过。当前部署事实仍是 Character test.23 / Interaction test.8 / Conversation Manager test.2 / QQTK test.23；统一平台仓库、QQ Personal 未实现，手机收件/审批按钮未完整验收。
 
-剩余待讨论主要为 Sender 返回/错误语义、已提交气泡确认与队列行为细节、中间 Package/Plugin 分组；其余方向见 [ADR](DECISIONS.md)。本轮不擅自定接口类型、状态机、包名/仓库名或 SQL。
+剩余待讨论见 [ADR](DECISIONS.md) 第 6 节。本计划不擅自定状态机、包名/仓库名或 SQL。

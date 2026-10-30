@@ -6,7 +6,7 @@
 
 ## 普通 Agent + QQ
 
-当前版本安装 QQ Bot 与独立 `dsh-conversation-manager@0.1.0-test.1`，应用 [QQTK](https://github.com/EJYDOvO/harness-qq-toolkit-public) 两份配套补丁。Profile 加载原生 base/web-app；无需 Character、Remote Ops、Memory。通用组合完成 rc.3 隔离验收；完整 Character 实例已授权部署，不能据此宣称普通 QQ 新装或其他平台已完成实机验收。
+当前版本安装 QQ Bot、独立 `dsh-conversation-manager@0.1.0-test.1` 与（QQTK Iteration 01 起）独立 `dsh-agent-io`，应用 [QQTK](https://github.com/EJYDOvO/harness-qq-toolkit-public) 两份配套补丁。Profile 加载原生 base/web-app；无需 Character、Remote Ops、Memory。通用组合完成 rc.3 隔离验收；完整 Character 实例已授权部署，不能据此宣称普通 QQ 新装或其他平台已完成实机验收。
 
 ```yaml
 # Profile pnpm-workspace.yaml 的相关部分
@@ -22,6 +22,9 @@ overrides:
 ```yaml
 # Profile cordis.patch.yml；由 Host 安全配置提供凭据
 - insert:
+    - id: agent-io               # QQTK Iteration 01 起，QQ 补丁原生依赖
+      name: dsh-agent-io
+      config: {}
     - id: conversation-manager
       name: dsh-conversation-manager
       config:
