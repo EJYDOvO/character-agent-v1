@@ -171,8 +171,27 @@ export function apply(ctx,config){
     const settled=Array.from({length:base.session.seq},(_,i)=>base.session.eventAt(i)).filter(e=>e?.type==='assistant/message').at(-1);
     assert(Number.isSafeInteger(settled.seq)&&Number.isSafeInteger(settled.data.turn));assert.equal(ids.at(-1),`qq:${base.id}:${settled.seq}:assistant`);
     plainHandler({header:{id:base.id}},settled);await sleep(100);assert.equal(plainSent.length,1,'a replayed native event is not sent again');
+    report.checks.push('Installed dsh-agent-io: a plain Agent reply reaches the QQ adapter once with a stable id from the real Host seq; replay is suppressed');
+    // Inbound on the same installed I/O: the reviewed QQ handler hands a QQ event
+    // to the channel, the trusted entry creates one native input, the reply comes
+    // back out through the outbound path. A re-pushed message id adds nothing.
+    if(typeof io.openInbound==='function'){
+     const {handleInbound,deliverInbound}=await import(pathToFileURL(config.qqFixture+'/dist/transport/inbound.js').href);
+     plainManager.getOrCreate=async(scope,peer,senderId,target)=>{assert.deepEqual([scope,peer,senderId],['c2c','synthetic-owner','synthetic-owner']);plainRecord.replyTarget=target;return plainRecord;};
+     const channel=io.openInbound({platform:'qq-official',adapter:'qq-official-gateway',accountId:'synthetic-app',deliver:s=>deliverInbound(s,plainManager,plainConfig,logger)});
+     const qqEvent=()=>({message:{kind:'c2c',senderId:'synthetic-owner',messageId:'synthetic-inbound-1',content:'chat-case inbound',attachments:[]},state:{},bot:{async sendMarkdown(){},async sendTyping(){}}});
+     try{
+      const before=plainSent.length;await handleInbound(qqEvent(),plainManager,plainConfig,logger,channel);await sleep(100);
+      const inputs=()=>Array.from({length:base.session.seq},(_,i)=>base.session.eventAt(i)).filter(e=>e?.type==='user/message'&&JSON.stringify(e.data).includes('chat-case inbound'));
+      assert.equal(inputs().length,1);assert.deepEqual(plainSent.slice(before),[{text:'嗯，今天还不错。咖啡机终于修好了。',msgId:'synthetic-inbound-1'}],'reply targets the inbound msg_id');
+      await handleInbound(qqEvent(),plainManager,plainConfig,logger,channel);await base.whenIdle();await sleep(100);
+      assert.equal(inputs().length,1,'duplicate push creates no second input');assert.equal(plainSent.length,before+1,'and no second reply');
+      const stranger=await channel.receive({conversation:{type:'direct',id:'stranger'},message:{id:'synthetic-inbound-2',text:'hi'},sender:{id:'stranger'},platformData:{context:qqEvent()}});
+      assert.equal(stranger.status,'rejected');
+     }finally{channel.close();}
+     report.checks.push('Installed dsh-agent-io inbound: a QQ event becomes one native input and its reply goes out through the I/O; duplicate push and stranger add nothing');
+    }else report.checks.push('Inbound NOT exercised: the installed dsh-agent-io has no openInbound (Iteration 01 package)');
    }finally{releasePlain?.();releaseAdapter();}
-   report.checks.push('Installed dsh-agent-io: a plain Agent reply reaches the QQ adapter once with a stable id from the real Host seq; replay is suppressed');
    report.ok=true;
   }catch(e){report.ok=false;report.error=e.stack;}finally{releaseTool();releaseOutbound?.();for(const h of handles)await h.dispose().catch(()=>{});resolver?.deregister();fs.writeFileSync(config.result,JSON.stringify(report,null,2));}
  }
