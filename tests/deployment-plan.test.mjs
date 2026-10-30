@@ -10,7 +10,10 @@ import {gzipSync} from 'node:zlib';
 const require=createRequire(import.meta.url),plan=require('../scripts/deployment-plan.cjs'),packages=require('../scripts/package-plan.cjs');
 const write=(file,value)=>{mkdirSync(dirname(file),{recursive:true});writeFileSync(file,typeof value==='string'?value:JSON.stringify(value));};
 // Real gzip/tar metadata: do not substitute a filename assertion for package version.
-function tarball(file,version,name='dsh-remote-ops-local'){const body=Buffer.from(JSON.stringify({name,version})),header=Buffer.alloc(512);header.write('package/package.json');header.write(body.length.toString(8).padStart(11,'0'),124);writeFileSync(file,gzipSync(Buffer.concat([header,body,Buffer.alloc(Math.ceil(body.length/512)*512-body.length+1024)])));}
+function tarball(file,version,name='dsh-remote-ops-local',extra={}){
+ const entry=(path,body)=>{const header=Buffer.alloc(512);header.write(path);header.write(body.length.toString(8).padStart(11,'0'),124);return Buffer.concat([header,body,Buffer.alloc(Math.ceil(body.length/512)*512-body.length)]);};
+ writeFileSync(file,gzipSync(Buffer.concat([entry('package/package.json',Buffer.from(JSON.stringify({name,version}))),...Object.entries(extra).map(([p,t])=>entry('package/'+p,Buffer.from(t))),Buffer.alloc(1024)])));
+}
 function fixture(){
  const root=mkdtempSync(join(tmpdir(),'deployment-contract-')),live=join(root,'data/profiles/desktop'),project=join(root,'source');
  const binding={appId:'synthetic-app',ownerId:'synthetic-owner',characterId:'character-a',projectId:'preserve-project'};
@@ -109,6 +112,22 @@ test('A QQ patch that needs the Unified Agent I/O requires a Core row and a revi
  execFileSync(process.execPath,[join(f.project,'scripts/prepare-deploy.cjs')],{env:{...process.env,DSH_INSTALL_ROOT:f.root,DSH_QQTK_PROJECT:f.root},stdio:'pipe'});
  const candidate=JSON.parse(readFileSync(join(f.root,'data/profiles/character-candidate/package.json'))),record=JSON.parse(readFileSync(join(f.root,'data/maintenance/character-deploy/candidate.json')));
  assert.equal(candidate.dependencies[name],pin.source);assert.deepEqual(record.artifacts[name],{name,source:pin.source,sha256:pin.sha256,version:'0.1.0-test.2'});
+});
+test('A QQ patch that opens the Conversation wiring refuses a dsh-agent-io without openConversation, installed or fresh',()=>{
+ const f=fixture(),qqPatch=join(f.root,'maintenance/patches/dsh-qqbot@0.5.2.patch'),name='dsh-agent-io',core=[{insert:[{id:'agent-io',name,config:{}}]}];
+ write(qqPatch,"+export const inject = ['agents', 'conversationManager', 'agentIO'];\n+    const conversation = io.openConversation({ platform: QQ_OFFICIAL });\n");
+ const patches=plan.patchPlan(f.live,f.root,{load:JSON.parse}).patches;
+ const old=join(f.root,'old.tgz');tarball(old,'0.1.0-test.3',name,{'index.mjs':"ctx.provide('agentIO',{sendMessage,registerAdapter,openInbound});"});
+ assert.throws(()=>plan.verifiedAgentIO(f.live,core,patches,['--agent-io-artifact='+old]),/openConversation \(0\.1\.0-test\.4 or later\)/);
+ const next=join(f.root,'next.tgz');tarball(next,'0.1.0-test.4',name,{'index.mjs':"ctx.provide('agentIO',{sendMessage,registerAdapter,openInbound,openConversation});"});
+ assert.equal(plan.verifiedAgentIO(f.live,core,patches,['--agent-io-artifact='+next]).version,'0.1.0-test.4');
+ // An installed, pinned older package is not silently kept under the new patch.
+ const pin=plan.pinAgentIO(plan.verifiedAgentIO(f.live,core,[],['--agent-io-artifact='+old]),f.root);
+ const manifest=JSON.parse(readFileSync(join(f.live,'package.json')));manifest.dependencies[name]=pin.source;write(join(f.live,'package.json'),manifest);
+ const pins=JSON.parse(readFileSync(join(f.live,'character-artifacts.json')));pins[name]={source:pin.source,sha256:pin.sha256,version:pin.version};write(join(f.live,'character-artifacts.json'),pins);
+ write(join(f.live,'node_modules',name,'package.json'),{name,version:'0.1.0-test.3'});write(join(f.live,'node_modules',name,'index.mjs'),"ctx.provide('agentIO',{sendMessage,registerAdapter,openInbound});");
+ assert.throws(()=>plan.verifiedAgentIO(f.live,core,patches,[]),/does not upgrade the installed dsh-agent-io/);
+ assert.equal(plan.verifiedAgentIO(f.live,core,[],[]).version,'0.1.0-test.3','the previous patch keeps the installed package');
 });
 test('the Character QQ wrapper declares agentIO and generated Core installs dsh-agent-io',()=>{
  const adapter=readFileSync(new URL('../packages/character-qq-adapter/index.mjs',import.meta.url),'utf8'),build=readFileSync(new URL('../scripts/build.cjs',import.meta.url),'utf8');

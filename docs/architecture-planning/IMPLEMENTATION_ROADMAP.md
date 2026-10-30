@@ -72,6 +72,21 @@ Character 单元 215、安全审计 33、QQTK 轻量 55/审批 6 是 [STATUS](..
 4. Interaction、Conversation Manager 与 Character Identity 的既有安全与会话边界不变；不修改运行中的 DSH 安装或生产数据。
 5. 明确记录未覆盖的输入、Streaming、HITL、Notification 和其他平台能力；无法安全完成的项标记未完成，不以模拟结果冒充真实 QQ 验收。
 
+### 3.2 Iteration 03：Conversation Manager 统一 I/O 接线
+
+**状态**：源码完成（QQTK `dsh-agent-io@0.1.0-test.4`），自动化测试与隔离 rc.3 Host 探针通过；**未部署**，运行实例仍为 test.3；真实 QQ/手机未验收。接口见 QQTK `plugin-sources/dsh-agent-io/README.md` 的 `openConversation()`。
+
+**实现**：
+
+- 统一 Conversation 引用 `{platform, accountId, conversation: {type, id}}`：入站由通道固定平台与账号，出站由同一接线校验；两者经同一 `scopes` 映射到 Manager 的 `(scope, peer)`，已持久化的 Session Key（QQ 仍为 `qqbot:<appId>:<scope>:<peer>`）、偏好与生命周期状态不变。
+- 平台无关的 Host 接口 `agentIO.openConversation({platform, adapter, accountId, manager, scopes, admits, onInput})`：`handoff()` 完成访问复核 → Manager `getOrCreate`（保留创建/恢复/轮换与 Character Owner-only 等包装）→ 同一 Conversation 且 `isCurrentSession` → 原生 `UserMessage` → Interaction `admitInput` 后 `intervene()` 或 `followup()`；`submit()` 供显式更正；`route()`/`registerAdapter()` 是出站可信路由（Manager 当前记录 + `isCurrentSession`，每个分片前复核）；`policy()` 为唯一 Interaction 查询。不依赖 QQ SDK、Character、Interaction 或 Manager 包。
+- QQ Official 已实际改用：入站 `deliverInbound` 只保留 QQ 协议（C2C 发送者、回复目标、正文组装、兜底提示、群历史、typing、等待本轮）；出站文本 Adapter 只保留回复目标检查、分片、发送与错误分类；显式更正、`/stop` 与出站 Interaction 绑定改用同一 `policy()`。删除了 QQ 内的 `getOrCreate`/`isCurrentSession`/原生输入创建、`manager.interactionPolicy`/`registerInteractionInput` 与另外两处重复的 Interaction 查询。
+- Conversation Manager 未改动，仍是唯一 Session 路由权威；未新增 Manager、数据库、权限系统或持久状态。
+
+**验收证据**：QQTK 新增 `conversation-io.test.mjs`（真实 Conversation Manager、不含 QQ 代码的合成第二平台）覆盖普通 Agent 收发、跨平台/账号/direct-group 隔离、冷恢复、自动轮换与显式重置后的迟到输出、Manager/接线关闭竞态、准入拒绝与 Owner-only 包装、伪造来源、入站去重、出站分片间复核与 Interaction；QQ 测试经 Gateway 自己的接线代码运行；关键校验经变异检查确认会被测试捕获。隔离 rc.3 探针确认已安装包从 Agent I/O 插件上下文取到原生 Interaction 服务、用 Host `dsh-llm` 创建原生输入，QQ 入站/出站经新接口各一次且重复推送/陌生人不产生输入。
+
+**未覆盖**：Interaction 出站迁移（04，`sendText`/`openStream` 与 SDK stream 照旧）；Remote Ops 启动路由恢复与 Character Identity 准入仍直接调用 Manager（非 Agent 输入）；命令/问答/审批（05/06）；通知与历史提醒（07）；持久发送状态；真实第二平台（只有合成夹具）；真实 QQ 手机收件；部署与回滚演练（Character 部署计划会拒绝缺 `openConversation` 的 `dsh-agent-io`，但尚不能升级已安装的 test.3，部署前需补该步骤）。
+
 ## 4. 后续验收矩阵与停止条件
 
 | 维度 | 必须证明 | 不可替代为通过的证据 |

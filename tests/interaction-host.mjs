@@ -35,7 +35,7 @@ export function apply(ctx,config){
  ctx.llm.registerAdapter(['interaction-fixture'],new Provider());
  ctx.tools.register(defineTool({name:'interaction_fixture',description:'Isolated synthetic tool',parameters:{},output:{schema:{type:'string'},render:(_a,v)=>[{type:'text',text:v}]},async execute(_a,{signal}){toolStarted=true;const aborted=()=>toolAborted=true;signal.addEventListener('abort',aborted,{once:true});try{await toolGate;return 'fixture-result';}finally{signal.removeEventListener('abort',aborted);}}}));
  ctx.effect(()=>{const timer=setTimeout(()=>void run(),700);return()=>clearTimeout(timer);});
- async function run(){const handles=[],report={ok:false,runId:config.runId,host:config.version,provider:'deterministic-fixture',qqNetwork:false,checks:[]};let resolver,releaseOutbound;
+ async function run(){const handles=[],report={ok:false,runId:config.runId,host:config.version,provider:'deterministic-fixture',qqNetwork:false,checks:[]};let resolver,releaseOutbound,conversation;
   try{
    assert(!ctx.get('qqGateway'));assert(!ctx.get('characterMemory'));
    const create=async preset=>{const h=await ctx.agents.create({sessionId:randomUUID(),agentOptions:{provider:'interaction-fixture',model:'fixture'},meta:{cwd:config.cwd,agentPreset:preset},setup:async c=>{await ctx.agentPresets.mount(c,preset);}});handles.push(h);return h.agent;};
@@ -58,17 +58,27 @@ export function apply(ctx,config){
    resolver=registerHooks({resolve(specifier,context,next){if(context.parentURL?.startsWith(fixtureUrl)&&!specifier.startsWith('.')&&!specifier.startsWith('node:')&&!specifier.startsWith('file:'))return next(specifier,{...context,parentURL:specifier.startsWith('@deepseek-ai/')?official:installed});return next(specifier,context);}});
    const {createInteractionOutbound}=await import(pathToFileURL(config.qqFixture+'/dist/gateway/bootstrap.js').href);
    const {setupMiddlewares}=await import(pathToFileURL(config.qqFixture+'/dist/gateway/middleware-setup.js').href);
-   const sent=[],bubbles=[],record={sessionKey:'fixture',agent:a,replyTarget:{scope:'c2c',targetId:'synthetic-owner',msgId:'synthetic-message'}};
-   const manager={ctx,findBySessionId:id=>id===a.id?record:undefined,getSessionRecord:()=>record,approvalChannel:{pending:new Map()},questionChannel:{pending:new Map()}};
+   const sent=[],bubbles=[],record={sessionKey:'fixture',sessionId:a.id,agent:a,scope:'c2c',peerId:'synthetic-owner',replyTarget:{scope:'c2c',targetId:'synthetic-owner',msgId:'synthetic-message'}};
+   const manager={ctx,getOrCreate:async()=>record,isCurrentSession:r=>r===record&&ctx.agents.get(a.id)===a,findBySessionId:id=>id===a.id?record:undefined,getSessionRecord:()=>record,approvalChannel:{pending:new Map()},questionChannel:{pending:new Map()}};
+   // The installed dsh-agent-io's shared Conversation wiring (Iteration 03), as the Gateway opens it.
+   const io=ctx.get('agentIO');assert(typeof io?.openConversation==='function','Installed dsh-agent-io has no openConversation (pre-Iteration 03 package)');
+   conversation=io.openConversation({platform:'qq-official',adapter:'qq-official-gateway',accountId:'synthetic-interaction',manager,scopes:{direct:'c2c',group:'group'},admits:(scope,peer)=>scope==='c2c'&&peer==='synthetic-owner',onInput:(r,m,policy)=>{if(policy)manager.trackInteractionInput?.(r,m);}});
    const logger={debug(){},info(){},warn(){},error(){}};
    const sender={async sendMarkdown(target,t,opts){sent.push({t,msgId:target?.msgId,input:opts?.delivery?.input,reply:opts?.delivery?.reply});},openStream(target,meta){const row={text:'',done:false,msgId:target?.msgId,input:meta?.input,reply:meta?.reply,bubble:meta?.bubble};bubbles.push(row);return {async update(t){row.text=t;meta?.onDelivered?.();},async complete(){row.done=true;}};}};
-   releaseOutbound=ctx.on('session/event',createInteractionOutbound(ctx,manager,sender,{streaming:true,textChunkLimit:3500,showToolResults:false},logger,ctx.tools));
-   const middleware=[];setupMiddlewares({use:m=>middleware.push(m)},{access:{c2cMode:'allowlist',c2cAllow:['synthetic-owner'],groupMode:'disabled',groupAllow:[]},historyLimit:10,media:{enabled:false}},manager,logger);
+   releaseOutbound=ctx.on('session/event',createInteractionOutbound(ctx,manager,sender,{streaming:true,textChunkLimit:3500,showToolResults:false},logger,ctx.tools,undefined,io,conversation));
+   const middleware=[];setupMiddlewares({use:m=>middleware.push(m)},{access:{c2cMode:'allowlist',c2cAllow:['synthetic-owner'],groupMode:'disabled',groupAllow:[]},historyLimit:10,media:{enabled:false}},manager,logger,conversation);
    let admitted=false;await middleware[2]({message:{kind:'c2c',senderId:'stranger'},log:logger,stop(){}},async()=>{admitted=true;});assert(!admitted);
    report.checks.push('Actual modified QQ outbound and middleware load with real SDK; outsider blocked without a gateway');
-   const input=text=>{const message=createUserMessage({content:[{type:'text',text}],source:{kind:'user'}});manager.registerInteractionInput(record,message);return message;};
+   // Through the Host's agentPresets, from the dsh-agent-io plugin context: the same scoped service, none for a Preset without it.
+   assert.equal(conversation.policy(record),p);assert.equal(conversation.policy({agent:base}),undefined);
+   report.checks.push('Installed dsh-agent-io Conversation wiring resolves the native scoped Interaction service; a Preset without it has none');
+   // What the shared handoff does for an admitted input before the policy acts (direct policy calls below).
+   const input=text=>{const message=createUserMessage({content:[{type:'text',text}],source:{kind:'user'}});manager.trackInteractionInput(record,message);p.admitInput?.(message);return message;};
    const send=async text=>{a.followup(input(text));await a.whenIdle();await p.idle();};
-   await send('chat-case');assert.deepEqual(bubbles.map(b=>b.text),['嗯，今天还不错。咖啡机终于修好了。']);assert(bubbles.every(b=>b.done));assert(!sent.length);
+   const handed=conversation.submit(record,'chat-case');assert.equal(handed.status,'accepted');assert.equal(handed.mode,'followup');assert.equal(handed.interactive,true);
+   assert.equal(handed.message.source.kind,'user');assert.equal(typeof handed.message.id,'string','the native dsh-llm UserMessage');await a.whenIdle();await p.idle();
+   report.checks.push('Shared handoff: one native UserMessage via the Host dsh-llm constructor, admitted to Interaction, followup on the idle Agent');
+   assert.deepEqual(bubbles.map(b=>b.text),['嗯，今天还不错。咖啡机终于修好了。']);assert(bubbles.every(b=>b.done));assert(!sent.length);
    assert(Array.from({length:a.session.seq},(_,i)=>a.session.eventAt(i)).some(e=>e?.type==='user/message'&&(e.data?.message??e.data)?.source?.kind==='time-context'),'Native time-context projection must actually run');
    report.checks.push('Official time-context projection preserves trusted QQ admission and reply delivery');
    report.checks.push('Actual native assistant-stream frames produce ordered bubbles, durable settlement does not duplicate');
@@ -157,13 +167,14 @@ export function apply(ctx,config){
    report.checks.push('Completed native tools return to text: judged priority/revise cancel text without cancelling a tool');
    // Plain Agent without Interaction: native reply -> original QQ router -> installed
    // dsh-agent-io -> QQ text adapter, with the logical id from the real Host seq.
-   const io=ctx.get('agentIO');assert(io&&typeof io.sendMessage==='function');
-   const {createQQTextAdapter}=await import(pathToFileURL(config.qqFixture+'/dist/transport/qq-text-adapter.js').href);
+   assert(typeof io.sendMessage==='function');
+   const {createQQTextAdapter,accessAllows,QQ_SCOPES}=await import(pathToFileURL(config.qqFixture+'/dist/transport/qq-text-adapter.js').href);
    const plainSent=[],ids=[],plainRecord={sessionKey:'plain',sessionId:base.id,agent:base,scope:'c2c',peerId:'synthetic-owner',replyTarget:{scope:'c2c',targetId:'synthetic-owner',msgId:'synthetic-plain'}};
-   const plainManager={ctx,findBySessionId:id=>id===base.id?plainRecord:undefined,getSessionRecord:(s,peer)=>s==='c2c'&&peer==='synthetic-owner'?plainRecord:undefined,isCurrentSession:r=>r===plainRecord&&ctx.agents.get(base.id)===base,approvalChannel:{pending:new Map()},questionChannel:{pending:new Map()}};
+   const plainManager={ctx,getOrCreate:async(scope,peer,senderId,target)=>{assert.deepEqual([scope,peer,senderId],['c2c','synthetic-owner','synthetic-owner']);plainRecord.replyTarget=target;return plainRecord;},findBySessionId:id=>id===base.id?plainRecord:undefined,getSessionRecord:(s,peer)=>s==='c2c'&&peer==='synthetic-owner'?plainRecord:undefined,isCurrentSession:r=>r===plainRecord&&ctx.agents.get(base.id)===base,approvalChannel:{pending:new Map()},questionChannel:{pending:new Map()}};
    const plainConfig={appId:'synthetic-app',streaming:false,textChunkLimit:3500,showToolResults:false,access:{c2cMode:'allowlist',c2cAllow:['synthetic-owner'],groupMode:'disabled',groupAllow:[]}};
-   const releaseAdapter=io.registerAdapter(createQQTextAdapter({accountId:'synthetic-app',manager:plainManager,access:plainConfig.access,limit:3500,split:t=>[t],send:async(target,text)=>{plainSent.push({text,msgId:target.msgId});return {id:'receipt-'+plainSent.length};}}));
-   const plainHandler=createInteractionOutbound(ctx,plainManager,sender,plainConfig,logger,ctx.tools,null,{...io,sendMessage:r=>{ids.push(r.id);return io.sendMessage(r);}});
+   const plainConversation=io.openConversation({platform:'qq-official',adapter:'qq-official-gateway',accountId:'synthetic-app',manager:plainManager,scopes:QQ_SCOPES,admits:(scope,peer)=>accessAllows(plainConfig.access,scope,peer)});
+   const releaseAdapter=plainConversation.registerAdapter(createQQTextAdapter({limit:3500,split:t=>[t],send:async(target,text)=>{plainSent.push({text,msgId:target.msgId});return {id:'receipt-'+plainSent.length};}}));
+   const plainHandler=createInteractionOutbound(ctx,plainManager,sender,plainConfig,logger,ctx.tools,null,{...io,sendMessage:r=>{ids.push(r.id);return io.sendMessage(r);}},plainConversation);
    const releasePlain=ctx.on('session/event',plainHandler);
    try{
     base.followup(createUserMessage({content:[{type:'text',text:'chat-case plain'}],source:{kind:'user'}}));await base.whenIdle();await sleep(100);
@@ -175,29 +186,23 @@ export function apply(ctx,config){
     // Inbound on the same installed I/O: the reviewed QQ handler hands a QQ event
     // to the channel, the trusted entry creates one native input, the reply comes
     // back out through the outbound path. A re-pushed message id adds nothing.
-    if(typeof io.openInbound==='function'){
+    {
      const {handleInbound,deliverInbound}=await import(pathToFileURL(config.qqFixture+'/dist/transport/inbound.js').href);
-     plainManager.getOrCreate=async(scope,peer,senderId,target)=>{assert.deepEqual([scope,peer,senderId],['c2c','synthetic-owner','synthetic-owner']);plainRecord.replyTarget=target;return plainRecord;};
-     const channel=io.openInbound({platform:'qq-official',adapter:'qq-official-gateway',accountId:'synthetic-app',deliver:s=>deliverInbound(s,plainManager,plainConfig,logger)});
+     const channel=plainConversation.openInbound(s=>deliverInbound(s,plainConversation,plainConfig,logger));
      const qqEvent=()=>({message:{kind:'c2c',senderId:'synthetic-owner',messageId:'synthetic-inbound-1',content:'chat-case inbound',attachments:[]},state:{},bot:{async sendMarkdown(){},async sendTyping(){}}});
      try{
-      const before=plainSent.length;await handleInbound(qqEvent(),plainManager,plainConfig,logger,channel);await sleep(100);
+      const before=plainSent.length;await handleInbound(qqEvent(),logger,channel);await sleep(100);
       const inputs=()=>Array.from({length:base.session.seq},(_,i)=>base.session.eventAt(i)).filter(e=>e?.type==='user/message'&&JSON.stringify(e.data).includes('chat-case inbound'));
       assert.equal(inputs().length,1);assert.deepEqual(plainSent.slice(before),[{text:'嗯，今天还不错。咖啡机终于修好了。',msgId:'synthetic-inbound-1'}],'reply targets the inbound msg_id');
-      await handleInbound(qqEvent(),plainManager,plainConfig,logger,channel);await base.whenIdle();await sleep(100);
+      await handleInbound(qqEvent(),logger,channel);await base.whenIdle();await sleep(100);
       assert.equal(inputs().length,1,'duplicate push creates no second input');assert.equal(plainSent.length,before+1,'and no second reply');
       const stranger=await channel.receive({conversation:{type:'direct',id:'stranger'},message:{id:'synthetic-inbound-2',text:'hi'},sender:{id:'stranger'},platformData:{context:qqEvent()}});
       assert.equal(stranger.status,'rejected');
      }finally{channel.close();}
-     report.checks.push('Installed dsh-agent-io inbound: a QQ event becomes one native input and its reply goes out through the I/O; duplicate push and stranger add nothing');report.inbound='exercised';
-    }else{
-     // Iteration 02 acceptance: an old I/O package must fail the run, not pass it
-     // with one check fewer. Only an explicit compatibility run may skip it.
-     if(config.requireInbound!==false)throw Error('Inbound acceptance required, but the installed dsh-agent-io has no openInbound (Iteration 01 package)');
-     report.checks.push('Inbound NOT exercised (compatibility run): the installed dsh-agent-io has no openInbound');report.inbound='not-exercised';
+     report.checks.push('Installed dsh-agent-io inbound: a QQ event becomes one native input through the shared Conversation handoff and its reply goes out through the I/O; duplicate push and stranger add nothing');report.inbound='exercised';
     }
-   }finally{releasePlain?.();releaseAdapter();}
+   }finally{releasePlain?.();releaseAdapter();plainConversation.close();}
    report.ok=true;
-  }catch(e){report.ok=false;report.error=e.stack;}finally{releaseTool();releaseOutbound?.();for(const h of handles)await h.dispose().catch(()=>{});resolver?.deregister();fs.writeFileSync(config.result,JSON.stringify(report,null,2));}
+  }catch(e){report.ok=false;report.error=e.stack;}finally{releaseTool();releaseOutbound?.();conversation?.close();for(const h of handles)await h.dispose().catch(()=>{});resolver?.deregister();fs.writeFileSync(config.result,JSON.stringify(report,null,2));}
  }
 }

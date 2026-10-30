@@ -170,4 +170,4 @@ HITL 是统一术语；HITL Bridge 不是已发布插件。不能让多个平台
 3. 聊天、HITL、Notification 共用 Sender 时的跨服务排序与背压。
 4. 具体 Package/Plugin 命名、是否迁仓。
 
-QQ Personal 协议、管理员授权声明、跨平台关联及非即时聊天扩展留后续专项。Iteration 01（普通文本出站 Unified I/O）源码已完成、未部署；下一步为 Iteration 02：入站标准化与可信身份交接（范围见 [路线图](IMPLEMENTATION_ROADMAP.md) 第 3 节）。详见 [决策](DECISIONS.md)、[模块计划](MODULE_IMPLEMENTATION_PLAN.md)。
+QQ Personal 协议、管理员授权声明、跨平台关联及非即时聊天扩展留后续专项。Iteration 01/02（普通文本出站、普通聊天入站）已配套 test.24 授权部署；Iteration 03（Conversation Manager 统一 I/O 接线，`dsh-agent-io` 的 `openConversation()`）源码完成、未部署，见 [路线图](IMPLEMENTATION_ROADMAP.md) 3.2；下一步为 Iteration 04：Interaction 出站迁移。详见 [决策](DECISIONS.md)、[模块计划](MODULE_IMPLEMENTATION_PLAN.md)。
