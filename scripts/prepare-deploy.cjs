@@ -21,6 +21,7 @@ plan.verifyTaskExtras(live,extras,extrasEnabled,yaml);
 if(process.argv.includes('--inspector'))require('./inspector-declaration.cjs')(rows,extrasEnabled?extras:[]);
 const artifactPlan=require('./package-plan.cjs').verifiedPlan(project,sourceDigest,plan.select({profile:rows,core,extras,extrasEnabled}));
 const remote=plan.verifiedRemote(live),patches=plan.patchPlan(live,path.resolve(process.env.DSH_QQTK_PROJECT||root),yaml);
+const agentIO=plan.verifiedAgentIO(live,core,patches.patches);
 const qq=rows.find(x=>x.id==='im-qqbot');assert.equal(qq.config.access.c2cMode,'allowlist');assert.equal(qq.config.access.c2cAllow.length,1);assert.equal(qq.config.access.groupMode,'disabled');
 const owner=JSON.parse(fs.readFileSync(root+'/data/maintenance/owner.json','utf8'));assert.equal(owner.openid,qq.config.access.c2cAllow[0]);
 const binding=JSON.parse(fs.readFileSync(root+'/data/character/binding.json','utf8'));assert.equal(binding.appId,qq.config.appId);assert.equal(binding.ownerId,owner.openid);
@@ -39,6 +40,7 @@ for(const pkg of artifactPlan){const f=pkg.filename,source=project+'/artifacts/p
  manifest.dependencies[pkg.name]='file:'+dest.replaceAll('\\','/');record.artifacts[pkg.name]={source:manifest.dependencies[pkg.name],sha256:hash(dest),version:pkg.version};}
 manifest.dependencies[remote.name]=remote.source;record.artifacts[remote.name]=remote;
 if(conversation){manifest.dependencies[conversation.name]=conversation.source;record.artifacts[conversation.name]=conversation;}
+if(agentIO){const pin=plan.pinAgentIO(agentIO,root);manifest.dependencies[pin.name]=pin.source;record.artifacts[pin.name]=pin;}
 manifest.dsh.profile.bundles=manifest.dsh.profile.bundles.filter(x=>!['@tencent-connect/dsh-qqbot','dsh-remote-ops-local','dsh-task-memory-local','dsh-character-core','dsh-character-extras'].includes(x));manifest.dsh.profile.bundles.push('dsh-character-core');if(extrasEnabled)manifest.dsh.profile.bundles.push('dsh-character-extras');
 qq.config.preset='qq-character';delete qq.name;plan.disableLegacyMemory(rows);
 fs.writeFileSync(candidate+'/package.json',JSON.stringify(manifest,null,2));fs.writeFileSync(candidate+'/cordis.patch.yml',yaml.dump(rows,{noRefs:true,lineWidth:120}));

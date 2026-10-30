@@ -5,7 +5,7 @@ import {registerHooks} from 'node:module';
 const sdk=(process.env.DSH_CHARACTER_HOST_ROOT||process.env.DSH_INSTALL_ROOT)+'/resources/app.asar/dsh/node_modules/@deepseek-ai/';
 const {LlmAdapter,createUserMessage}=await import(pathToFileURL(sdk+'dsh-llm/lib/index.js').href);
 const {defineTool}=await import(pathToFileURL(sdk+'dsh-tools/lib/index.js').href);
-export const name='interaction-host-probe';export const inject=['agents','agentPresets','llm','tools'];
+export const name='interaction-host-probe';export const inject=['agents','agentPresets','llm','tools','agentIO'];
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 export function apply(ctx,config){
  let toolStarted=false,toolAborted=false,releaseTool;let toolGate=new Promise(r=>releaseTool=r);
@@ -155,6 +155,24 @@ export function apply(ctx,config){
     assert(bubbles.some(b=>b.input===next.id));assert(!toolAborted);
    }
    report.checks.push('Completed native tools return to text: judged priority/revise cancel text without cancelling a tool');
+   // Plain Agent without Interaction: native reply -> original QQ router -> installed
+   // dsh-agent-io -> QQ text adapter, with the logical id from the real Host seq.
+   const io=ctx.get('agentIO');assert(io&&typeof io.sendMessage==='function');
+   const {createQQTextAdapter}=await import(pathToFileURL(config.qqFixture+'/dist/transport/qq-text-adapter.js').href);
+   const plainSent=[],ids=[],plainRecord={sessionKey:'plain',sessionId:base.id,agent:base,scope:'c2c',peerId:'synthetic-owner',replyTarget:{scope:'c2c',targetId:'synthetic-owner',msgId:'synthetic-plain'}};
+   const plainManager={ctx,findBySessionId:id=>id===base.id?plainRecord:undefined,getSessionRecord:(s,peer)=>s==='c2c'&&peer==='synthetic-owner'?plainRecord:undefined,isCurrentSession:r=>r===plainRecord&&ctx.agents.get(base.id)===base,approvalChannel:{pending:new Map()},questionChannel:{pending:new Map()}};
+   const plainConfig={appId:'synthetic-app',streaming:false,textChunkLimit:3500,showToolResults:false,access:{c2cMode:'allowlist',c2cAllow:['synthetic-owner'],groupMode:'disabled',groupAllow:[]}};
+   const releaseAdapter=io.registerAdapter(createQQTextAdapter({accountId:'synthetic-app',manager:plainManager,access:plainConfig.access,limit:3500,split:t=>[t],send:async(target,text)=>{plainSent.push({text,msgId:target.msgId});return {id:'receipt-'+plainSent.length};}}));
+   const plainHandler=createInteractionOutbound(ctx,plainManager,sender,plainConfig,logger,ctx.tools,null,{...io,sendMessage:r=>{ids.push(r.id);return io.sendMessage(r);}});
+   const releasePlain=ctx.on('session/event',plainHandler);
+   try{
+    base.followup(createUserMessage({content:[{type:'text',text:'chat-case plain'}],source:{kind:'user'}}));await base.whenIdle();await sleep(100);
+    assert.deepEqual(plainSent,[{text:'嗯，今天还不错。咖啡机终于修好了。',msgId:'synthetic-plain'}]);
+    const settled=Array.from({length:base.session.seq},(_,i)=>base.session.eventAt(i)).filter(e=>e?.type==='assistant/message').at(-1);
+    assert(Number.isSafeInteger(settled.seq)&&Number.isSafeInteger(settled.data.turn));assert.equal(ids.at(-1),`qq:${base.id}:${settled.seq}:assistant`);
+    plainHandler({header:{id:base.id}},settled);await sleep(100);assert.equal(plainSent.length,1,'a replayed native event is not sent again');
+   }finally{releasePlain?.();releaseAdapter();}
+   report.checks.push('Installed dsh-agent-io: a plain Agent reply reaches the QQ adapter once with a stable id from the real Host seq; replay is suppressed');
    report.ok=true;
   }catch(e){report.ok=false;report.error=e.stack;}finally{releaseTool();releaseOutbound?.();for(const h of handles)await h.dispose().catch(()=>{});resolver?.deregister();fs.writeFileSync(config.result,JSON.stringify(report,null,2));}
  }

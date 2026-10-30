@@ -142,7 +142,7 @@ DSH 原生 Web/Desktop 聊天窗继续用 DSH 原生消息 UI、Session、渲染
 | 发送语义 | 一条逻辑消息不因 settlement、模型重试或内部队列重复生成有效发送任务；区分“API 前未发送/被拒”“平台已接受”“可能已发生但未知”，部分分片成功单独表达；不保证物理 exactly-once，未知禁止盲目重发，失败不伪装成功；诊断不写凭据、原始身份、正文 |
 | 串行与取消 | 同一 Conversation 按序发送，不同 Conversation 不被全局串行阻塞，队列与并发有界；取消/过期 Turn 不继续提交待发内容，多分片在分片之间复核；已进入平台 API 的调用不假定可撤销 |
 
-这些规则是从 Iteration 01 起逐步实现的门禁：每个切片只对自己迁移的路径声明满足，跨 Interaction/HITL/Notification 的统一排序与背压在对应切片完成前不宣称已保证。
+这些规则是从 Iteration 01 起逐步实现的门禁：每个切片只对自己迁移的路径声明满足，跨 Interaction/HITL/Notification 的统一排序与背压在对应切片完成前不宣称已保证。Iteration 01 只对“未绑定 Interaction 的 QQ 普通文本出站”满足出站授权有效性、发送语义、串行与取消（稳定 ID 来自原生 Session ID + 事件 seq；进程内去重不跨重启）；入站去重属 Iteration 02。
 
 ## 7. D5：L3 可选服务与相关 L1 能力（设计决定，尚未实现）
 
@@ -170,4 +170,4 @@ HITL 是统一术语；HITL Bridge 不是已发布插件。不能让多个平台
 3. 聊天、HITL、Notification 共用 Sender 时的跨服务排序与背压。
 4. 具体 Package/Plugin 命名、是否迁仓。
 
-QQ Personal 协议、管理员授权声明、跨平台关联及非即时聊天扩展留后续专项。下一步为 Iteration 01：普通文本出站 Unified I/O（范围、非目标与验收见 [路线图](IMPLEMENTATION_ROADMAP.md) 第 3 节）。详见 [决策](DECISIONS.md)、[模块计划](MODULE_IMPLEMENTATION_PLAN.md)。
+QQ Personal 协议、管理员授权声明、跨平台关联及非即时聊天扩展留后续专项。Iteration 01（普通文本出站 Unified I/O）源码已完成、未部署；下一步为 Iteration 02：入站标准化与可信身份交接（范围见 [路线图](IMPLEMENTATION_ROADMAP.md) 第 3 节）。详见 [决策](DECISIONS.md)、[模块计划](MODULE_IMPLEMENTATION_PLAN.md)。

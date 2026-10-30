@@ -29,7 +29,7 @@ DSH 原生 Web/Desktop 聊天窗继续用原生 UI、Session、渲染和 Streami
 
 ## 当前事实与剩余讨论
 
-部署基线仍为 **Character test.23 / Interaction test.8 / Conversation Manager test.2 / QQTK test.23**。现有 `policy.bind sendText` / 可选 `openStream` 与 QQTK Outbound 是当前实现；统一平台仓库及 QQ Personal 尚未实现。真实 QQ 手机收件、审批按钮等尚未完整验收。下一步为 Iteration 01：普通文本出站 Unified I/O（见 [路线图](IMPLEMENTATION_ROADMAP.md) 3.1），其实现状态以 QQTK 源码与文档为准。
+部署基线仍为 **Character test.23 / Interaction test.8 / Conversation Manager test.2 / QQTK test.23**。现有 `policy.bind sendText` / 可选 `openStream` 与 QQTK Outbound 是当前实现；统一平台仓库及 QQ Personal 尚未实现。真实 QQ 手机收件、审批按钮等尚未完整验收。Iteration 01（普通文本出站 Unified I/O）源码已完成并通过自动化与隔离 Host 验证，未部署、真实 QQ 未验收；下一步为 Iteration 02：入站（见 [路线图](IMPLEMENTATION_ROADMAP.md)）。
 
 剩余讨论：结果结构在附件/引用/Interaction 确认点接入后的扩展、逐泡发送状态持久化与恢复、跨服务排序与背压、具体 Package/Plugin 命名。跨平台关联、管理员授权声明和 QQ Personal 协议选型留后续，不擅自定稿。
 

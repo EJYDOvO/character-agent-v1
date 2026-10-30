@@ -51,6 +51,8 @@ Character 单元 215、安全审计 33、QQTK 轻量 55/审批 6 是 [STATUS](..
 
 ### 3.1 Iteration 01：普通文本出站 Unified I/O
 
+**状态**：源码完成，自动化测试与隔离 rc.3 Host 探针通过；未部署，真实 QQ/手机收件未验收。实现见 QQTK `plugin-sources/dsh-agent-io`，覆盖范围以其 README 为准。
+
 **目标**：从现有 QQTK 中提取可复用的聊天消息发送接口，建立最小 Unified Agent I/O 出站能力，并通过 QQ Official Adapter 实现普通文本消息发送。上层提交一条与 QQ SDK 无关的逻辑聊天消息，由通用 I/O 交给 QQ Official Adapter，后者复用现有 QQ 发送逻辑（回复目标解析、被动回复限额、诊断）。
 
 **范围**：

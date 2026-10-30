@@ -86,6 +86,35 @@ test('Real preparation CLI accepts absent, disabled and active legacy memory wit
   assert(!up.dsh.profile.bundles.includes('dsh-plugin-bilibili'));assert(!up.dependencies['dsh-memory-inspector']);assert.deepEqual(meta.artifacts['dsh-remote-ops-local'],record.artifacts['dsh-remote-ops-local']);assert.deepEqual(meta.patches,record.patches);
  }
 });
+test('A QQ patch that needs the Unified Agent I/O requires a Core row and a reviewed, pinned dsh-agent-io artifact',()=>{
+ const f=fixture(),qqPatch=join(f.root,'maintenance/patches/dsh-qqbot@0.5.2.patch'),name='dsh-agent-io';
+ write(qqPatch,"+export const inject = ['agents', 'conversationManager', 'agentIO'];\n");
+ const patches=plan.patchPlan(f.live,f.root,{load:JSON.parse}).patches,core=[{insert:[{id:'agent-io',name,config:{}}]}];
+ assert.throws(()=>plan.verifiedAgentIO(f.live,[],patches,[]),/requires dsh-agent-io; rebuild/,'no silent start without the service');
+ assert.throws(()=>plan.verifiedAgentIO(f.live,core,patches,[]),/reviewed tarball/,'no implicit first install');
+ assert.throws(()=>plan.verifiedAgentIO(f.live,core,patches,['--agent-io-artifact=relative.tgz']),/missing/);
+ const wrong=join(f.root,'wrong.tgz');tarball(wrong,'0.1.0-test.2','dsh-other');assert.throws(()=>plan.verifiedAgentIO(f.live,core,patches,['--agent-io-artifact='+wrong]),/Invalid dsh-agent-io/);
+ const file=join(f.root,'agent-io.tgz');tarball(file,'0.1.0-test.2',name);
+ const fresh=plan.verifiedAgentIO(f.live,core,patches,['--agent-io-artifact='+file]);assert.deepEqual([fresh.fresh,fresh.version,fresh.sha256],[true,'0.1.0-test.2',plan.hash(file)]);
+ const pin=plan.pinAgentIO(fresh,f.root);assert.equal(plan.hash(join(f.root,'plugin-packages','dsh-agent-io-0.1.0-test.2.tgz')),pin.sha256);assert(pin.source.startsWith('file:'));
+ const other=join(f.root,'other.tgz');tarball(other,'0.1.0-test.2',name);writeFileSync(other,Buffer.concat([readFileSync(other),Buffer.alloc(1)]));
+ assert.throws(()=>plan.pinAgentIO(plan.verifiedAgentIO(f.live,core,patches,['--agent-io-artifact='+other]),f.root),/Immutable artifact differs/);
+ // Once installed and pinned in the Profile it is re-verified like the Manager.
+ const manifest=JSON.parse(readFileSync(join(f.live,'package.json')));manifest.dependencies[name]=pin.source;write(join(f.live,'package.json'),manifest);
+ const pins=JSON.parse(readFileSync(join(f.live,'character-artifacts.json')));pins[name]={source:pin.source,sha256:pin.sha256,version:pin.version};write(join(f.live,'character-artifacts.json'),pins);
+ write(join(f.live,'node_modules',name,'package.json'),{name,version:'0.1.0-test.2'});
+ assert.deepEqual(plan.verifiedAgentIO(f.live,core,patches,[]),{name,source:pin.source,sha256:pin.sha256,version:'0.1.0-test.2'});
+ // The real preparation CLI pins it into the candidate and its record.
+ write(join(f.project,'bundles/character-core/cordis.patch.yml'),core);
+ execFileSync(process.execPath,[join(f.project,'scripts/prepare-deploy.cjs')],{env:{...process.env,DSH_INSTALL_ROOT:f.root,DSH_QQTK_PROJECT:f.root},stdio:'pipe'});
+ const candidate=JSON.parse(readFileSync(join(f.root,'data/profiles/character-candidate/package.json'))),record=JSON.parse(readFileSync(join(f.root,'data/maintenance/character-deploy/candidate.json')));
+ assert.equal(candidate.dependencies[name],pin.source);assert.deepEqual(record.artifacts[name],{name,source:pin.source,sha256:pin.sha256,version:'0.1.0-test.2'});
+});
+test('the Character QQ wrapper declares agentIO and generated Core installs dsh-agent-io',()=>{
+ const adapter=readFileSync(new URL('../packages/character-qq-adapter/index.mjs',import.meta.url),'utf8'),build=readFileSync(new URL('../scripts/build.cjs',import.meta.url),'utf8');
+ assert.match(adapter,/export const inject=\[[^\]]*'agentIO'/);
+ assert.match(build,/\{id:'agent-io',name:'dsh-agent-io',config:\{\}\}/);assert(build.indexOf("id:'agent-io'")<build.indexOf("id:'im-qqbot'"));
+});
 test('Candidate gate requires matching lockfile, installed versions and both patch hashes',()=>{
  const f=fixture(),remote=plan.verifiedRemote(f.live),patch=plan.patchPlan(f.live,f.root,{load:JSON.parse}),record={artifacts:{[remote.name]:remote},patches:patch.patches};
  for(const [rel,p]of Object.entries(patch.patches)){write(join(f.live,rel),readFileSync(p.source,'utf8'));}

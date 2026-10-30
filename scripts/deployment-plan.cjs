@@ -35,6 +35,12 @@ function verifyTaskExtras(live,nextRows,enabled,yaml){
   assert(next&&next.disabled===row.disabled&&JSON.stringify(next.config??{})===JSON.stringify(row.config??{}),'Long task Extras policy changed; review explicitly before preparing upgrade');
  }
 }
+function tarPackage(file){
+ // Inspect the tarball metadata: filenames alone are not version evidence.
+ const tar=require('node:zlib').gunzipSync(fs.readFileSync(file));let pkg;
+ for(let offset=0;offset+512<=tar.length;){const header=tar.subarray(offset,offset+512),size=parseInt(header.subarray(124,136).toString().replace(/\0/g,'').trim()||'0',8),entry=header.subarray(0,100).toString().replace(/\0.*$/s,'');if(!entry)break;if(entry==='package/package.json')pkg=JSON.parse(tar.subarray(offset+512,offset+512+size));offset+=512+Math.ceil(size/512)*512;}
+ return pkg;
+}
 function localFile(profile,source){assert(typeof source==='string'&&source.startsWith('file:'),'Reviewed local artifact required');return path.resolve(profile,source.slice(5));}
 function verifiedArtifact(live,name){
  const manifest=JSON.parse(fs.readFileSync(path.join(live,'package.json'))),source=manifest.dependencies?.[name];
@@ -43,9 +49,7 @@ function verifiedArtifact(live,name){
  assert.equal(installed.name,name);assert(pin&&pin.source===source,name+' artifact is not pinned to this Profile');
  assert.equal(hash(file),pin.sha256,name+' artifact hash changed');
  if(pin.version)assert.equal(pin.version,installed.version,name+' installed version differs from pin');
- // Inspect the tarball metadata too: filenames alone are not version evidence.
- const tar=require('node:zlib').gunzipSync(fs.readFileSync(file));let pkg;
- for(let offset=0;offset+512<=tar.length;){const header=tar.subarray(offset,offset+512),size=parseInt(header.subarray(124,136).toString().replace(/\0/g,'').trim()||'0',8),entry=header.subarray(0,100).toString().replace(/\0.*$/s,'');if(!entry)break;if(entry==='package/package.json')pkg=JSON.parse(tar.subarray(offset+512,offset+512+size));offset+=512+Math.ceil(size/512)*512;}
+ const pkg=tarPackage(file);
  assert.equal(pkg?.name,name,'Invalid '+name+' tarball');assert.equal(pkg?.version,installed.version,name+' tarball would change installed version; explicit upgrade required');
  return {name,source:'file:'+file.replaceAll('\\','/'),sha256:pin.sha256,version:installed.version};
 }
@@ -55,6 +59,30 @@ function verifiedConversation(live,core,oldCore,args=process.argv){
  assert(entries(oldCore).some(r=>r.name==='dsh-conversation-manager')||args.includes('--conversation-state-reviewed'),'Conversation extraction requires an offline routing/Schedule/notification inventory and explicit --conversation-state-reviewed');
  assert(path.isAbsolute(row.config?.stateFile)&&fs.existsSync(row.config.stateFile),'Reviewed Conversation state missing; never silently reset legacy routes');
  return verifiedArtifact(live,'dsh-conversation-manager');
+}
+// The reviewed QQ patch injects agentIO and the gateway refuses to start without
+// it, so Core must declare dsh-agent-io and the candidate must pin its artifact.
+// An installed pin is re-verified; a first install takes only an explicitly named,
+// reviewed tarball. There is no fallback to the former direct send path.
+function verifiedAgentIO(live,core,patches,args=process.argv){
+ const name='dsh-agent-io',required=Object.values(patches??{}).some(p=>/inject = \[[^\]]*'agentIO'/.test(fs.readFileSync(p.source,'utf8')));
+ const row=entries(core).find(r=>r.name===name);
+ if(!row){assert(!required,'Reviewed QQ patch requires '+name+'; rebuild Character Core');return;}
+ const manifest=JSON.parse(fs.readFileSync(path.join(live,'package.json')));
+ if(manifest.dependencies?.[name])return verifiedArtifact(live,name);
+ const arg=args.find(a=>a.startsWith('--agent-io-artifact='));
+ assert(arg,'First '+name+' install requires a reviewed tarball: --agent-io-artifact=<absolute .tgz>');
+ const file=arg.slice('--agent-io-artifact='.length);
+ assert(path.isAbsolute(file)&&fs.existsSync(file),'Reviewed '+name+' tarball missing');
+ const pkg=tarPackage(file);assert.equal(pkg?.name,name,'Invalid '+name+' tarball');assert(typeof pkg.version==='string'&&pkg.version,'Invalid '+name+' version');
+ return {name,file,sha256:hash(file),version:pkg.version,fresh:true};
+}
+// Copy a first-install artifact next to the other immutable packages and pin it.
+function pinAgentIO(agentIO,root){
+ if(!agentIO?.fresh)return agentIO;
+ const dest=path.join(root,'plugin-packages',agentIO.name+'-'+agentIO.version+'.tgz');
+ if(fs.existsSync(dest))assert.equal(hash(dest),agentIO.sha256,'Immutable artifact differs: '+agentIO.name);else fs.copyFileSync(agentIO.file,dest);
+ return {name:agentIO.name,source:'file:'+dest.replaceAll('\\','/'),sha256:agentIO.sha256,version:agentIO.version};
 }
 function patchPlan(live,toolkit,yaml){
  const workspace=yaml.load(fs.readFileSync(path.join(live,'pnpm-workspace.yaml'),'utf8'))??{},patches={};
@@ -95,4 +123,4 @@ function entryYaml(yaml){
  const schema=yaml.JSON_SCHEMA.extend(type);
  return {load:(text,options)=>yaml.load(text,{...options,schema}),dump:(value,options)=>yaml.dump(value,{...options,schema})};
 }
-module.exports={select,disableLegacyMemory,verifyTaskExtras,verifiedRemote,verifiedConversation,patchPlan,verifyCandidate,entryYaml,hash};
+module.exports={select,disableLegacyMemory,verifyTaskExtras,verifiedRemote,verifiedConversation,verifiedAgentIO,pinAgentIO,patchPlan,verifyCandidate,entryYaml,hash};

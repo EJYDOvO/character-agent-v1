@@ -117,6 +117,8 @@ HITL Bridge、Notification 按 ADR-057 建议各自为独立可选 Plugin，Comm
 
 具体目录、Package/Plugin 组合与对象结构由实现切片结合 DSH Host 机制提出，并在 QQTK 文档记录；本表只固定职责划分。Iteration 01 不新增持久数据库、消息总线或服务框架。
 
+已实现的落点：出站核心为 QQTK `plugin-sources/dsh-agent-io`（与 Conversation Manager 同为可独立安装的 Host Plugin，服务名 `agentIO`）；QQ Official 文本 Adapter 在 QQ 补丁 `dist/transport/qq-text-adapter.js`，复用 Gateway Sender 与 Manager 的 `isCurrentSession`；首个调用方为原 QQ 出站路由（未绑定 Interaction 的普通回复、Streaming 静态降级、工具错误与轮次错误）。QQ 补丁原生 `inject` `agentIO`，缺失即拒绝启动；Character 的 QQ 包装与 Core 同步声明，候选首次装配须显式提供已审查的 `dsh-agent-io` 包。
+
 ## 8. 讨论、开发及验收顺序
 
 按 [路线图](IMPLEMENTATION_ROADMAP.md) 的 Iteration 01–10 逐切片实施：每轮实现或抽离 → 单元/集成测试 → 局部替换旧路径 → 清理旧代码；Identity 与权限验证从第一轮起即为门禁。QQ Personal 协议与真实账号接入留后续，不以模拟结果冒充实现。

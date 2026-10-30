@@ -26,7 +26,7 @@ async function main(){
  if(!workerSupported)throw Error('Installed DSH lacks independent native Worker presets');
  configureWorkers(character,settings.specialistWorkers,settings.communityWorkerPresets);
  if(settings.interaction){const {options}=await import('../packages/interaction-policy/policy.mjs');character.config.plugins.push({id:'interaction-policy',name:'dsh-interaction-policy',isolate:{interactionPolicy:true},config:options({hangOnModelFile:settings.dataDirectory+'/hangon-model.json',...settings.interaction})});}
- const host=[{id:'conversation-manager',name:'dsh-conversation-manager',config:{stateFile:settings.dataDirectory+'/conversations.json'}},{id:'character-identity',name:'dsh-character-identity',config:{presetId:settings.presetId,bindingFile:settings.dataDirectory+'/binding.json',stateFile:settings.dataDirectory+'/coordination.sqlite'}},
+ const host=[{id:'agent-io',name:'dsh-agent-io',config:{}},{id:'conversation-manager',name:'dsh-conversation-manager',config:{stateFile:settings.dataDirectory+'/conversations.json'}},{id:'character-identity',name:'dsh-character-identity',config:{presetId:settings.presetId,bindingFile:settings.dataDirectory+'/binding.json',stateFile:settings.dataDirectory+'/coordination.sqlite'}},
  {id:'character-memory-core',name:'dsh-character-memory-core',config:{database:settings.dataDirectory+'/memory.sqlite',autoCapture:true}},
  {id:'qq-remote-ops',name:'dsh-remote-ops-local',config:{root:install.replaceAll('\\','/')}},
  {id:'im-qqbot',name:'dsh-character-qq-adapter',config:{preset:settings.presetId,access:{c2cMode:'allowlist',c2cAllow:[],groupMode:'disabled',groupAllow:[]}}},...workerIds.filter(id=>!externalIds.has(id)).map(workerPreset),character];

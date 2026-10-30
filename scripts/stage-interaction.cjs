@@ -21,5 +21,10 @@ fs.cpSync(path.join(installedQQ,'dist'),path.join(qqFixture,'dist'),{recursive:t
 fs.copyFileSync(path.join(installedQQ,'package.json'),path.join(qqFixture,'package.json'));
 fs.cpSync(path.join(toolkit,'maintenance/qqbot-src/dist'),path.join(qqFixture,'dist'),{recursive:true});
 fs.writeFileSync(dir+'/package.json',JSON.stringify({name:'interaction-isolated',private:true,dsh:{profile:{bundles:['@deepseek-ai/dsh-base','@deepseek-ai/dsh-web-app']}}},null,2));
-fs.writeFileSync(dir+'/cordis.patch.yml',yaml.dump([{id:'session-title-llm',disabled:true},{id:'llm-pi-ai',disabled:true},{insert:[preset('interaction-test',true),preset('interaction-off',false),control,creator,{id:'interaction-probe',name:path.join(root,'tests/interaction-host.mjs').replaceAll('\\','/'),config:{cwd:home,result,runId,qqFixture,version,hangOnModelFile:path.join(home,'hangon-model.json')}}]}],{schema,noRefs:true}));
+// The Unified Agent I/O is installed from its packed tarball, as a candidate would be.
+const pnpm=install+'/resources/runtime/pnpm/bin/pnpm.cjs',ioSource=path.join(toolkit,'plugin-sources/dsh-agent-io'),ioPackage=JSON.parse(fs.readFileSync(ioSource+'/package.json','utf8')),packs=path.join(home,'packs');
+const run=(args,cwd)=>require('node:child_process').execFileSync(process.execPath,[pnpm,...args],{cwd,stdio:'pipe',windowsHide:true});
+fs.mkdirSync(packs);run(['pack','--pack-destination',packs],ioSource);
+run(['add','--offline','--ignore-scripts','--config.auto-install-peers=false','--node-linker=hoisted','--store-dir',path.join(home,'store'),'file:'+path.join(packs,ioPackage.name+'-'+ioPackage.version+'.tgz')],dir);
+fs.writeFileSync(dir+'/cordis.patch.yml',yaml.dump([{id:'session-title-llm',disabled:true},{id:'llm-pi-ai',disabled:true},{insert:[{id:'agent-io',name:'dsh-agent-io',config:{}},preset('interaction-test',true),preset('interaction-off',false),control,creator,{id:'interaction-probe',name:path.join(root,'tests/interaction-host.mjs').replaceAll('\\','/'),config:{cwd:home,result,runId,qqFixture,version,hangOnModelFile:path.join(home,'hangon-model.json')}}]}],{schema,noRefs:true}));
 fs.writeFileSync(root+'/test-data/interaction-run.json',JSON.stringify({home,result,runId}));console.log(JSON.stringify({home,result,runId,productionCopied:false}));

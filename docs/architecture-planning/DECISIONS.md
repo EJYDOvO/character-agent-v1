@@ -80,7 +80,7 @@
 - 网络发送可能出现不确定结果，**不保证物理 exactly-once**；未知状态禁止盲目重新发送，失败不得被静默伪装为成功。
 - 普通诊断日志不写凭据、原始身份或聊天正文。
 
-具体返回对象、类型命名由实现切片提出并以测试固定；Iteration 01 的普通文本出站实现是第一个候选，后续切片复核后再扩展。
+具体返回对象、类型命名由实现切片提出并以测试固定。Iteration 01 已固定第一版：`sent` / `not-sent`（`stage: before-platform|platform`）/ `partial` / `unknown`，逐片 `parts` 与 `duplicate`；同一逻辑 ID 只交接一次，异内容或异目标返回 `id-conflict`；后续切片复核后再扩展。
 
 ### ADR-061 串行与取消
 
@@ -110,7 +110,7 @@ Identity 与权限验证是**从 Iteration 01 起持续有效的安全门禁**�
 - Conversation Manager 已为 QQTK `plugin-sources` 内独立 Host Plugin；Interaction 已为 Character `packages` 内可选独立 Agent/Preset Plugin；Memory/Inspector/Long Tasks 等已有模块。
 - test.8 `policy.bind` 仍是 `sendText` / 可选 `openStream`；QQTK `createInteractionOutbound` 负责接线，QQ 官方 Bot/SDK 仍有 stream。此事实与 ADR-052 目标分别记录。
 - 原生窗口分泡/Hang-on 尚未完整适配；真实 QQ 手机收件、审批按钮和部分流式残留仍未完整验收。当前状态及测试数量见 [STATUS](../STATUS.md)。
-- Iteration 01（普通文本出站 Unified I/O）的实现状态以 QQTK 源码与其文档为准；未合并、未部署前不计入部署基线。
+- Iteration 01 实现（QQTK 源码，**未部署**）：独立 Host Plugin `dsh-agent-io` 0.1.0-test.2 提供 `sendMessage()`，QQ 补丁内 QQ Official 文本 Adapter；未绑定 Interaction 的普通回复、Streaming 静态降级、工具错误与轮次错误提示已改走它，旧直接发送代码已删除。逻辑消息 ID 由原生 Session ID + 事件 seq + 类别派生，同 ID 异内容/目标判 `id-conflict`；去重仅进程内、有界，淘汰或重启后不提供 exactly-once。每片发送前复核访问配置与 Manager `isCurrentSession`；`/stop` 与 `aborted`/`interrupted` Turn 取消未交给 QQ 的输出。验证仅为自动化测试与隔离 rc.3 Host 探针，真实 QQ/手机未验收。Character 候选装配须同时安装并固定 `dsh-agent-io`。接口细节以 QQTK `plugin-sources/dsh-agent-io/README.md` 为准；合并不等于部署，部署基线不变。
 
 ## 6. 剩余待决（不提前定为最终 ADR）
 
