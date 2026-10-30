@@ -101,3 +101,5 @@ QQ 配置 deliveryDiagnostics:true 可记录本机限量脱敏的事件→气泡
 test.5 新增 15 项单元测试，覆盖并发不阻塞、超时回退、取消/停止/审批、跨 Turn、发送顺序、状态回执隔离、`maxBubbles` 名额和模型路由；Character 单元 170 项、审计 33 项通过。实际 rc.3 Host 12 项交互检查通过，其中包括：经原生 `ctx.llm` 在继承路由上生成一次动态提示且不进入 Session 历史、生成超时回退固定文案、`hangon-model.json` 改路由。模型与 Sender 为合成替身，真实模型的提示质量、延迟和手机展示仍未验证。历史结果见 STATUS。
 
 入口：npm test、npm run test:audit、scripts/run-interaction.ps1、scripts/run-lifecycle.ps1；QQTK SDK 测试必须指定代码隔离的 QQBOT_AUDIT_SDK_DIR / QQBOT_AUDIT_DIST，不使用生产凭据。测试结果保留在本地忽略目录。
+
+`run-interaction.ps1` 默认把 Unified Agent I/O 入站作为必验项：安装的 dsh-agent-io 没有 `openInbound`（Iteration 01 包）时整次运行失败，而不是少一项检查后仍报告通过。只有显式设置 `DSH_PROBE_INBOUND=optional` 的兼容性运行会跳过入站，结果中 `inbound` 为 `not-exercised`；验收结果须为 `exercised`。

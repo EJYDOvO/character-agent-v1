@@ -189,8 +189,13 @@ export function apply(ctx,config){
       const stranger=await channel.receive({conversation:{type:'direct',id:'stranger'},message:{id:'synthetic-inbound-2',text:'hi'},sender:{id:'stranger'},platformData:{context:qqEvent()}});
       assert.equal(stranger.status,'rejected');
      }finally{channel.close();}
-     report.checks.push('Installed dsh-agent-io inbound: a QQ event becomes one native input and its reply goes out through the I/O; duplicate push and stranger add nothing');
-    }else report.checks.push('Inbound NOT exercised: the installed dsh-agent-io has no openInbound (Iteration 01 package)');
+     report.checks.push('Installed dsh-agent-io inbound: a QQ event becomes one native input and its reply goes out through the I/O; duplicate push and stranger add nothing');report.inbound='exercised';
+    }else{
+     // Iteration 02 acceptance: an old I/O package must fail the run, not pass it
+     // with one check fewer. Only an explicit compatibility run may skip it.
+     if(config.requireInbound!==false)throw Error('Inbound acceptance required, but the installed dsh-agent-io has no openInbound (Iteration 01 package)');
+     report.checks.push('Inbound NOT exercised (compatibility run): the installed dsh-agent-io has no openInbound');report.inbound='not-exercised';
+    }
    }finally{releasePlain?.();releaseAdapter();}
    report.ok=true;
   }catch(e){report.ok=false;report.error=e.stack;}finally{releaseTool();releaseOutbound?.();for(const h of handles)await h.dispose().catch(()=>{});resolver?.deregister();fs.writeFileSync(config.result,JSON.stringify(report,null,2));}
