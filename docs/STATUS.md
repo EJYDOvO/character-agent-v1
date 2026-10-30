@@ -2,6 +2,12 @@
 
 本页是版本与验收状态的统一入口。历史发布记录说明当时结果，不代表最新运行状态。
 
+## Iteration 03 源码（Agent I/O test.4，未部署）
+
+QQTK `dsh-agent-io@0.1.0-test.4` 新增平台无关的 `openConversation()`：入站交接（Conversation Manager `getOrCreate` → `isCurrentSession` → 原生 `UserMessage` → Interaction `intervene`/`followup`）与出站可信路由（Manager 当前记录 + `isCurrentSession`，每个分片前复核）收在一处，出入站共用 `{platform, accountId, conversation}` 引用。QQ Official 入站、出站文本、显式更正与 `/stop` 已改用；Session Key、持久状态、Character Identity/Owner/Memory ACL 与 Conversation Manager 均未改。Character 包无改动，仅更新隔离 Interaction 探针、部署计划检查与文档：QQ 补丁使用 `openConversation()` 时，部署计划拒绝没有该接口的 `dsh-agent-io`（已安装的 test.3 或首次安装的旧 tarball），避免 Gateway 启动即失败；计划本身尚不支持升级已安装的 `dsh-agent-io`。
+
+验证（本机，未部署、未连接 QQ）：QQTK 轻量 124（含新增 Conversation 接线 10 项）、审批/边界 12、代码隔离 SDK 审计 33、两份补丁重建一致且可应用；Character 单元 220、安全审计 33；隔离 rc.3 Interaction 探针 21 项（含已安装 test.4 包的 Interaction 查询、Host `dsh-llm` 原生输入与 QQ 入站/出站经新接口）。`run-generic-probe` 会以生产 QQ 凭据启动 Gateway，未运行；`maintenance.test.cjs` 需安装目录的 `js-yaml`，在源码仓库与 `main` 上同样无法运行。范围与遗留见 [路线图](architecture-planning/IMPLEMENTATION_ROADMAP.md) 3.2。
+
 ## test.25（已授权部署）
 
 起因：test.24 上线后的真实 QQ 对话里，被问到“今年的年度游戏提名”时，模型虽有 `web_search`/`research` 等工具却未调用，直接给出虚构名单；工具、模型路由（`navigator/gemma-4-31b-it`）与提示均与部署前相同，系统提示也没有“先查证”的要求。

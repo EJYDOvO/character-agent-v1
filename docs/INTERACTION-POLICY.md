@@ -102,4 +102,4 @@ test.5 新增 15 项单元测试，覆盖并发不阻塞、超时回退、取消
 
 入口：npm test、npm run test:audit、scripts/run-interaction.ps1、scripts/run-lifecycle.ps1；QQTK SDK 测试必须指定代码隔离的 QQBOT_AUDIT_SDK_DIR / QQBOT_AUDIT_DIST，不使用生产凭据。测试结果保留在本地忽略目录。
 
-`run-interaction.ps1` 默认把 Unified Agent I/O 入站作为必验项：安装的 dsh-agent-io 没有 `openInbound`（Iteration 01 包）时整次运行失败，而不是少一项检查后仍报告通过。只有显式设置 `DSH_PROBE_INBOUND=optional` 的兼容性运行会跳过入站，结果中 `inbound` 为 `not-exercised`；验收结果须为 `exercised`。
+`run-interaction.ps1` 安装 QQTK 源码中的 dsh-agent-io，并要求其提供 Iteration 03 的 `openConversation()`：QQ 入站、出站文本与 Interaction 查询都经这一共享接线，旧包（无 `openConversation`）会使整次运行失败。原 `DSH_PROBE_INBOUND=optional` 兼容性开关已移除（新 QQ 代码无法在旧包上运行）；结果中 `inbound` 须为 `exercised`。

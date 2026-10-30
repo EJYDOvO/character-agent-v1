@@ -35,11 +35,14 @@ function verifyTaskExtras(live,nextRows,enabled,yaml){
   assert(next&&next.disabled===row.disabled&&JSON.stringify(next.config??{})===JSON.stringify(row.config??{}),'Long task Extras policy changed; review explicitly before preparing upgrade');
  }
 }
+function tarEntry(file,wanted){
+ const tar=require('node:zlib').gunzipSync(fs.readFileSync(file));let found;
+ for(let offset=0;offset+512<=tar.length;){const header=tar.subarray(offset,offset+512),size=parseInt(header.subarray(124,136).toString().replace(/\0/g,'').trim()||'0',8),entry=header.subarray(0,100).toString().replace(/\0.*$/s,'');if(!entry)break;if(entry===wanted)found=tar.subarray(offset+512,offset+512+size);offset+=512+Math.ceil(size/512)*512;}
+ return found;
+}
 function tarPackage(file){
  // Inspect the tarball metadata: filenames alone are not version evidence.
- const tar=require('node:zlib').gunzipSync(fs.readFileSync(file));let pkg;
- for(let offset=0;offset+512<=tar.length;){const header=tar.subarray(offset,offset+512),size=parseInt(header.subarray(124,136).toString().replace(/\0/g,'').trim()||'0',8),entry=header.subarray(0,100).toString().replace(/\0.*$/s,'');if(!entry)break;if(entry==='package/package.json')pkg=JSON.parse(tar.subarray(offset+512,offset+512+size));offset+=512+Math.ceil(size/512)*512;}
- return pkg;
+ const body=tarEntry(file,'package/package.json');return body&&JSON.parse(body);
 }
 function localFile(profile,source){assert(typeof source==='string'&&source.startsWith('file:'),'Reviewed local artifact required');return path.resolve(profile,source.slice(5));}
 function verifiedArtifact(live,name){
@@ -65,16 +68,24 @@ function verifiedConversation(live,core,oldCore,args=process.argv){
 // An installed pin is re-verified; a first install takes only an explicitly named,
 // reviewed tarball. There is no fallback to the former direct send path.
 function verifiedAgentIO(live,core,patches,args=process.argv){
- const name='dsh-agent-io',required=Object.values(patches??{}).some(p=>/inject = \[[^\]]*'agentIO'/.test(fs.readFileSync(p.source,'utf8')));
+ const name='dsh-agent-io',sources=Object.values(patches??{}).map(p=>fs.readFileSync(p.source,'utf8')),required=sources.some(s=>/inject = \[[^\]]*'agentIO'/.test(s));
+ // The Iteration 03 QQ patch opens its Conversation wiring through dsh-agent-io:
+ // an older package would stop the Gateway at start, so it is refused here.
+ const wiring=sources.some(s=>/io\.openConversation\(/.test(s)),offers=source=>/\bopenConversation\b/.test(source??''),needs=name+' with openConversation (0.1.0-test.4 or later)';
  const row=entries(core).find(r=>r.name===name);
  if(!row){assert(!required,'Reviewed QQ patch requires '+name+'; rebuild Character Core');return;}
  const manifest=JSON.parse(fs.readFileSync(path.join(live,'package.json')));
- if(manifest.dependencies?.[name])return verifiedArtifact(live,name);
+ if(manifest.dependencies?.[name]){
+  const installed=verifiedArtifact(live,name);
+  assert(!wiring||offers(fs.readFileSync(path.join(live,'node_modules',name,'index.mjs'),'utf8')),'Reviewed QQ patch needs '+needs+'; this plan does not upgrade the installed '+name+' yet');
+  return installed;
+ }
  const arg=args.find(a=>a.startsWith('--agent-io-artifact='));
  assert(arg,'First '+name+' install requires a reviewed tarball: --agent-io-artifact=<absolute .tgz>');
  const file=arg.slice('--agent-io-artifact='.length);
  assert(path.isAbsolute(file)&&fs.existsSync(file),'Reviewed '+name+' tarball missing');
  const pkg=tarPackage(file);assert.equal(pkg?.name,name,'Invalid '+name+' tarball');assert(typeof pkg.version==='string'&&pkg.version,'Invalid '+name+' version');
+ assert(!wiring||offers(tarEntry(file,'package/index.mjs')?.toString()),'Reviewed QQ patch needs '+needs);
  return {name,file,sha256:hash(file),version:pkg.version,fresh:true};
 }
 // Copy a first-install artifact next to the other immutable packages and pin it.
