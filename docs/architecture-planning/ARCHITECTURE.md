@@ -150,8 +150,8 @@ DSH 原生 Web/Desktop 聊天窗继续用 DSH 原生消息 UI、Session、渲染
 | --- | --- | --- |
 | HITL Bridge | HITL = Human-in-the-Loop，人工介入；展示原生 Approval / `userQuestions.ask`，路由已验证回应，处理取消/超时；共享 I/O Sender，原生服务唯一裁决 | Iteration 06 源码（未部署）：Agent I/O 包内可选模块 `openHITL()`，经原生 waterfall 统一接入，提示与签发按钮经 `sendMessage()`；QQ 原通道已删除 |
 | Notification | 复用 I/O Sender、稳定 Conversation 目的地与持久 Outbox；去重、恢复和明确事件投递；复用原生 Schedule，不重造调度 | 建议独立可选 Plugin（ADR-057）；持久状态归属与切换在 Iteration 07 设计 |
-| Commands（L1） | 默认为 I/O 内部的命令入口解析/分发，Host 执行授权；不让平台字段授予能力 | Iteration 05 源码（未部署）：`openCommands()` 路由；QQ `/stop`、`/bot-*`、会话命令与 Remote Ops `/ops` 已迁移 |
-| Media（L1 基础/可选工具） | 基础消息附件属于 D1/L1；高级图片/音频/视频等工具保持现有可选工具，平台传输/路径权限留 Adapter/Host | Iteration 05 源码（未部署）：附件描述（可信资源与模型可见内容分开），QQ 入站附件/引用与 `qqbot_send_file` 已迁移；视觉理解未改 |
+| Commands（L1） | 默认为 I/O 内部的命令入口解析/分发，Host 执行授权；不让平台字段授予能力 | Iteration 05（已于 2026-10-31 授权部署）：`openCommands()` 路由；QQ `/stop`、`/bot-*`、会话命令与 Remote Ops `/ops` 已迁移 |
+| Media（L1 基础/可选工具） | 基础消息附件属于 D1/L1；高级图片/音频/视频等工具保持现有可选工具，平台传输/路径权限留 Adapter/Host | Iteration 05（已于 2026-10-31 授权部署）：附件描述（可信资源与模型可见内容分开），QQ 入站附件/引用与 `qqbot_send_file` 已迁移；视觉理解未改 |
 
 HITL 是统一术语；HITL Bridge 是 Agent I/O 包内的可选模块（Iteration 06 源码），不是独立插件。不能让多个平台分别猴子补丁共享的全局问答/审批服务；可信回应只能关联到原生待决请求，由 Host 验证身份、目标和有效期。Commands 与基础 Media 按 ADR-057 归入 L1，表中保留以说明与 L3 的分工。通知是服务输出，不作为普通聊天输入；审批/问答回应也不自动产生普通聊天 Turn。
 

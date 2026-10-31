@@ -7,7 +7,7 @@
 
 | 能力 | 当前事实 | 尚未完成的边界 |
 | --- | --- | --- |
-| 运行装配 | 当前授权部署：Character **test.25**、Interaction **test.9**、Agent I/O **test.4**、Conversation Manager **test.2** 与 QQTK Iteration 04 补丁（QQTK PR #5 / Character PR #6 已合并到 main）；DSH **0.2.1-rc.3**、Node **24.21.0**、Windows | 不等于 Mac/其他 DSH 构建可安装或验收；真实 QQ 手机收件与分泡节奏未验收 |
+| 运行装配 | 当前授权部署（2026-10-31）：Character **test.25**、Interaction **test.9**、Agent I/O **test.5**、Conversation Manager **test.2** 与 QQTK Iteration 05 补丁（QQTK PR #6 / Character PR #7 已合并到 main）；DSH **0.2.1-rc.3**、Node **24.21.0**、Windows | 不等于 Mac/其他 DSH 构建可安装或验收；真实 QQ 手机收件与分泡节奏未验收 |
 | 会话 | 独立 Conversation Manager **test.2**，QQTK 为薄会话适配；隔离恢复/唯一路由已有验证 | 模拟第二平台不代表真实第二平台；旧提醒根/单写入者约束保留 |
 | Interaction | **test.9** 已部署（Iteration 04）只提交完整气泡，`bind` 只用 `sendText`，QQ 侧经 `sendMessage()` 发送 | 真实 QQ 手机收件与实机分泡节奏未验收 |
 | Worker | 原生 Creator/Worker Preset、显式委派、工具范围守卫；test.23 记录 13 Preset 健康 | 部分 Host 探针限时未完成；真实任务质量另验 |
@@ -127,7 +127,7 @@ Character 单元 215、安全审计 33、QQTK 轻量 55/审批 6 是 [STATUS](..
 - **模块边界**：Bridge 是 Agent I/O 包内的可选模块（`hitl.mjs`，经 `conversation.openHITL()` 打开），不是新的独立 Plugin：它需要 I/O 的发送、按钮签发与入站认领，放在同一包内避免再造一套 Sender 或跨插件的签发接口；平台不打开它时不注册任何监听器。ADR-057 建议的独立插件形态因此暂不采用，模块不依赖 QQ，可在以后单独成包。
 - **原生接入**：原生 `approval/request` 与 `user-questions/request` waterfall（`prepend`）由 Agent I/O 统一注册一次；请求的 Session 不是某个已打开 Bridge 的当前、仍被准入记录时 `next()`。不再修改全局 `userQuestions.ask`；原生审批策略、审计事件与结果语义不变。
 - **出站**：审批提示、提问、下一题与超时提示经 `sendMessage()`；按钮为 Bridge 签发的 `message.actions`（其他调用方构造的为 `unauthorized`）。审批展示被证明失败为 `unavailable`，未知不重发；提问按钮被拒时纯文本重发一次。
-- **回应**：按钮（`respond`）与文本（`answer`，在并发合并之前、经 I/O 入站去重认领）都校验 Conversation、预期作答者、请求引用、原生信号与当前 Session/准入；每个请求只完成一次，多题顺序推进、旧题按钮失效。
+- **回应**：按钮（`respond`）与文本（`answer`，在并发合并之前、经 I/O 入站去重认领）都校验 Conversation、预期作答者、请求引用、原生信号与当前 Session/准入；每个请求只完成一次，多题顺序推进、旧题按钮失效；每题另有自己的取消控制（定向审查修复：一题作答后，它排队或尚未开始的提示分片不再发送，已在途分片无法撤回）。
 - **生命周期**：`/stop`/AbortSignal、超时、Session 释放（`cancelPending`）与 Gateway 卸载都结算并清理 Pending、定时器、监听与在途提示；Conversation Manager 与 Interaction 通过 `waiting(record)` 判断等待用户。
 - **清理**：QQ 原审批/问答通道、`questionAnswer` 中间件与 Gateway 直发路径删除；`hitl.enabled: false` 交回原生。
 

@@ -13,7 +13,7 @@ HITL Bridge：原生审批与 `ask_user_question` 的 QQ 展示和作答迁移�
 - **QQ**：只保留原 Markdown 渲染（问题另显示原生 `detail`，计划审阅需要它）、键盘渲染与按钮事件转换；原 `ApprovalChannel`/`QuestionChannel`/`questionAnswer` 不再被引用，Gateway 直发审批/问答的路径已删除。`hitl.enabled: false` 时交回原生 Web/Desktop。
 - **Character**：部署计划在补丁调用 `openHITL()` 时要求 `dsh-agent-io` 提供 `openHITL()` 与 Bridge 模块（test.6），已安装 test.5 须显式 `--agent-io-artifact` 升级；隔离探针新增真实 Host 的审批与问答检查。Character 运行包无改动。
 
-验证（本机，未部署、未连接 QQ）：QQTK 轻量 182（新增 HITL 13）、边界 3、代码隔离 SDK 审计 34（新增 Q22/Q23：真实 SDK 消息代码发出的键盘请求、真实 `INTERACTION_CREATE` 分发与 `acknowledgeInteraction`、群成员校验、未知不重发、被拒按钮）、两份补丁重建一致且可应用；HITL 关键保护的变异检查 15 项中 14 项被捕获（余 1 项为等价变异）；Character 单元 221、安全审计 33；隔离 rc.3 探针 25 项（原生审批 `decide()` 与 `userQuestions.ask()` 经已安装 test.6 的 Bridge：按钮允许/拒绝、逐题按钮与文本作答、中止、重投去重；另一 Agent 与 Bridge 关闭后请求留在原生应答者），`qqNetwork: false`。
+验证（本机，未部署、未连接 QQ）：QQTK 轻量 183（新增 HITL 14，含定向审查修复：每题独立取消，已作答题目排队或未开始的提示分片不再发送）、边界 3、代码隔离 SDK 审计 34（新增 Q22/Q23：真实 SDK 消息代码发出的键盘请求、真实 `INTERACTION_CREATE` 分发与 `acknowledgeInteraction`、群成员校验、未知不重发、被拒按钮）、两份补丁重建一致且可应用；HITL 关键保护的变异检查 15 项中 14 项被捕获（余 1 项为等价变异）；Character 单元 221、安全审计 33；隔离 rc.3 探针 25 项（原生审批 `decide()` 与 `userQuestions.ask()` 经已安装 test.6 的 Bridge：按钮允许/拒绝、逐题按钮与文本作答、中止、重投去重；另一 Agent 与 Bridge 关闭后请求留在原生应答者），`qqNetwork: false`。
 
 未验证：真实 QQ 按钮键盘的显示与点击（含 keyboard 权限、群聊点击字段）、手机端；同一 Session 并发的第二个审批仍为 `unavailable`；HITL 状态只在内存，重启即取消；`run-generic-probe` 使用生产凭据，未运行。
 
