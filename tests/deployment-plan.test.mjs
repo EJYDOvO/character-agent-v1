@@ -143,6 +143,24 @@ test('A QQ patch that opens the Conversation wiring refuses a dsh-agent-io witho
  writeFileSync(join(f.root,'plugin-packages','dsh-agent-io-0.1.0-test.3.tgz'),Buffer.concat([readFileSync(old),Buffer.alloc(1)]));
  assert.throws(()=>plan.verifiedAgentIO(f.live,core,patches,['--agent-io-artifact='+next]),/artifact hash changed/);
 });
+test('A QQ patch that opens the I/O command router refuses dsh-agent-io without openCommands and upgrades to one that has it',()=>{
+ const f=fixture(),qqPatch=join(f.root,'maintenance/patches/dsh-qqbot@0.5.2.patch'),name='dsh-agent-io',core=[{insert:[{id:'agent-io',name,config:{}}]}];
+ write(qqPatch,"+export const inject = ['agents', 'conversationManager', 'agentIO'];\n+    const conversation = io.openConversation({ platform: QQ_OFFICIAL });\n+    const router = conversation.openCommands({ prefixes: ['/'] });\n");
+ const patches=plan.patchPlan(f.live,f.root,{load:JSON.parse}).patches;
+ const test4=join(f.root,'test4.tgz');tarball(test4,'0.1.0-test.4',name,{'index.mjs':"ctx.provide('agentIO',{sendMessage,registerAdapter,openInbound,openConversation});",'conversation.mjs':'export function createConversations(){}'});
+ assert.throws(()=>plan.verifiedAgentIO(f.live,core,patches,['--agent-io-artifact='+test4]),/openCommands \(0\.1\.0-test\.5 or later\)/);
+ const noIndex=join(f.root,'half.tgz');tarball(noIndex,'0.1.0-test.5',name,{'index.mjs':"ctx.provide('agentIO',{sendMessage});",'conversation.mjs':'openCommands'});
+ assert.throws(()=>plan.verifiedAgentIO(f.live,core,patches,['--agent-io-artifact='+noIndex]),/openCommands/,'both interfaces are required');
+ // Installed test.4 under the new patch: refused without an upgrade, upgraded with a reviewed test.5.
+ const pin=plan.pinAgentIO(plan.verifiedAgentIO(f.live,core,[],['--agent-io-artifact='+test4]),f.root);
+ const manifest=JSON.parse(readFileSync(join(f.live,'package.json')));manifest.dependencies[name]=pin.source;write(join(f.live,'package.json'),manifest);
+ const pins=JSON.parse(readFileSync(join(f.live,'character-artifacts.json')));pins[name]={source:pin.source,sha256:pin.sha256,version:pin.version};write(join(f.live,'character-artifacts.json'),pins);
+ write(join(f.live,'node_modules',name,'package.json'),{name,version:'0.1.0-test.4'});
+ write(join(f.live,'node_modules',name,'index.mjs'),"ctx.provide('agentIO',{sendMessage,registerAdapter,openInbound,openConversation});");write(join(f.live,'node_modules',name,'conversation.mjs'),'export function createConversations(){}');
+ assert.throws(()=>plan.verifiedAgentIO(f.live,core,patches,[]),/installed dsh-agent-io 0\.1\.0-test\.4 lacks it/);
+ const test5=join(f.root,'test5.tgz');tarball(test5,'0.1.0-test.5',name,{'index.mjs':"ctx.provide('agentIO',{sendMessage,registerAdapter,openInbound,openConversation});",'conversation.mjs':'function openCommands(){}'});
+ assert.deepEqual([plan.verifiedAgentIO(f.live,core,patches,['--agent-io-artifact='+test5]).upgradeFrom],['0.1.0-test.4']);
+});
 test('the Character QQ wrapper declares agentIO and generated Core installs dsh-agent-io',()=>{
  const adapter=readFileSync(new URL('../packages/character-qq-adapter/index.mjs',import.meta.url),'utf8'),build=readFileSync(new URL('../scripts/build.cjs',import.meta.url),'utf8');
  assert.match(adapter,/export const inject=\[[^\]]*'agentIO'/);

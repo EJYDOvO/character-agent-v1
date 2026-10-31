@@ -1,21 +1,21 @@
 # DSH Character Agent：当前进度与渐进式重构路线图 v0.8
 
-> 更新：2026-10-30（开发方式改为按功能切片的渐进式重构，ADR-062）。GitHub 是后续文档维护的唯一主入口；旧 ChatGPT Library v0.7.8 仅为历史快照。
+> 更新：2026-10-31（Iteration 03/04 已授权部署且 PR 已合并；Iteration 05 源码与隔离验证，未部署）。2026-10-30 起开发方式改为按功能切片的渐进式重构（ADR-062）。GitHub 是后续文档维护的唯一主入口；旧 ChatGPT Library v0.7.8 仅为历史快照。
 > 下列目标均为**设计决定，尚未实现**，除非标明已实现。每个切片的开发都在与生产隔离的环境进行，切片完成不等于部署；部署需另行授权并走既有门禁。
 
 ## 1. 当前源码与部署记录基线
 
 | 能力 | 当前事实 | 尚未完成的边界 |
 | --- | --- | --- |
-| 运行装配 | Character **test.23** / QQTK **test.23** 已有授权部署记录；DSH **0.2.1-rc.3**、Node **24.21.0**、Windows | 不等于 Mac/其他 DSH 构建可安装或验收 |
+| 运行装配 | 当前授权部署：Character **test.25**、Interaction **test.9**、Agent I/O **test.4**、Conversation Manager **test.2** 与 QQTK Iteration 04 补丁（QQTK PR #5 / Character PR #6 已合并到 main）；DSH **0.2.1-rc.3**、Node **24.21.0**、Windows | 不等于 Mac/其他 DSH 构建可安装或验收；真实 QQ 手机收件与分泡节奏未验收 |
 | 会话 | 独立 Conversation Manager **test.2**，QQTK 为薄会话适配；隔离恢复/唯一路由已有验证 | 模拟第二平台不代表真实第二平台；旧提醒根/单写入者约束保留 |
 | Interaction | **test.9** 已部署（Iteration 04）只提交完整气泡，`bind` 只用 `sendText`，QQ 侧经 `sendMessage()` 发送 | 真实 QQ 手机收件与实机分泡节奏未验收 |
 | Worker | 原生 Creator/Worker Preset、显式委派、工具范围守卫；test.23 记录 13 Preset 健康 | 部分 Host 探针限时未完成；真实任务质量另验 |
 | Memory/Inspector | SQLite Schema 3、记忆 L1/L2/L3、来源治理及可选 Inspector | 与通信 L1/L2/L3 无关；长期效果/桌面体验/大库性能另验 |
 | 通知/Long Tasks | 原生 Schedule + 既有持久 Outbox、稳定目标/去重及可选 Long Tasks | 通用 Notification 尚未抽离；手机投递未全验 |
-| 平台/原生窗口 | QQ Official Bot/SDK 版本化补丁及 SDK stream 为现状；原生窗口保留原生 UI/Streaming | QQ Personal、统一平台仓库未实现；Interaction 原生窗口出站分泡/Hang-on 未完整适配 |
+| 平台/原生窗口 | QQ Official Bot/SDK 版本化补丁；QQ 聊天输出不再使用 SDK stream（Iteration 04）；原生窗口保留原生 UI/Streaming | QQ Personal、统一平台仓库未实现；Interaction 原生窗口出站分泡/Hang-on 未完整适配 |
 
-Character 单元 215、安全审计 33、QQTK 轻量 55/审批 6 是 [STATUS](../STATUS.md) 的 test.23 **历史记录**；Host 探针多用合成 Sender/LLM。`--workers --manager` 在 55 秒期限内未完成，不列为通过。真实 QQ 手机收件、审批按钮、流式残留和生产回滚演练不能假定已验收。
+Character 单元 215、安全审计 33、QQTK 轻量 55/审批 6 是 [STATUS](../STATUS.md) 的 test.23 **历史记录**（各迭代当前的测试数量见 STATUS 对应小节）；Host 探针多用合成 Sender/LLM。`--workers --manager` 在 55 秒期限内未完成，不列为通过。真实 QQ 手机收件、审批按钮、流式残留和生产回滚演练不能假定已验收。
 
 ## 2. 开发方式（ADR-062）
 
@@ -51,7 +51,7 @@ Character 单元 215、安全审计 33、QQTK 轻量 55/审批 6 是 [STATUS](..
 
 ### 3.1 Iteration 01：普通文本出站 Unified I/O
 
-**状态**：源码完成，自动化测试与隔离 rc.3 Host 探针通过；未部署，真实 QQ/手机收件未验收。实现见 QQTK `plugin-sources/dsh-agent-io`，覆盖范围以其 README 为准。
+**状态**：源码完成，自动化测试与隔离 rc.3 Host 探针通过；已随 Character test.24（Agent I/O test.3）授权部署，之后由 test.4 升级；真实 QQ/手机收件未验收。实现见 QQTK `plugin-sources/dsh-agent-io`，覆盖范围以其 README 为准。
 
 **目标**：从现有 QQTK 中提取可复用的聊天消息发送接口，建立最小 Unified Agent I/O 出站能力，并通过 QQ Official Adapter 实现普通文本消息发送。上层提交一条与 QQ SDK 无关的逻辑聊天消息，由通用 I/O 交给 QQ Official Adapter，后者复用现有 QQ 发送逻辑（回复目标解析、被动回复限额、诊断）。
 
@@ -85,7 +85,7 @@ Character 单元 215、安全审计 33、QQTK 轻量 55/审批 6 是 [STATUS](..
 
 **验收证据**：QQTK 新增 `conversation-io.test.mjs`（真实 Conversation Manager、不含 QQ 代码的合成第二平台）覆盖普通 Agent 收发、跨平台/账号/direct-group 隔离、冷恢复、自动轮换与显式重置后的迟到输出、Manager/接线关闭竞态、准入拒绝与 Owner-only 包装、伪造来源、入站去重、出站分片间复核与 Interaction；QQ 测试经 Gateway 自己的接线代码运行；关键校验经变异检查确认会被测试捕获。隔离 rc.3 探针确认已安装包从 Agent I/O 插件上下文取到原生 Interaction 服务、用 Host `dsh-llm` 创建原生输入，QQ 入站/出站经新接口各一次且重复推送/陌生人不产生输入。
 
-**未覆盖**：Interaction 出站迁移（04，见 3.3）；Remote Ops 启动路由恢复与 Character Identity 准入仍直接调用 Manager（非 Agent 输入）；命令/问答/审批（05/06）；通知与历史提醒（07）；持久发送状态；真实第二平台（只有合成夹具）；真实 QQ 手机收件；部署与回滚演练（Character 部署计划会拒绝缺 `openConversation` 的 `dsh-agent-io`，但尚不能升级已安装的 test.3，部署前需补该步骤）。
+**未覆盖**：Interaction 出站迁移（04，见 3.3）；Remote Ops 启动路由恢复与 Character Identity 准入仍直接调用 Manager（非 Agent 输入）；命令/问答/审批（05/06）；通知与历史提醒（07）；持久发送状态；真实第二平台（只有合成夹具）；真实 QQ 手机收件；生产回滚演练。（部署：Character 部署计划已增加显式升级已安装 Agent I/O 的步骤，test.3 → test.4 已随 Iteration 04 授权部署。）
 
 ### 3.3 Iteration 04：Interaction 出站迁移
 
@@ -101,7 +101,22 @@ Character 单元 215、安全审计 33、QQTK 轻量 55/审批 6 是 [STATUS](..
 
 **验收证据**：Character Interaction 单元测试改为只提交完整气泡的语义（生成期间提前提交、无预览、取消信号、未确认气泡扣留、工具执行中/后的分泡）；QQTK 桥接测试覆盖开启/关闭 Interaction 均经 `sendMessage()`、稳定 ID 与重复提交、按输入回复目标、`/stop`/策略撤回/Turn 中止、部分失败/未知结果、轮换与撤权、诊断字段；SDK 审计以真实 Interaction + 桥接 + I/O + QQ 文本 Adapter + SDK MessageApi 覆盖限额、被动额度、提前提交、取消与轮换；关键保护经变异检查确认会被测试捕获；隔离 rc.3 探针确认真实 Agent/Interaction 的全部气泡、等待提示与 steer 回复都经已安装的 Agent I/O 发送。
 
-**未覆盖**：气泡发送状态不持久（进程重启后不识别重复）；实机手机消息格式、分泡节奏与被动额度；审批/问答/通知（05–07）；部署（Agent I/O 已安装版本升级仍受部署保护限制，见 [STATUS](../STATUS.md)）。
+**未覆盖**：气泡发送状态不持久（进程重启后不识别重复）；实机手机消息格式、分泡节奏与被动额度；审批/问答/通知（05–07）。部署：已经部署计划的显式 Agent I/O 升级授权部署（见 [STATUS](../STATUS.md)）；遗留的 Turn 取消控制器淘汰问题在 Iteration 05 修复（3.4）。
+
+### 3.4 Iteration 05：Commands / 基础 Media 抽离
+
+**状态**：源码完成（QQTK `dsh-agent-io@0.1.0-test.5` + QQ 补丁；Character 仅部署计划、探针与文档），自动化测试、代码隔离 SDK 审计与隔离 rc.3 Host 探针通过；**未部署、未合并**；真实 QQ/手机未验收。
+
+**实现**：
+
+- **Commands**（ADR-057：I/O 内部 L1 模块）：`conversation.openCommands({prefixes})` 返回命令路由——识别前缀与命令名、解析参数、以本接线 `admits` 准入、在入站去重范围内 `claim()` 一次（重复或并发投递为 `duplicate`，之后经 `receive()` 的同一消息也只是 `duplicate`）、范围与授权拒绝、执行与结果回复。路由不比较身份、不读平台数据；执行与授权仍由命令所属插件（QQ 会话命令、Remote Ops `/ops` 的所有者检查）负责。QQ `commandGate` 只做协议（@ 标记、群 @ 判断、回复），位置仍在并发合并之前，所以 `/stop` 不排在运行中的 Turn 后面；SDK `slashCommand` 已移除。未知命令照旧作为普通聊天；审批/问答回应与显式更正不归入 Commands。
+- **基础 Media**：`sendMessage().message` 可含 `attachments`（`image|voice|video|file`，可信 `resource` 为本地文件或平台 URL，与模型可见内容分开）；入站标准消息含 `attachments` 与 `quote`。分片为说明文字后逐个附件，发送前 Adapter 须接受全部附件（否则整条 `unsupported`），同 Conversation 顺序、逻辑 ID 去重（指纹含附件）、取消与每片前路由复核同文本。QQ Adapter 只接受本地资源，`sendMedia` 先复核资源（真实路径、白名单、普通文件），再上传（不发消息），再发媒体消息：上传失败 `not-sent`、消息超时/5xx `unknown` 不重发。QQ 入站附件/引用改为标准描述，模型可见正文从描述组装（格式不变）。`qqbot_send_file` 改经 `sendMessage()`：只发往调用者 Agent 的当前会话（模型给的其他目标被拒），同轮同文件同一逻辑 ID，只有 `not-sent` 后才以新 ID 重试；旧直发路径删除。
+- **Iteration 04 遗留**：Turn 取消控制器改为租约式生命周期（在途不淘汰、空闲有界、`turn/end` 释放、中止留墓碑、Session 释放与 Gateway 关闭清理）。
+- **定向审查修复**：新建控制器在取得租约前不再被容量清理（原先 8 个被持有时第 9 个会脱离 `/stop`）；入站下载按附件序号而非文件名关联（原先同名/无名引用附件共用一个文件）。
+
+**验收证据**：QQTK 新增 `commands.test.mjs`（路由：解析、注册、一次性、隔离、准入、授权、范围、失败回复、关闭）、`turn-controls.test.mjs`（容量溢出、旧 Turn 取消、租约竞态、释放与关闭）、`qq-media.test.mjs`（真实临时文件与目录联接：当前会话限制、白名单/联接逃逸/目录/缺失、同轮不重发、未知不重试、上传失败可重试、撤权/轮换/`/stop`/取消、发送时复核、多附件顺序与 partial、不支持的资源、入站描述与正文组装），并在 QQ 入站/出站集成中覆盖 `/stop` 在合并保护被占用时立即执行、命令重投不进入 Agent、所有者命令拒绝、容量溢出后 `/stop`、Session 释放；SDK 审计以真实 `MediaApi` 验证上传/媒体消息请求与真实 `ApiError` 分类；隔离 rc.3 探针在真实 Host 上经已安装 test.5 执行命令路由与 `qqbot_send_file`；关键保护的变异检查均被捕获。
+
+**未覆盖**：真实 QQ 上传、手机展示与平台大小/格式限制；群聊命令的真实 @ 行为；出站引用关联（`replyTo`）与远程 URL 附件；视觉理解等高级媒体工具（未改）；命令回复仍为平台对命令消息的协议回复（不经 `sendMessage()`）；审批/问答（06）、通知/提醒（07）；部署（需把已安装 test.4 显式升级为 test.5，部署计划已支持）。
 
 ## 4. 后续验收矩阵与停止条件
 
