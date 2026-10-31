@@ -17,7 +17,7 @@ Character 应用保持一个仓库；所有交互平台 Adapter 未来统一进�
 | DSH 运行时 | 验证基线 **DSH 0.2.1-rc.3 / Node.js 24.21.0 / Windows** | 继续复用原生 Agent、Session、Preset、Tools、Approval、Schedule、Worker Spawn；不另造运行时 |
 | Conversation Manager | **`dsh-conversation-manager@0.1.0-test.2`**，源码在 QQTK `plugin-sources/` | 已独立 DSH Host Plugin；唯一当前 Conversation→原生 Session 路由，恢复、偏好、轮换及释放；第二平台仅合成夹具验证 |
 | Interaction | **`dsh-interaction-policy@0.1.0-test.8`**，源码在 Character `packages/` | 已可选独立 Agent/Preset Plugin；中断、分泡、Hang-on、Worker 续轮等；QQTK 仍负责 Sender/回执接线 |
-| QQ 官方适配 | 运行实例为 QQTK Iteration 04 补丁；Bot **0.5.2** / SDK **1.0.5** 的受审版本化补丁 | 单一 Gateway；聊天收发（Iteration 01–04）与源码中的命令/基础媒体（Iteration 05，未部署）已经 Agent I/O，审批/问答/诊断仍在 QQTK，不是统一跨平台库 |
+| QQ 官方适配 | 运行实例为 QQTK Iteration 05 补丁；Bot **0.5.2** / SDK **1.0.5** 的受审版本化补丁 | 单一 Gateway；聊天收发（Iteration 01–04）与命令/基础媒体（Iteration 05）已经 Agent I/O，源码中审批/问答（Iteration 06，未部署）也已迁移到 Agent I/O HITL Bridge；诊断仍在 QQTK，不是统一跨平台库 |
 | Memory | Character Memory Core/Tools、`memoryIdentity@1` 可信 Host 契约；SQLite Schema **3**、L1/L2/L3 与人格化模式 | 已支持非 Character 的 DSH Agent 选装；不等于在任意平台自动获得可信身份 |
 | 其他可选能力 | Remote Ops、Memory Inspector、Long Tasks、Preset Manager | 已有独立模块/插件，不在本轮为了重构而重写 |
 | 新平台 | QQ Personal / NapCat/OneBot 等 | **未实现、协议未定，未完成真实 QQ 小号测试** |
@@ -31,7 +31,7 @@ Character 应用保持一个仓库；所有交互平台 Adapter 未来统一进�
 
 - [Interaction policy](../../packages/interaction-policy/policy.mjs) 的 `bind(transport)` 要求 `sendText`（源码 test.9 起只提交完整气泡，不再使用 `openStream`）；[原生事件装配](../../packages/interaction-policy/index.mjs) 订阅 Agent/Session 事件。它已处理部分渐进分泡，但不是新的公共 I/O v1。
 - [QQTK bootstrap](https://github.com/EJYDOvO/harness-qq-toolkit-public/blob/2e8fd2299e8fb2358ac1c4e04d5b287dae1e6181/maintenance/qqbot-src/dist/gateway/bootstrap.js) 的 `createInteractionOutbound` 完成 `policy.bind`、回复目标、`sendText` 和条件 `openStream` 接线，仍包含 SDK stream。迁移需兼容/隔离这些旧路径，不能把它们提升为新公共契约。
-- QQTK 的 [QuestionChannel](https://github.com/EJYDOvO/harness-qq-toolkit-public/blob/2e8fd2299e8fb2358ac1c4e04d5b287dae1e6181/maintenance/qqbot-src/dist/features/question-channel.js) 仍包装共享 `userQuestions.ask()`；多平台不能分别照搬包装。
+- （Iteration 06 起已由 Agent I/O HITL Bridge 经原生 `user-questions/request` waterfall 取代。）QQTK 的 [QuestionChannel](https://github.com/EJYDOvO/harness-qq-toolkit-public/blob/2e8fd2299e8fb2358ac1c4e04d5b287dae1e6181/maintenance/qqbot-src/dist/features/question-channel.js) 仍包装共享 `userQuestions.ask()`；多平台不能分别照搬包装。
 - [Character Identity](../../packages/character-identity/index.mjs) 同时管理 Owner/当前路由门禁、历史提醒绑定、QQ bindings 和 SQLite Outbox；[Character QQ lifecycle](../../packages/character-qq-adapter/lifecycle.mjs) 仍包装 `qqRemoteOps.attach`。这些耦合是迁移依据，尚未抽离。
 
 ## 2. 职责分层与模块组织（设计决定，尚未实现）
@@ -148,12 +148,12 @@ DSH 原生 Web/Desktop 聊天窗继续用 DSH 原生消息 UI、Session、渲染
 
 | 服务 | 目标职责与权威边界 | 仍待定 |
 | --- | --- | --- |
-| HITL Bridge | HITL = Human-in-the-Loop，人工介入；展示原生 Approval / `userQuestions.ask`，路由已验证回应，处理取消/超时；共享 I/O Sender，原生服务唯一裁决 | 建议独立可选 Plugin（ADR-057）；Host 集成方式在 Iteration 06 设计 |
+| HITL Bridge | HITL = Human-in-the-Loop，人工介入；展示原生 Approval / `userQuestions.ask`，路由已验证回应，处理取消/超时；共享 I/O Sender，原生服务唯一裁决 | Iteration 06 源码（未部署）：Agent I/O 包内可选模块 `openHITL()`，经原生 waterfall 统一接入，提示与签发按钮经 `sendMessage()`；QQ 原通道已删除 |
 | Notification | 复用 I/O Sender、稳定 Conversation 目的地与持久 Outbox；去重、恢复和明确事件投递；复用原生 Schedule，不重造调度 | 建议独立可选 Plugin（ADR-057）；持久状态归属与切换在 Iteration 07 设计 |
-| Commands（L1） | 默认为 I/O 内部的命令入口解析/分发，Host 执行授权；不让平台字段授予能力 | Iteration 05 源码（未部署）：`openCommands()` 路由；QQ `/stop`、`/bot-*`、会话命令与 Remote Ops `/ops` 已迁移 |
-| Media（L1 基础/可选工具） | 基础消息附件属于 D1/L1；高级图片/音频/视频等工具保持现有可选工具，平台传输/路径权限留 Adapter/Host | Iteration 05 源码（未部署）：附件描述（可信资源与模型可见内容分开），QQ 入站附件/引用与 `qqbot_send_file` 已迁移；视觉理解未改 |
+| Commands（L1） | 默认为 I/O 内部的命令入口解析/分发，Host 执行授权；不让平台字段授予能力 | Iteration 05（已于 2026-10-31 授权部署）：`openCommands()` 路由；QQ `/stop`、`/bot-*`、会话命令与 Remote Ops `/ops` 已迁移 |
+| Media（L1 基础/可选工具） | 基础消息附件属于 D1/L1；高级图片/音频/视频等工具保持现有可选工具，平台传输/路径权限留 Adapter/Host | Iteration 05（已于 2026-10-31 授权部署）：附件描述（可信资源与模型可见内容分开），QQ 入站附件/引用与 `qqbot_send_file` 已迁移；视觉理解未改 |
 
-HITL 是统一术语；HITL Bridge 不是已发布插件。不能让多个平台分别猴子补丁共享的全局问答/审批服务；可信回应只能关联到原生待决请求，由 Host 验证身份、目标和有效期。Commands 与基础 Media 按 ADR-057 归入 L1，表中保留以说明与 L3 的分工。通知是服务输出，不作为普通聊天输入；审批/问答回应也不自动产生普通聊天 Turn。
+HITL 是统一术语；HITL Bridge 是 Agent I/O 包内的可选模块（Iteration 06 源码），不是独立插件。不能让多个平台分别猴子补丁共享的全局问答/审批服务；可信回应只能关联到原生待决请求，由 Host 验证身份、目标和有效期。Commands 与基础 Media 按 ADR-057 归入 L1，表中保留以说明与 L3 的分工。通知是服务输出，不作为普通聊天输入；审批/问答回应也不自动产生普通聊天 Turn。
 
 ## 8. D6：持久数据与受控迁移（设计决定，尚未实现）
 

@@ -1,13 +1,13 @@
 # DSH Character Agent：当前进度与渐进式重构路线图 v0.8
 
-> 更新：2026-10-31（Iteration 03/04 已授权部署且 PR 已合并；Iteration 05 源码与隔离验证，未部署）。2026-10-30 起开发方式改为按功能切片的渐进式重构（ADR-062）。GitHub 是后续文档维护的唯一主入口；旧 ChatGPT Library v0.7.8 仅为历史快照。
+> 更新：2026-11-01（Iteration 03–05 已授权部署且 PR 已合并；Iteration 06 源码与隔离验证，未部署）。2026-10-30 起开发方式改为按功能切片的渐进式重构（ADR-062）。GitHub 是后续文档维护的唯一主入口；旧 ChatGPT Library v0.7.8 仅为历史快照。
 > 下列目标均为**设计决定，尚未实现**，除非标明已实现。每个切片的开发都在与生产隔离的环境进行，切片完成不等于部署；部署需另行授权并走既有门禁。
 
 ## 1. 当前源码与部署记录基线
 
 | 能力 | 当前事实 | 尚未完成的边界 |
 | --- | --- | --- |
-| 运行装配 | 当前授权部署：Character **test.25**、Interaction **test.9**、Agent I/O **test.4**、Conversation Manager **test.2** 与 QQTK Iteration 04 补丁（QQTK PR #5 / Character PR #6 已合并到 main）；DSH **0.2.1-rc.3**、Node **24.21.0**、Windows | 不等于 Mac/其他 DSH 构建可安装或验收；真实 QQ 手机收件与分泡节奏未验收 |
+| 运行装配 | 当前授权部署（2026-10-31）：Character **test.25**、Interaction **test.9**、Agent I/O **test.5**、Conversation Manager **test.2** 与 QQTK Iteration 05 补丁（QQTK PR #6 / Character PR #7 已合并到 main）；DSH **0.2.1-rc.3**、Node **24.21.0**、Windows | 不等于 Mac/其他 DSH 构建可安装或验收；真实 QQ 手机收件与分泡节奏未验收 |
 | 会话 | 独立 Conversation Manager **test.2**，QQTK 为薄会话适配；隔离恢复/唯一路由已有验证 | 模拟第二平台不代表真实第二平台；旧提醒根/单写入者约束保留 |
 | Interaction | **test.9** 已部署（Iteration 04）只提交完整气泡，`bind` 只用 `sendText`，QQ 侧经 `sendMessage()` 发送 | 真实 QQ 手机收件与实机分泡节奏未验收 |
 | Worker | 原生 Creator/Worker Preset、显式委派、工具范围守卫；test.23 记录 13 Preset 健康 | 部分 Host 探针限时未完成；真实任务质量另验 |
@@ -105,7 +105,7 @@ Character 单元 215、安全审计 33、QQTK 轻量 55/审批 6 是 [STATUS](..
 
 ### 3.4 Iteration 05：Commands / 基础 Media 抽离
 
-**状态**：源码完成（QQTK `dsh-agent-io@0.1.0-test.5` + QQ 补丁；Character 仅部署计划、探针与文档），自动化测试、代码隔离 SDK 审计与隔离 rc.3 Host 探针通过；**未部署、未合并**；真实 QQ/手机未验收。
+**状态**：源码完成（QQTK `dsh-agent-io@0.1.0-test.5` + QQ 补丁；Character 仅部署计划、探针与文档），自动化测试、代码隔离 SDK 审计与隔离 rc.3 Host 探针通过；PR 已合并（QQTK `47a2a43`、Character `15ec724`），2026-10-31 已授权部署；真实 QQ/手机未验收。
 
 **实现**：
 
@@ -117,6 +117,23 @@ Character 单元 215、安全审计 33、QQTK 轻量 55/审批 6 是 [STATUS](..
 **验收证据**：QQTK 新增 `commands.test.mjs`（路由：解析、注册、一次性、隔离、准入、授权、范围、失败回复、关闭）、`turn-controls.test.mjs`（容量溢出、旧 Turn 取消、租约竞态、释放与关闭）、`qq-media.test.mjs`（真实临时文件与目录联接：当前会话限制、白名单/联接逃逸/目录/缺失、同轮不重发、未知不重试、上传失败可重试、撤权/轮换/`/stop`/取消、发送时复核、多附件顺序与 partial、不支持的资源、入站描述与正文组装），并在 QQ 入站/出站集成中覆盖 `/stop` 在合并保护被占用时立即执行、命令重投不进入 Agent、所有者命令拒绝、容量溢出后 `/stop`、Session 释放；SDK 审计以真实 `MediaApi` 验证上传/媒体消息请求与真实 `ApiError` 分类；隔离 rc.3 探针在真实 Host 上经已安装 test.5 执行命令路由与 `qqbot_send_file`；关键保护的变异检查均被捕获。
 
 **未覆盖**：真实 QQ 上传、手机展示与平台大小/格式限制；群聊命令的真实 @ 行为；出站引用关联（`replyTo`）与远程 URL 附件；视觉理解等高级媒体工具（未改）；命令回复仍为平台对命令消息的协议回复（不经 `sendMessage()`）；审批/问答（06）、通知/提醒（07）；部署（需把已安装 test.4 显式升级为 test.5，部署计划已支持）。
+
+### 3.5 Iteration 06：HITL Bridge
+
+**状态**：源码完成（QQTK `dsh-agent-io@0.1.0-test.6` + QQ 补丁；Character 仅部署计划、探针与文档），自动化测试、代码隔离 SDK 审计与隔离 rc.3 Host 探针通过；**未部署、未合并**；真实 QQ 按钮/手机未验收。
+
+**实现**：
+
+- **模块边界**：Bridge 是 Agent I/O 包内的可选模块（`hitl.mjs`，经 `conversation.openHITL()` 打开），不是新的独立 Plugin：它需要 I/O 的发送、按钮签发与入站认领，放在同一包内避免再造一套 Sender 或跨插件的签发接口；平台不打开它时不注册任何监听器。ADR-057 建议的独立插件形态因此暂不采用，模块不依赖 QQ，可在以后单独成包。
+- **原生接入**：原生 `approval/request` 与 `user-questions/request` waterfall（`prepend`）由 Agent I/O 统一注册一次；请求的 Session 不是某个已打开 Bridge 的当前、仍被准入记录时 `next()`。不再修改全局 `userQuestions.ask`；原生审批策略、审计事件与结果语义不变。
+- **出站**：审批提示、提问、下一题与超时提示经 `sendMessage()`；按钮为 Bridge 签发的 `message.actions`（其他调用方构造的为 `unauthorized`）。审批展示被证明失败为 `unavailable`，未知不重发；提问按钮被拒时纯文本重发一次。
+- **回应**：按钮（`respond`）与文本（`answer`，在并发合并之前、经 I/O 入站去重认领）都校验 Conversation、预期作答者、请求引用、原生信号与当前 Session/准入；每个请求只完成一次，多题顺序推进、旧题按钮失效；每题另有自己的取消控制（定向审查修复：一题作答后，它排队或尚未开始的提示分片不再发送，已在途分片无法撤回）。
+- **生命周期**：`/stop`/AbortSignal、超时、Session 释放（`cancelPending`）与 Gateway 卸载都结算并清理 Pending、定时器、监听与在途提示；Conversation Manager 与 Interaction 通过 `waiting(record)` 判断等待用户。
+- **清理**：QQ 原审批/问答通道、`questionAnswer` 中间件与 Gateway 直发路径删除；`hitl.enabled: false` 交回原生。
+
+**验收证据**：QQTK 新增 `hitl.test.mjs`（Gateway 接线 + `openQQHITL` + QQ 键盘/按钮解码：允许/拒绝/取消/超时/发送失败/未知/部分发送、单题/多题/按钮/文本、Owner 与群成员、伪造与跨会话、重复点击、旧按钮、轮换与撤权、启停、文本闸门、卸载、原生透传与签发限制）；SDK 审计 Q22/Q23 以真实 SDK 消息代码验证键盘请求、交互事件分发与确认码；隔离 rc.3 探针以原生 `approval.decide()` 与 `userQuestions.ask()` 验证真实 waterfall；变异检查 14/15 被捕获（1 项等价）。
+
+**未覆盖**：真实 QQ 键盘显示与点击、手机端；同一 Session 并发审批的排队（第二个仍 `unavailable`）；HITL 状态持久化与重启恢复；跨聊天/HITL/Notification 的统一优先级与背压；通知/提醒（07）。
 
 ## 4. 后续验收矩阵与停止条件
 

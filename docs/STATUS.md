@@ -2,9 +2,26 @@
 
 本页是版本与验收状态的统一入口。历史发布记录说明当时结果，不代表最新运行状态。
 
-## Iteration 05 源码（Agent I/O test.5，未部署）
+## Iteration 06 源码（Agent I/O test.6，未部署）
 
-Commands 与基础 Media 抽离，并修复第四轮遗留的 Turn 取消控制器淘汰问题。全部为源码与隔离验证，**未部署**（QQTK PR #6 / Character PR #7，定向审查的两个问题修复后合并），运行实例仍是下一节的 Agent I/O test.4 / Interaction test.9。
+HITL Bridge：原生审批与 `ask_user_question` 的 QQ 展示和作答迁移到 Agent I/O。全部为源码与隔离验证，**未部署、未合并**；运行实例为下一节的 Agent I/O test.5。
+
+- **权威不变**：原生 Approval（`approval/request`）与 `userQuestions.ask()`（`user-questions/request`）仍是唯一业务权威：审批策略、结果闭合集合（`allowed-once|rejected|cancelled|unavailable`）、审计事件与 `ASK_ABORTED` 错误语义都不变。Bridge 只负责请求关联、展示、可信回应、取消、超时与状态清理。
+- **集中接入**：`dsh-agent-io@0.1.0-test.6` 在第一个平台打开 Bridge 时以 `prepend` 注册这两个原生 waterfall 的监听器一次，最后一个关闭时移除；不属于已打开 Bridge 当前 Session 的请求原样交给原生 Web/Desktop。不再修改全局 `userQuestions.ask`。
+- **统一出站**：审批提示、提问、下一题与提问超时提示都经 `sendMessage()` 发送（同 Conversation 顺序、当前 Session/准入复核、去重、取消）。按钮是新的 `message.actions`，只能由 Bridge 签发，其他调用方与模型都不能构造；纯文本与附件消息不变。审批提示被证明未送达时为 `unavailable`（从不批准），结果未知时不重发按钮；被拒的提问按钮以纯文本重发一次。
+- **可信回应**：按钮与文本回应须来自同一 Conversation 的预期作答者（群聊按点击成员 `group_member_openid`；原通道在群里比较的是 `user_openid`），请求未完成、原生信号未中止、Session 仍为当前且仍被准入；伪造、重复、迟到、过期、跨会话与旧题回应一律拒绝，每个请求（每道题）只完成一次。文本作答在 I/O 入站去重范围内认领，重投不再作答也不进入 Agent；不满足条件的文本照常是普通聊天。
+- **QQ**：只保留原 Markdown 渲染（问题另显示原生 `detail`，计划审阅需要它）、键盘渲染与按钮事件转换；原 `ApprovalChannel`/`QuestionChannel`/`questionAnswer` 不再被引用，Gateway 直发审批/问答的路径已删除。`hitl.enabled: false` 时交回原生 Web/Desktop。
+- **Character**：部署计划在补丁调用 `openHITL()` 时要求 `dsh-agent-io` 提供 `openHITL()` 与 Bridge 模块（test.6），已安装 test.5 须显式 `--agent-io-artifact` 升级；隔离探针新增真实 Host 的审批与问答检查。Character 运行包无改动。
+
+验证（本机，未部署、未连接 QQ）：QQTK 轻量 183（新增 HITL 14，含定向审查修复：每题独立取消，已作答题目排队或未开始的提示分片不再发送）、边界 3、代码隔离 SDK 审计 34（新增 Q22/Q23：真实 SDK 消息代码发出的键盘请求、真实 `INTERACTION_CREATE` 分发与 `acknowledgeInteraction`、群成员校验、未知不重发、被拒按钮）、两份补丁重建一致且可应用；HITL 关键保护的变异检查 15 项中 14 项被捕获（余 1 项为等价变异）；Character 单元 221、安全审计 33；隔离 rc.3 探针 25 项（原生审批 `decide()` 与 `userQuestions.ask()` 经已安装 test.6 的 Bridge：按钮允许/拒绝、逐题按钮与文本作答、中止、重投去重；另一 Agent 与 Bridge 关闭后请求留在原生应答者），`qqNetwork: false`。
+
+未验证：真实 QQ 按钮键盘的显示与点击（含 keyboard 权限、群聊点击字段）、手机端；同一 Session 并发的第二个审批仍为 `unavailable`；HITL 状态只在内存，重启即取消；`run-generic-probe` 使用生产凭据，未运行。
+
+## Iteration 05（Agent I/O test.5，已授权部署）
+
+2026-10-31 按授权部署：QQTK `main` `47a2a43` 的补丁与 67 个维护文件、Character `main` `15ec724`；已安装的 `dsh-agent-io` 经显式 `--agent-io-artifact` 由 test.4 升至 test.5（tarball 与在 `main` 上重跑的隔离 rc.3 探针所装的包一致）。Character 包、Interaction test.9 与 Conversation Manager test.2 不变。停机一致性快照 400 个文件；离线审计无未完成 Turn/审批、无 active 提醒、Outbox 不变、Memory Schema 3 / 15 条；最终路径冻结锁文件安装与逐文件比对通过；新 Host 13 个 Preset 健康、单一 QQ Gateway、`agent-io` test.5 与 Manager 激活，部署后 Owner 上下文/Inspector/路由/提醒/Outbox 检查通过；旧 Profile 保留以便回滚。未发送 QQ 验收消息，真实 QQ 命令、媒体与手机端仍未验收。
+
+Commands 与基础 Media 抽离，并修复第四轮遗留的 Turn 取消控制器淘汰问题（QQTK PR #6 / Character PR #7，定向审查的两个问题修复后合并）。
 
 - **Commands**：QQTK `dsh-agent-io@0.1.0-test.5` 新增 I/O 内部命令路由（`conversation.openCommands()`）：识别、解析、在入站去重范围内一次性认领（`claim()`）与路由；执行与授权仍由命令所属插件负责。QQ 的 `/stop`、`/bot-*`、`/new`、`/compact`、`/model`、`/preset` 与 Remote Ops `/ops` 改经该路由，QQ `commandGate` 只做 @ 标记与群 @ 判断，位置仍在并发合并之前；SDK `slashCommand` 已移除。命令消息不会重复执行，也不会再成为 Agent 输入；未知命令仍作为普通聊天。审批/问答回应与显式更正保持原语义。
 - **基础 Media**：`sendMessage()` 与入站标准消息新增可选附件描述（图片/语音/视频/文件；可信资源 `resource` 与模型可见内容分开）及入站引用 `quote`。QQ 入站附件与引用改为标准描述，模型可见正文从描述组装（格式不变）；`qqbot_send_file` 改经 `sendMessage()` 作为附件消息发送——只能发往调用者 Agent 的当前会话（不再接受其他 openid）、路径白名单与符号链接解析保留并在发送时复核、上传与媒体消息分阶段分类（上传失败 `not-sent`，消息超时 `unknown` 不重发）、同轮同文件不重发。原 `mediaSender` 直发路径已删除。

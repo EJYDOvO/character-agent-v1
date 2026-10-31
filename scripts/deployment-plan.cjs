@@ -70,11 +70,12 @@ function verifiedConversation(live,core,oldCore,args=process.argv){
 function verifiedAgentIO(live,core,patches,args=process.argv){
  const name='dsh-agent-io',sources=Object.values(patches??{}).map(p=>fs.readFileSync(p.source,'utf8')),required=sources.some(s=>/inject = \[[^\]]*'agentIO'/.test(s));
  // The Iteration 03 QQ patch opens its Conversation wiring through dsh-agent-io,
- // the Iteration 05 patch its command router (and sends attachments): an older
- // package would stop the Gateway at start, so it is refused here.
- const wiring=sources.some(s=>/io\.openConversation\(/.test(s)),commands=sources.some(s=>/\.openCommands\(/.test(s));
- const needs=name+(commands?' with openCommands (0.1.0-test.5 or later)':' with openConversation (0.1.0-test.4 or later)');
- const offers=read=>(!wiring||/\bopenConversation\b/.test(read('index.mjs')??''))&&(!commands||/\bopenCommands\b/.test(read('conversation.mjs')??''));
+ // the Iteration 05 patch its command router (and sends attachments), the
+ // Iteration 06 patch its HITL Bridge: an older package would stop the Gateway
+ // at start, so it is refused here.
+ const wiring=sources.some(s=>/io\.openConversation\(/.test(s)),commands=sources.some(s=>/\.openCommands\(/.test(s)),hitl=sources.some(s=>/\.openHITL\(/.test(s));
+ const needs=name+(hitl?' with openHITL (0.1.0-test.6 or later)':commands?' with openCommands (0.1.0-test.5 or later)':' with openConversation (0.1.0-test.4 or later)');
+ const offers=read=>(!wiring||/\bopenConversation\b/.test(read('index.mjs')??''))&&(!commands||/\bopenCommands\b/.test(read('conversation.mjs')??''))&&(!hitl||(/\bopenHITL\b/.test(read('conversation.mjs')??'')&&/\bcreateHITLBridge\b/.test(read('hitl.mjs')??'')));
  const fromFile=dir=>file=>{try{return fs.readFileSync(path.join(dir,file),'utf8');}catch{return undefined;}};
  const row=entries(core).find(r=>r.name===name);
  if(!row){assert(!required,'Reviewed QQ patch requires '+name+'; rebuild Character Core');return;}
