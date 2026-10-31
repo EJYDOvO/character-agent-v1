@@ -6,6 +6,8 @@ test.22 收紧恢复：只有持久化 open/load 的原生同 ID 缺失错误允
 
 Identity 通过公开 `records / ownershipState / isCurrentSession` 契约绑定真实 Agent，SQLite routes 仅保留历史证据，不再作为当前主路由权威。Owner、项目/角色和 Memory capability 仍由 Identity 授权；Manager 不发放权限。平台 pending approval/question、额外 prompt 和 Typing 清理通过 Adapter 回调提供。
 
+rc.3 的 Character Spawn 通过既有 Tools 包内的轻量适配转调原生实现：仅为组件重载时的注册表扫描过滤已关闭 Context，保留原生配置与授权。它不改变 Conversation Manager 的销毁顺序、不修改官方模块，也不增加 Agent Manager。确定性复现与移除条件见 [Worker 文档](WORKERS.md#rc3-销毁与热重载适配)。
+
 test.13 在既有原生分析 Worker、Memory Inspector 上引入可选 QQ Session 生命周期和独立长期任务；test.14 收紧历史根权限并补充存量提醒审计。隔离与当前实例部署的验收边界统一见 [STATUS](STATUS.md)。阶段对照见 [路线图](IMPLEMENTATION_ROADMAP.md)，任务契约见 [Long Tasks](../packages/long-tasks/README.md)。
 
 test.16 的社区 Preset 修复只调整构建契约：`communityWorkerPresets` 可声明真实 ID 与展示别名，`allowedAgentPresets`、实际 Spawn 和持久目标始终使用真实 ID；不增加运行服务、权限或第三方安装路径。详细校验和隔离验收见 [Worker](WORKERS.md)。
@@ -23,7 +25,7 @@ Worker V2 使用官方 `subagent` 的 `agentPreset / allowedAgentPresets` 和 `s
 | Memory Core | `characterIdentity` | 标准 `memoryIdentity@1`、DSH LLM/Agent/默认模型；不导入 QQ/Character |
 | Memory Tools 默认入口 | Character 身份、提示词、通知查询 | `memoryIdentity@1 + dshMemory + tools + systemPrompt`，Agent-scoped |
 | Tools `character.mjs` | 无独立边界 | 同包内专用入口：旧工具名、Character 提示、QQ 通知查询 |
-| Character Identity | QQ Owner、会话绑定、通知账本 | 原有职责 + 标准可信身份适配、QQ 全消息确认策略 |
+| Character Identity | QQ Owner、会话绑定、通知账本 | 原有职责 + 标准可信身份适配、QQ 全消息确认策略；通知 Outbox（`outbox.mjs`，唯一写入者）经 Agent I/O 通知器发送 |
 | Character QQ Adapter | QQTK attach 拦截 | 保留；只允许配置的 Character Preset，不接受解析失败降级 |
 | Definition / Creator 派生 | 固定默认路径和 Preset | 角色路径、Preset ID、数据目录可配置；官方 Creator 指纹变更触发重建 |
 
@@ -88,7 +90,7 @@ test.12 审计进一步将内部可见性判断与公开脱敏分离，避免遗
 - 多进程不能靠内存租约互斥；部署脚本用维护锁和单活检查隔离真实 QQ 验证与生产。
 - 上游 QQ 用户目录偏好会跨 Profile 共用；维护补丁优先使用 DSH_HOME/qqbot。不同项目必须分开 DSH_HOME；无环境配置时保留旧路径，不自动迁移或覆盖旧数据。
 - Remote Ops 在 Gateway 引导时可选绑定。运行中新增/移除它应重载 Gateway 或重启 Profile；暂不支持无重载的动态能力发现。
-- Character Adapter 保留 QQTK 通知到 Character outbox 的桥接，卸载撤销身份。失效 Preset 拒绝服务，不能退回权限不同的宿主组合。
+- Character Adapter 保留 QQTK 通知到 Character outbox 的桥接，卸载撤销身份。Outbox 只经 Gateway 交来的 Agent I/O 通知器发送（稳定 Owner 目标，不要求当前 Session；每个分片前复核 Gateway 附加、Owner-only 策略与提醒来源 Session 的绑定证据），没有通知器时保持待发。失效 Preset 拒绝服务，不能退回权限不同的宿主组合。
 
 ## 明确未改变的部分
 

@@ -1,18 +1,18 @@
 # DSH Character Agent：当前进度与渐进式重构路线图 v0.8
 
-> 更新：2026-11-01（Iteration 03–05 已授权部署且 PR 已合并；Iteration 06 源码与隔离验证，未部署）。2026-10-30 起开发方式改为按功能切片的渐进式重构（ADR-062）。GitHub 是后续文档维护的唯一主入口；旧 ChatGPT Library v0.7.8 仅为历史快照。
+> 更新：2026-11-01（Iteration 03–06 已授权部署且 PR 已合并；Iteration 07 源码与隔离验证，未部署）。2026-10-30 起开发方式改为按功能切片的渐进式重构（ADR-062）。GitHub 是后续文档维护的唯一主入口；旧 ChatGPT Library v0.7.8 仅为历史快照。
 > 下列目标均为**设计决定，尚未实现**，除非标明已实现。每个切片的开发都在与生产隔离的环境进行，切片完成不等于部署；部署需另行授权并走既有门禁。
 
 ## 1. 当前源码与部署记录基线
 
 | 能力 | 当前事实 | 尚未完成的边界 |
 | --- | --- | --- |
-| 运行装配 | 当前授权部署（2026-10-31）：Character **test.25**、Interaction **test.9**、Agent I/O **test.5**、Conversation Manager **test.2** 与 QQTK Iteration 05 补丁（QQTK PR #6 / Character PR #7 已合并到 main）；DSH **0.2.1-rc.3**、Node **24.21.0**、Windows | 不等于 Mac/其他 DSH 构建可安装或验收；真实 QQ 手机收件与分泡节奏未验收 |
+| 运行装配 | 当前授权部署（2026-11-01）：Character **test.25**、Interaction **test.9**、Agent I/O **test.6**、Conversation Manager **test.2** 与 QQTK Iteration 06 补丁（QQTK PR #7 / Character PR #8 已合并到 main）；DSH **0.2.1-rc.3**、Node **24.21.0**、Windows | 不等于 Mac/其他 DSH 构建可安装或验收；真实 QQ 手机收件与分泡节奏未验收 |
 | 会话 | 独立 Conversation Manager **test.2**，QQTK 为薄会话适配；隔离恢复/唯一路由已有验证 | 模拟第二平台不代表真实第二平台；旧提醒根/单写入者约束保留 |
 | Interaction | **test.9** 已部署（Iteration 04）只提交完整气泡，`bind` 只用 `sendText`，QQ 侧经 `sendMessage()` 发送 | 真实 QQ 手机收件与实机分泡节奏未验收 |
 | Worker | 原生 Creator/Worker Preset、显式委派、工具范围守卫；test.23 记录 13 Preset 健康 | 部分 Host 探针限时未完成；真实任务质量另验 |
 | Memory/Inspector | SQLite Schema 3、记忆 L1/L2/L3、来源治理及可选 Inspector | 与通信 L1/L2/L3 无关；长期效果/桌面体验/大库性能另验 |
-| 通知/Long Tasks | 原生 Schedule + 既有持久 Outbox、稳定目标/去重及可选 Long Tasks | 通用 Notification 尚未抽离；手机投递未全验 |
+| 通知/Long Tasks | 原生 Schedule + 既有持久 Outbox、稳定目标/去重及可选 Long Tasks | Iteration 07 源码（未部署）：Outbox 经 Agent I/O 通知器发送，独立授权；手机投递未全验 |
 | 平台/原生窗口 | QQ Official Bot/SDK 版本化补丁；QQ 聊天输出不再使用 SDK stream（Iteration 04）；原生窗口保留原生 UI/Streaming | QQ Personal、统一平台仓库未实现；Interaction 原生窗口出站分泡/Hang-on 未完整适配 |
 
 Character 单元 215、安全审计 33、QQTK 轻量 55/审批 6 是 [STATUS](../STATUS.md) 的 test.23 **历史记录**（各迭代当前的测试数量见 STATUS 对应小节）；Host 探针多用合成 Sender/LLM。`--workers --manager` 在 55 秒期限内未完成，不列为通过。真实 QQ 手机收件、审批按钮、流式残留和生产回滚演练不能假定已验收。
@@ -120,7 +120,7 @@ Character 单元 215、安全审计 33、QQTK 轻量 55/审批 6 是 [STATUS](..
 
 ### 3.5 Iteration 06：HITL Bridge
 
-**状态**：源码完成（QQTK `dsh-agent-io@0.1.0-test.6` + QQ 补丁；Character 仅部署计划、探针与文档），自动化测试、代码隔离 SDK 审计与隔离 rc.3 Host 探针通过；**未部署、未合并**；真实 QQ 按钮/手机未验收。
+**状态**：源码完成（QQTK `dsh-agent-io@0.1.0-test.6` + QQ 补丁；Character 仅部署计划、探针与文档），自动化测试、代码隔离 SDK 审计与隔离 rc.3 Host 探针通过；PR 已合并（QQTK `61ad840`、Character `4a2ac56`），2026-11-01 已授权部署；真实 QQ 按钮/手机未验收。
 
 **实现**：
 
@@ -134,6 +134,18 @@ Character 单元 215、安全审计 33、QQTK 轻量 55/审批 6 是 [STATUS](..
 **验收证据**：QQTK 新增 `hitl.test.mjs`（Gateway 接线 + `openQQHITL` + QQ 键盘/按钮解码：允许/拒绝/取消/超时/发送失败/未知/部分发送、单题/多题/按钮/文本、Owner 与群成员、伪造与跨会话、重复点击、旧按钮、轮换与撤权、启停、文本闸门、卸载、原生透传与签发限制）；SDK 审计 Q22/Q23 以真实 SDK 消息代码验证键盘请求、交互事件分发与确认码；隔离 rc.3 探针以原生 `approval.decide()` 与 `userQuestions.ask()` 验证真实 waterfall；变异检查 14/15 被捕获（1 项等价）。
 
 **未覆盖**：真实 QQ 键盘显示与点击、手机端；同一 Session 并发审批的排队（第二个仍 `unavailable`）；HITL 状态持久化与重启恢复；跨聊天/HITL/Notification 的统一优先级与背压；通知/提醒（07）。
+
+### 3.6 Iteration 07：Notification
+
+**状态**：源码完成（QQTK `dsh-agent-io@0.1.0-test.7` + QQ 补丁 + Remote Ops `1.1.1-test.2`；Character Identity Outbox 模块与 test.26 包），自动化测试、代码隔离 SDK 审计与隔离 rc.3 Host 探针通过；**未部署、未合并**；真实 QQ 通知/手机未验收。
+
+**模块形态与理由**：不新建插件。L1 的发送通道放在 Agent I/O（`conversation.openNotifications()`），因为它必须与聊天共用同一 Conversation 队列、去重与平台 Adapter；持久状态与授权留在 Character Identity 的既有 Outbox（新模块 `outbox.mjs`），因为 Owner、`qq_bindings` 历史证据与 SQLite 只在那里——另立插件会形成第二个写入者或跨插件复制授权证据（ADR-055）。独立 QQTK 由 Remote Ops 账本承担同一角色。两种形态互斥：有 Character 时 Remote Ops 只委托 Outbox。
+
+**实现**：稳定目标与独立授权（每个分片前的准入 + 通知方 `authorize`，不要求当前 Session，凭据不可伪造）；Outbox 状态机（持久认领、sending → unknown 恢复、仅证明未发出时回到 pending、终态条件写入、HMR 所有权交接、关闭时取消排队交接）；提醒来源 Session 记入 `identity_state` 并在发送时复核绑定；Schedule、Long Tasks、Remote Ops 与 `notify()` 统一入队；Remote Ops 去掉直发、如实记账；Character 部署门禁要求 test.7。
+
+**验收证据**：QQTK `notifications.test.mjs`、SDK 审计 Q24；Character `notification-service.test.mjs` 与更新后的 `notifications.test.mjs`；变异检查 15/15；rc.3 Interaction（已安装 test.7 通知器 + 真实 Outbox）、Inspector（原生 Schedule 到期）与 Lifecycle（轮换/冷恢复后的旧 Session 提醒、长任务、Manager 重装）探针。
+
+**未覆盖**：真实 QQ 主动推送额度与手机显示；生产 Outbox 升级前的离线审计（部署切片执行）；跨服务优先级/公平性；多进程同一 Outbox；升级前遗留且无来源记录的待发提醒需人工处理。
 
 ## 4. 后续验收矩阵与停止条件
 

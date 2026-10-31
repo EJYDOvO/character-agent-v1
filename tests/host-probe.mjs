@@ -1,5 +1,6 @@
 import fs from 'node:fs';import assert from 'node:assert/strict';import {randomUUID} from 'node:crypto';import sourceDigest from '../scripts/source-digest.cjs';
 import {managerFixture} from './qq-manager-fixture.mjs';
+import {notifierFixture} from './notifier-fixture.mjs';
 export const name='character-test-probe';export const inject=['agents','agentPresets','tools','characterIdentity','characterMemory'];
 export function apply(ctx,config){
  ctx.effect(()=>{const timer=setTimeout(()=>void run(),1500);return()=>clearTimeout(timer);});
@@ -10,7 +11,7 @@ export function apply(ctx,config){
    const base=[...ctx.tools.view(creator).visible.keys()],actual=[...ctx.tools.view(character).visible.keys()];
    assert.deepEqual(base.filter(n=>!actual.includes(n)),[]);assert(actual.includes('character_remember'));report.checks.push('Creator tool registry parity');report.tools={creator:base,character:actual};
    const identity=ctx.get('characterIdentity');const deliveries=[],manager=managerFixture();
-   const release=identity.attach({manager,config:{appId:'mock-app',preset:'qq-character',access:{c2cMode:'allowlist',c2cAllow:['mock-owner'],groupMode:'disabled'}},sender:{sendMarkdown:async(t,text)=>deliveries.push({target:t.scope,text})}});
+   const release=identity.attach({manager,config:{appId:'mock-app',preset:'qq-character',access:{c2cMode:'allowlist',c2cAllow:['mock-owner'],groupMode:'disabled'}},sender:{sendMarkdown:async()=>{throw Error('no direct Gateway send');}},notifications:notifierFixture(async(t,text)=>deliveries.push({target:t.scope,text}))});
    const bind=async agent=>{manager.commit({sessionId:agent.session.header.id,agent,agentPreset:'qq-character',scope:'c2c',peerId:'mock-owner',senderId:'mock-owner'});await manager.getOrCreate('c2c','mock-owner','mock-owner',{scope:'c2c',targetId:'mock-owner'});};await bind(character);
    const call=async(agent,name,args)=>JSON.parse(await ctx.tools.get(name,agent).execute(args,{agent}));
    const row=await call(character,'character_remember',{kind:'semantic',statement:'集成测试偏好：中文短报告 '+character.id});assert.equal(row.status,'uncertain');

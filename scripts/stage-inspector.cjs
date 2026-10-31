@@ -17,6 +17,7 @@ const schema=yaml.DEFAULT_SCHEMA.extend([new yaml.Type('tag:yaml.org,2002:js',{k
  if(workerProbe&&(realModel||modules))throw Error('--workers uses its own deterministic native Host fixture');
  const specialists=extras||workerProbe?['worker-review']:[],community=workerProbe?['worker-community',{id:'root-planner-worker',alias:'external-planner'}]:[];
  const workerIds=selectedWorkerIds(specialists,community);configureWorkers(character,specialists,community);
+ character.config.plugins.find(p=>p.id==='delegation').config.find(p=>p.id==='tool-subagent').name=local('packages/character-memory-tools/subagent.mjs');
  character.config.plugins.push({id:'memory-tools',name:local('packages/character-memory-tools/character.mjs'),config:{workerPresets:workerIds,communityWorkerPresets:community}});
  const {communityWorkerIds}=await import('../packages/character-memory-tools/worker-policy.mjs');
  const external=communityWorkerIds(community),workers=workerIds.filter(id=>!external.includes(id)).map(workerPreset);

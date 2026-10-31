@@ -188,7 +188,7 @@ export function apply(ctx,config){
    const mediaDir=path.join(config.cwd,'media-probe');fs.mkdirSync(mediaDir,{recursive:true});const mediaConfig={sendFile:{restrictPaths:true,extraRoots:[]},cwd:fs.realpathSync(mediaDir)};
    const mediaCalls=[],mediaBot={creds:{},async uploadMedia(o){mediaCalls.push({stage:'upload',fileType:o.fileType,srvSendMsg:o.srvSendMsg,path:o.localPath});return {file_uuid:'synthetic-uuid',file_info:'synthetic-info'};},
     mediaApi:{async sendMediaMessage(_scope,_target,info,_creds,opts){mediaCalls.push({stage:'message',info,msgId:opts.msgId});return {id:'synthetic-media-'+mediaCalls.length};}}};
-   const releaseAdapter=plainConversation.registerAdapter(createQQTextAdapter({limit:3500,split:t=>[t],send:async(target,text,info)=>{plainSent.push({text,msgId:target.msgId,...(info?.keyboard?{keyboard:info.keyboard}:{})});return {id:'receipt-'+plainSent.length};},
+   const releaseAdapter=plainConversation.registerAdapter(createQQTextAdapter({limit:3500,split:t=>[t],send:async(target,text,info)=>{if(text==='notify-timeout')throw Object.assign(Error('API'),{name:'ApiError',httpStatus:0});plainSent.push({text,msgId:target.msgId,...(info?.keyboard?{keyboard:info.keyboard}:{}),...(info?.notification?{notification:true,targetId:target.targetId}:{})});return {id:'receipt-'+plainSent.length};},
     sendMedia:(target,attachment)=>sendMedia(mediaBot,new ReplyLimiter({limit:4}),mediaConfig,target,attachment)}));
    const plainHandler=createInteractionOutbound(ctx,plainManager,sender,plainConfig,logger,ctx.tools,null,{...io,sendMessage:r=>{ids.push(r.id);return io.sendMessage(r);}},plainConversation);
    const releasePlain=ctx.on('session/event',plainHandler);
@@ -299,6 +299,44 @@ export function apply(ctx,config){
        const after=plainSent.length;
        assert.deepEqual(await nativeWait(base),['pending','cancelled'],'after close the native answerers own the requests again');
        assert.equal(plainSent.length,after);
+      }
+      // Iteration 07 Notification: the installed Agent I/O notifier and the real Character
+      // Outbox (temporary SQLite) behind the reviewed QQ adapter on the real Host.
+      {
+       const notifier=plainConversation.openNotifications();assert(notifier&&typeof notifier.send==='function','installed dsh-agent-io offers openNotifications');
+       const historic=await io.sendMessage({target:plainConversation.target(plainRecord),origin:{sessionId:'historical-session'},message:{text:'旧会话聊天'}});
+       assert.deepEqual([historic.status,historic.reason],['not-sent','stale'],'chat keeps the current-Session check');
+       const owner={type:'direct',id:'synthetic-owner'};let before=plainSent.length;
+       const ok=await notifier.send({id:'probe-notify-1',conversation:owner,text:'[提醒到期] probe',authorize:t=>t.type==='direct'&&t.id==='synthetic-owner'});
+       assert.equal(ok.status,'sent');assert.deepEqual(plainSent.slice(before),[{text:'[提醒到期] probe',msgId:undefined,notification:true,targetId:'synthetic-owner'}],'stable target, no Session');
+       assert.equal((await notifier.send({id:'probe-notify-2',conversation:owner,text:'x',authorize:()=>false})).reason,'unauthorized');
+       assert.equal((await notifier.send({id:'probe-notify-3',conversation:{type:'direct',id:'stranger'},text:'x',authorize:()=>true})).reason,'unauthorized','Gateway admission still applies');
+       const forged=await io.sendMessage({target:plainConversation.target(plainRecord),origin:{notification:{authorize:()=>true,closed:()=>false}},message:{text:'伪造通知'}});
+       assert.deepEqual([forged.status,forged.reason],['not-sent','unauthorized']);
+       // The real Outbox state machine on the real notifier.
+       const {createOutbox}=await import(new URL('../packages/character-identity/outbox.mjs',import.meta.url).href);
+       const {DatabaseSync}=await import('node:sqlite');
+       const dbFile=path.join(config.cwd,'outbox-probe.sqlite'),db=new DatabaseSync(dbFile);
+       db.exec("CREATE TABLE outbox(id TEXT PRIMARY KEY,kind TEXT NOT NULL,conversation TEXT NOT NULL,text TEXT NOT NULL,status TEXT NOT NULL,at TEXT NOT NULL);CREATE TABLE identity_state(key TEXT PRIMARY KEY,value TEXT NOT NULL);");
+       db.prepare("INSERT INTO outbox VALUES('crashed','task_completed','qq-probe','interrupted','sending',?)").run(new Date().toISOString());
+       const outbox=createOutbox({db,key:dbFile});await outbox.ready;
+       for(const [id,text] of [['ok','notify-ok'],['lost','notify-timeout']])outbox.enqueue({eventId:id,kind:'task_completed',text,conversation:'qq-probe'});
+       before=plainSent.length;
+       const opts={notifier,conversation:'qq-probe',target:owner,eligible:()=>true,authorize:(_row,_src,t)=>t.id==='synthetic-owner'};
+       await outbox.pump(opts);await outbox.pump(opts);
+       const statuses=Object.fromEntries(db.prepare('SELECT id,status FROM outbox').all().map(r=>[r.id,r.status]));
+       assert.deepEqual(statuses,{crashed:'unknown',ok:'sent',lost:'unknown'},'interrupted → unknown, sent, timed out → unknown');
+       assert.deepEqual(plainSent.slice(before).map(m=>m.text),['notify-ok'],'unknown and interrupted rows are never resent');
+       await outbox.close();
+       // Keep this installed I/O and its result cache alive while only Outbox
+       // reloads. A proven-unsent result must not poison the next owner's id.
+       let admitted=false;const retryOpts={...opts,authorize:()=>admitted};
+       const retry=createOutbox({db,key:dbFile});retry.enqueue({eventId:'hmr-retry',kind:'task_completed',text:'notify-hmr-retry',conversation:'qq-probe'});
+       await retry.pump(retryOpts);assert.equal(retry.status('hmr-retry'),'pending');await retry.close();
+       admitted=true;const next=createOutbox({db,key:dbFile});await next.pump(retryOpts);
+       assert.equal(next.status('hmr-retry'),'sent');assert.equal(plainSent.filter(m=>m.text==='notify-hmr-retry').length,1,'real I/O cache retained across Outbox HMR');
+       await next.close();db.close();notifier.close();
+       report.checks.push('Installed dsh-agent-io notifier on the real Host: stable-target notification without a current Session, authority and Gateway admission per part, forged grant refused, chat stays Session-checked; the real Character Outbox records sent/unknown and never resends an interrupted or unknown row');report.notifications='exercised';
       }
      }finally{channel.close();}
      report.checks.push('Installed dsh-agent-io inbound: a QQ event becomes one native input through the shared Conversation handoff and its reply goes out through the I/O; duplicate push and stranger add nothing');report.inbound='exercised';

@@ -172,6 +172,15 @@ test('A QQ patch that opens the HITL Bridge refuses dsh-agent-io test.5 and acce
  const test6=join(f.root,'test6.tgz');tarball(test6,'0.1.0-test.6',name,{'index.mjs':index,'conversation.mjs':'function openCommands(){} function openHITL(){}','hitl.mjs':'export function createHITLBridge(){}'});
  assert.equal(plan.verifiedAgentIO(f.live,core,patches,['--agent-io-artifact='+test6]).version,'0.1.0-test.6');
 });
+test('A QQ patch that opens the Agent I/O notifier refuses dsh-agent-io test.6 and accepts a test.7 with openNotifications',()=>{
+ const f=fixture(),qqPatch=join(f.root,'maintenance/patches/dsh-qqbot@0.5.2.patch'),name='dsh-agent-io',core=[{insert:[{id:'agent-io',name,config:{}}]}];
+ write(qqPatch,"+export const inject = ['agents', 'conversationManager', 'agentIO'];\n+    const conversation = io.openConversation({ platform: QQ_OFFICIAL });\n+    const router = conversation.openCommands({ prefixes: ['/'] });\n+    return conversation.openHITL({\n+    const notifications = conversation.openNotifications();\n");
+ const patches=plan.patchPlan(f.live,f.root,{load:JSON.parse}).patches,index="ctx.provide('agentIO',{sendMessage,registerAdapter,openInbound,openConversation});",hitl='export function createHITLBridge(){}';
+ const test6=join(f.root,'test6.tgz');tarball(test6,'0.1.0-test.6',name,{'index.mjs':index,'conversation.mjs':'function openCommands(){} function openHITL(){}','hitl.mjs':hitl});
+ assert.throws(()=>plan.verifiedAgentIO(f.live,core,patches,['--agent-io-artifact='+test6]),/openNotifications \(0\.1\.0-test\.7 or later\)/);
+ const test7=join(f.root,'test7.tgz');tarball(test7,'0.1.0-test.7',name,{'index.mjs':index,'conversation.mjs':'function openCommands(){} function openHITL(){} function openNotifications(){}','hitl.mjs':hitl});
+ assert.equal(plan.verifiedAgentIO(f.live,core,patches,['--agent-io-artifact='+test7]).version,'0.1.0-test.7');
+});
 test('the Character QQ wrapper declares agentIO and generated Core installs dsh-agent-io',()=>{
  const adapter=readFileSync(new URL('../packages/character-qq-adapter/index.mjs',import.meta.url),'utf8'),build=readFileSync(new URL('../scripts/build.cjs',import.meta.url),'utf8');
  assert.match(adapter,/export const inject=\[[^\]]*'agentIO'/);

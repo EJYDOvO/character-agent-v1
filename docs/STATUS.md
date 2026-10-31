@@ -2,9 +2,41 @@
 
 本页是版本与验收状态的统一入口。历史发布记录说明当时结果，不代表最新运行状态。
 
-## Iteration 06 源码（Agent I/O test.6，未部署）
+## Iteration 07 源码（Character test.26 / Agent I/O test.7，未部署）
 
-HITL Bridge：原生审批与 `ask_user_question` 的 QQ 展示和作答迁移到 Agent I/O。全部为源码与隔离验证，**未部署、未合并**；运行实例为下一节的 Agent I/O test.5。
+Notification：主动通知统一经 Agent I/O 发送，保留稳定目标、持久 Outbox、原生 Schedule 与独立授权边界。全部为源码与隔离验证，**未部署**；运行实例为下一节的 Character test.25 / Agent I/O test.6。
+
+- **调用链**：原生 Schedule 提醒（`schedule:` + sha256(schedule_id, occurrence)）、Long Tasks 结果（`long-task:<run>`）、Remote Ops 维护/长任务提示（`qqtk:<key>`）与 `notify()` 都只写入 Character Identity 的既有 SQLite Outbox；Outbox 是唯一写入者，经 QQ Gateway 交来的 Agent I/O 通知器发送。原 `runtime.sender.sendMarkdown` 直发路径删除。通知不成为 Agent 输入，不产生 Turn。
+- **授权**：通知发往 Owner 私聊的稳定 Conversation，不要求来源 Session 仍是当前 Session。每个分片前复核：仍是同一次 Gateway 附加、Owner-only 访问配置、Owner 私聊 Conversation；提醒另须其来源 Session 仍有持久 `qq_bindings` 证据（来源 Session 随行记在 `identity_state` 的 `outbox-source:<eventId>`，不改表结构）。无绑定证据的根仍被拒绝；升级前遗留、没有来源记录的待发提醒保持 pending，不发送，等待人工审查。普通聊天、HITL 的当前 Session 检查与 Memory ACL 不变。
+- **状态**：pending → sending → sent | unknown | partial | not-sent，或 pending → cancelled。持久认领后才交出；进程中断留下的 sending 在下一个所有者启动时记为 unknown，永不重发；只有平台之前被证明未发出（未授权、未准入、Gateway 关闭、队列满）或限流的尝试回到 pending 并暂缓；平台明确拒绝记为 not-sent。终态写入只作用于本所有者仍持有的 sending 行；HMR 时新实例等旧实例关闭后才恢复和发送。新增的 not-sent/partial 对旧代码只是未知状态（回滚安全）。
+- **入口修复**：此前 pump 正在运行时 `notifySystem` 会立刻看到 pending 并抛错，Remote Ops 把实际稍后送达的通知记为 failed；现在 pump 串行并为后到调用补跑一轮，错误携带 Outbox 状态。
+- **定向复审修复**：Pump 补跑使用最新附着上下文；旧尝试的迟到拒绝不能覆盖新附着释放的授权暂缓。I/O ID 使用事件哈希、实例 UUID 与尝试号，保持原始持久事件 ID，并满足 I/O 的 256 字符限制。关闭等待真实在途交接和前任所有者，重复 close/连续 HMR 不提前释放 SQLite；若底层永不结束则保持关闭等待，宁可暂缓接管。分页越过暂缓行，20 条缺来源的旧提醒不再阻塞后续合法事件；同时间戳按既有 SQLite rowid 保留入账顺序，不按事件 ID 重排。自动 Pump 的存储故障捕获后明确告警。
+- **Remote Ops**（QQTK `1.1.1-test.2`，Character 部署不需要）：与 Character 集成时只由 Outbox 发送；独立运行时经通知器发送并如实记录状态，不再直接调用 Sender。
+- **启停与排序**：QQ `notifications.enabled: false` 时不打开通知器，Outbox 中的通知保持 pending。通知与聊天共用同一 Conversation 的 I/O 队列（先后顺序、有界、可取消），没有优先级或公平性保证；Outbox 一次只交出一条，不会成串阻塞聊天。
+- **部署依赖**：需要 `dsh-agent-io@0.1.0-test.7`（部署计划在补丁调用 `openNotifications()` 时要求，已安装 test.6 须显式 `--agent-io-artifact` 升级）与 Character test.26 包（Identity 变更，Core 成套升版）；SQLite 不迁移、不改表。
+
+PR 初次验证（历史基线，未部署、未连接 QQ）：QQTK 轻量 190（新增通知 7：稳定目标、伪造凭据、逐片授权与准入、与聊天同队列的顺序/队列满/取消、平台结果、Remote Ops 账本与唯一发送方）、边界 3、代码隔离 SDK 审计 35（新增 Q24：真实 SDK 消息代码发出的通知、无输入时主动推送、限额内复用被动回复 ID、超时/5xx 为 unknown、403 为 not-sent）、两份补丁重建一致且可应用；Character 单元 232（新增 Outbox/通知 10：去重与并发、各结果、授权暂缓、崩溃与落盘失败、HMR 交接、关闭、轮换后旧 Session 的合法提醒、伪造根与发送前撤销绑定/撤权、遗留提醒、pump 串行）、安全审计 33；变异检查 15/15 被捕获；隔离 rc.3 Host：Interaction 探针 26 项（已安装 test.7 的通知器与真实 Outbox：无当前 Session 的稳定目标、伪造凭据拒绝、聊天仍需当前 Session、中断与超时为 unknown 不重发），Inspector 探针（真实 Identity + 原生 Schedule 到期 → Outbox → 通知器，去重）与 Lifecycle 探针（轮换与冷恢复后的旧 Session 提醒、长任务结果、Manager 卸载重装不重放 Outbox）通过，`qqNetwork: false`。
+
+未验证：真实 QQ 主动推送额度、通知在手机上的显示；生产 Outbox 上的升级（部署时应先离线审计 pending/sending 行）；跨服务优先级与公平性；多进程同时打开同一 Outbox（依赖单活部署约束）；`run-generic-probe` 使用生产凭据，未运行。
+
+定向复审追加验证（未部署）：Character 单元 247/247、安全审计 33/33；QQTK 单元 194/194、SDK 隔离审计及边界 38/38，两份补丁重建并在上游快照应用一致。新增回归覆盖重附着时六类旧发送结果及并发调用、保留 I/O 缓存的 HMR 重试、发送 ID 长度、连续 HMR 与重复 close、暂缓行分页、固定同毫秒入账的批量 FIFO、真实临时 SQLite 写锁/只读故障，以及 Remote Ops 初次落盘失败、写入结果不确定、终态写入失败和旧实例迟到写回。rc.3 Interaction/Notification 与 Inspector 探针通过；Lifecycle 的一次重启阶段出现原生 Subagent `cannot create effect on inactive context`，后续全新 Profile 复测及未改 PR Head 的两次对照通过，根因尚未确认，不将首次失败抹去或宣称稳定性完全验收。首次推送的 Ubuntu CI 捕获分页实现将同毫秒批量提醒按事件 ID 重排的回归，已以固定时间用例复现并改用入账顺序；未降低原顺序断言。
+
+后续生命周期排查：在真实 rc.3 的 Context 已关闭、Agent 尚未移出注册表的窗口重载原生 Spawn，首轮稳定复现同一 INACTIVE_EFFECT 调用点。既有 Tools 包内增加薄适配，仅过滤已关闭 Context，其他原生逻辑与错误透传；适配后压力探针 30 轮通过，正式 Lifecycle 探针增加每次启动三轮复现回归。原首次失败缺少阶段日志，无法追溯其具体热重载顺序。新增阶段标记供后续定位；不再将这类异常作为无法验证的假设，也不改官方 DSH。Worker 真实 Host 两阶段回归仍保留原生工具、白名单、深度和冷恢复断言。
+
+升级/回滚边界：尚未保护真实运行数据。从不包含本修复的旧代码升级，或回滚到旧代码，必须停止旧 Host 并确认退出后再切换，不能依赖旧实现的 10 秒关闭超时或跨版本 HMR。新实现内部 HMR 的所有权防护不能约束仍在执行的旧版代码。底层发送永久不结束时，关闭会等待而不放开所有权；需停净进程后以 unknown 屏障冷恢复，不盲目补发。
+
+## Iteration 06（Agent I/O test.6，已授权部署）
+
+2026-11-01 按授权部署：QQTK `main` `61ad840`（PR #7）的补丁与 70 个维护文件（新增 `ops.cjs` 与 `manage.ps1`：其 verify/Stage 改查 HITL Bridge 接线），Character `main` `4a2ac56`（PR #8）；已安装的 `dsh-agent-io` 经显式 `--agent-io-artifact` 由 test.5 升至 test.6，tarball 与在 `main` 上重跑的隔离 rc.3 探针（25 项，`hitl`/`inbound`/`media` 均已实测）所装的包逐字节一致。Character 包、Interaction test.9 与 Conversation Manager test.2 不变。
+
+- **第一次切换未完成并已自动回滚**：分离启动的 Windows PowerShell 继承了 pwsh 的模块路径，离线快照脚本找不到 `Get-FileHash`；失败发生在停机之后、快照/审计/Profile 替换/维护文件替换之前，部署脚本恢复策略文件并以原 Profile（Agent I/O test.5）重启，QQ 重新连接（`ready`）。留下一个空的快照目录 `20261101-035837`（0 个文件）。改用 Windows PowerShell 自身的模块路径后第二次切换成功。
+- **切换**：停机一致性快照 `20261101-035945`（404 个文件）；离线审计无未完成 Turn/审批（26/26）、无 active 提醒、Outbox 不变（sent 3）、Memory Schema 3 / 15 条；最终路径冻结锁文件安装与逐文件比对通过，维护完整性校验（新 `ops.cjs verify`）通过。
+- **启动后**：新 Host 13 个 Preset 健康、单一 QQ Gateway（`Bot ready` 一次、QQ `connected/ready`）、`agent-io` test.6 与 Manager 激活、官方 ASAR 未变、错误日志为空；Owner 上下文、只读 Inspector、未登录/外站拒绝、QQ 路由、旧偏好、提醒与 Outbox 检查通过。旧 Profile 保留以便回滚。
+- 部署前（11-01 03:09 起）旧 Host 的 QQ 健康记录停在 `reconnecting`：同期 Host 有 `ERR_NAME_NOT_RESOLVED`，为本机网络/DNS 中断；SDK 以 resume 重连成功时不更新该记录，因此当时无法确认是否已恢复。切换（含回滚那次重启）后 QQ 均为全新连接并 `ready`。
+
+未发送 QQ 验收消息：真实 QQ 审批/问答按钮的显示与点击、手机端仍未验收。
+
+HITL Bridge：原生审批与 `ask_user_question` 的 QQ 展示和作答迁移到 Agent I/O（QQTK PR #7 / Character PR #8，定向审查的多题发送竞态与文档基线修复后合并）。
 
 - **权威不变**：原生 Approval（`approval/request`）与 `userQuestions.ask()`（`user-questions/request`）仍是唯一业务权威：审批策略、结果闭合集合（`allowed-once|rejected|cancelled|unavailable`）、审计事件与 `ASK_ABORTED` 错误语义都不变。Bridge 只负责请求关联、展示、可信回应、取消、超时与状态清理。
 - **集中接入**：`dsh-agent-io@0.1.0-test.6` 在第一个平台打开 Bridge 时以 `prepend` 注册这两个原生 waterfall 的监听器一次，最后一个关闭时移除；不属于已打开 Bridge 当前 Session 的请求原样交给原生 Web/Desktop。不再修改全局 `userQuestions.ask`。
@@ -17,7 +49,7 @@ HITL Bridge：原生审批与 `ask_user_question` 的 QQ 展示和作答迁移�
 
 未验证：真实 QQ 按钮键盘的显示与点击（含 keyboard 权限、群聊点击字段）、手机端；同一 Session 并发的第二个审批仍为 `unavailable`；HITL 状态只在内存，重启即取消；`run-generic-probe` 使用生产凭据，未运行。
 
-## Iteration 05（Agent I/O test.5，已授权部署）
+## Iteration 05（Agent I/O test.5，2026-10-31 授权部署，已由 Iteration 06 取代）
 
 2026-10-31 按授权部署：QQTK `main` `47a2a43` 的补丁与 67 个维护文件、Character `main` `15ec724`；已安装的 `dsh-agent-io` 经显式 `--agent-io-artifact` 由 test.4 升至 test.5（tarball 与在 `main` 上重跑的隔离 rc.3 探针所装的包一致）。Character 包、Interaction test.9 与 Conversation Manager test.2 不变。停机一致性快照 400 个文件；离线审计无未完成 Turn/审批、无 active 提醒、Outbox 不变、Memory Schema 3 / 15 条；最终路径冻结锁文件安装与逐文件比对通过；新 Host 13 个 Preset 健康、单一 QQ Gateway、`agent-io` test.5 与 Manager 激活，部署后 Owner 上下文/Inspector/路由/提醒/Outbox 检查通过；旧 Profile 保留以便回滚。未发送 QQ 验收消息，真实 QQ 命令、媒体与手机端仍未验收。
 

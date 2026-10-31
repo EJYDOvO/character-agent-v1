@@ -4,6 +4,8 @@ import {pathToFileURL} from 'node:url';
 import {createUserMessage} from '@deepseek-ai/dsh-llm';
 import {DatabaseSync} from 'node:sqlite';
 import {defineTool} from '@deepseek-ai/dsh-tools';
+import {notifierFixture} from './notifier-fixture.mjs';
+import {verifySubagentLifecycle} from './subagent-lifecycle-host.mjs';
 export const name='isolated-lifecycle-probe';
 export const inject=['agents','agentPresets','tools','skills','sessions','schedule','characterIdentity','memoryIdentity','dshMemory','longTasks','lifecycleFixture'];
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
@@ -13,6 +15,10 @@ export function apply(ctx,config){
  async function run(){
   const checkpoint=config.cwd+'/checkpoint.json',restart=fs.existsSync(checkpoint),state=restart?JSON.parse(fs.readFileSync(checkpoint)):null,report={ok:false,runId:config.runId,restart,host:config.version,provenance:config.provenance,qqNetwork:false,provider:'deterministic fixture',checks:[]};let manager,detach;
   try{
+   report.phase='subagent-disposal-hmr';
+   const cycles=await verifySubagentLifecycle(ctx,{cwd:config.cwd,native:config.nativeSubagent===true});
+   report.checks.push(`Native Spawn reload during Context disposal: ${cycles} cycles; live/new Agents keep tools`);
+   report.phase='conversation-recovery';
    const conversations=ctx.get('conversationManager');assert(conversations);
    const fakeOptions={context:ctx,preset:'cordis',cwd:config.cwd,provider:'task-fixture',model:'fixture',sessionIdleTimeout:0,sessionLifecycle:{enabled:false},adapter:{
     key:(scope,peer)=>'mock:tenant:'+JSON.stringify([scope,peer]),lifecycleScope:()=>true,acceptActivity:()=>true,isUserInput:t=>!!t?.inputId,inputId:t=>t?.inputId,
@@ -35,7 +41,7 @@ export function apply(ctx,config){
    report.checks.push('Second non-QQ Adapter: namespace lease, concurrent root, cold resume and Memory denial');
    const {SessionManager}=await import(pathToFileURL(config.qqFixture+'/dist/session/session-manager.js').href),deliveries=[];
    manager=new SessionManager(ctx,ctx.agents,{appId:'fixture-app',preset:'qq-character',cwd:config.cwd,provider:'task-fixture',model:'fixture',sessionIdleTimeout:600000,sessionLifecycle:{enabled:true,freshOnHostRestart:true,inactivityMs:43200000}},ctx.logger);
-   detach=ctx.characterIdentity.attach({manager,config:{appId:'fixture-app',preset:'qq-character',sessionLifecycle:manager.config.sessionLifecycle,access:{c2cMode:'allowlist',c2cAllow:['fixture-owner'],groupMode:'disabled'}},sender:{async sendMarkdown(target,text){deliveries.push({target,text});}}});
+   detach=ctx.characterIdentity.attach({manager,config:{appId:'fixture-app',preset:'qq-character',sessionLifecycle:manager.config.sessionLifecycle,access:{c2cMode:'allowlist',c2cAllow:['fixture-owner'],groupMode:'disabled'}},sender:{sendMarkdown:async()=>{throw Error('no direct Gateway send');}},notifications:notifierFixture(async(target,text)=>{deliveries.push({target,text});})});
    const get=id=>manager.getOrCreate('c2c','fixture-owner','fixture-owner',{scope:'c2c',targetId:'fixture-owner',msgId:id});
    const warm=await manager.getOrCreate('c2c','fixture-owner','fixture-owner',{scope:'c2c',targetId:'fixture-owner'});
    const warmState=manager.modelResolver.prefs.getLifecycle(warm.sessionKey);
@@ -80,7 +86,7 @@ export function apply(ctx,config){
     const expire=()=>prefs.commitLifecycle(key,{...prefs.getLifecycle(key),lastUserAt:Date.now()-43200001,lastMessageId:'old',due:null});
     record.agent.followup(createUserMessage({source:{kind:'user'},content:[{type:'text',text:'owner-busy-fixture'}]}));const waitDeadline=Date.now()+5000;while(!control.waiting&&Date.now()<waitDeadline)await sleep(20);assert(control.waiting);
     expire();assert.equal((await get('busy-input')).sessionId,first);record.lastActivity=0;manager.evictor.check();assert(manager.sessions.has(key));control.release();await record.agent.whenIdle();
-    record=await get('after-busy');assert.notEqual(record.sessionId,first);
+    report.phase='idle-session-rotation';record=await get('after-busy');assert.notEqual(record.sessionId,first);
     expire();const concurrent=await Promise.all(Array.from({length:5},(_,i)=>get('parallel-'+i)));assert.equal(new Set(concurrent.map(r=>r.sessionId)).size,1);assert.notEqual(concurrent[0].sessionId,record.sessionId);record=concurrent[0];report.checks.push('12h user inactivity, busy/eviction protection, no fork and concurrent rotation');
     const deadline=Date.now()+72000;let tasks;
     while(Date.now()<deadline){tasks=await ctx.longTasks.list(record.agent);if([state.once,state.error,state.periodic].every(id=>{const r=tasks.find(t=>t.id===id)?.runs[0];return r&&r.status!=='running'&&r.notification==='sent';})&&deliveries.some(d=>d.text.includes('Legacy reminder')))break;await sleep(150);}
@@ -113,13 +119,13 @@ export function apply(ctx,config){
     await control.reloadConversations();assert.notEqual(ctx.get('conversationManager'),previousService);
     assert.throws(()=>previousService.openAdapter('late',{}));assert.equal(previousManager.isCurrentSession(oldRecord),false);assert.equal(oldRecord.typingKeepAlive,undefined);
     manager=new SessionManager(ctx,ctx.agents,previousManager.config,ctx.logger);
-    detach=ctx.characterIdentity.attach({manager,config:{appId:'fixture-app',preset:'qq-character',access:{c2cMode:'allowlist',c2cAllow:['fixture-owner'],groupMode:'disabled'}},sender:{async sendMarkdown(target,text){deliveries.push({target,text});}}});
+    detach=ctx.characterIdentity.attach({manager,config:{appId:'fixture-app',preset:'qq-character',access:{c2cMode:'allowlist',c2cAllow:['fixture-owner'],groupMode:'disabled'}},sender:{sendMarkdown:async()=>{throw Error('no direct Gateway send');}},notifications:notifierFixture(async(target,text)=>{deliveries.push({target,text});})});
     record=await manager.getOrCreate('c2c','fixture-owner','fixture-owner',{scope:'c2c',targetId:'fixture-owner'});assert.equal(record.sessionId,oldId);assert(ctx.characterIdentity.forSession(oldId));assert.equal(deliveries.length,4);
     report.checks.push('Native Manager unload/remount revokes old leases, releases Typing, restores one authoritative route and rebinds Identity without outbox replay');
     await control.disable();assert(!ctx.get('longTasks'));assert(tools.guardReason({agent,name:'task_fixture_read'}),'Unloaded service must deny retained task tools');
     agent.followup(duplicate);await agent.whenIdle();assert.equal(globalThis[Symbol.for('fixture.tasks.read.calls')],reads);assert.equal(deliveries.length,4);
    }
-   report.ok=true;
+   report.phase='complete';report.ok=true;
   }catch(error){report.error=error.stack;}finally{control.release();detach?.();await manager?.disposeAll().catch(()=>{});fs.writeFileSync(config.result,JSON.stringify(report,null,2));}
  }
 }

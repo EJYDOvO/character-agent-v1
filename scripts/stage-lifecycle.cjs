@@ -18,12 +18,14 @@ provenance.conversationPackageSha256=createHash('sha256').update(fs.readFileSync
 const qq=home+'/qq-fixture';fs.cpSync(install+'/data/profiles/desktop/node_modules/@tencent-connect/dsh-qqbot/dist',qq+'/dist',{recursive:true});fs.cpSync(toolkit+'/maintenance/qqbot-src/dist',qq+'/dist',{recursive:true});
 fs.writeFileSync(qq+'/package.json',JSON.stringify({type:'module'}));
 creator.id='preset-qq-character';creator.config.id='qq-character';creator.config.plugins.find(p=>p.id==='persona').config.prefix='Synthetic Character. No private Persona.';
+const nativeSubagent=process.argv.includes('--native-subagent');
+if(!nativeSubagent)creator.config.plugins.find(p=>p.id==='delegation').config.find(p=>p.id==='tool-subagent').name=local('packages/character-memory-tools/subagent.mjs');
 fs.writeFileSync(home+'/binding.json',JSON.stringify({appId:'fixture-app',ownerId:'fixture-owner',characterId:'fixture-character',projectId:'fixture-project'}));
 const rows=[{id:'session-title-llm',disabled:true},{id:'llm-pi-ai',disabled:true},{id:'agent-default-model',config:{provider:'task-fixture',model:'fixture'}},{insert:[creator,
  {id:'identity',name:local('packages/character-identity/index.mjs'),config:{presetId:'qq-character',bindingFile:home+'/binding.json',stateFile:home+'/coordination.sqlite',memoryMode:'character'}},
  {id:'memory',name:local('packages/character-memory-core/index.mjs'),config:{database:home+'/memory.sqlite',autoCapture:false,consolidation:false}},
  {id:'long-tasks',name:local('tests/lifecycle-fixture.mjs'),config:{cwd:home,conversationModule:pathToFileURL(dir+'/node_modules/dsh-conversation-manager/index.mjs').href,conversationStateFile:home+'/conversations.json',allowTools:['task_fixture_read'],taskPlugins:[{id:'fixture-read',name:local('tests/task-fixture-tools.mjs')}]}},
- {id:'probe',name:local('tests/lifecycle-host.mjs'),config:{cwd:home,result:home+'/result.json',runId,qqFixture:qq,version,provenance}}
+ {id:'probe',name:local('tests/lifecycle-host.mjs'),config:{cwd:home,result:home+'/result.json',runId,qqFixture:qq,version,provenance,nativeSubagent}}
 ]}];
 fs.writeFileSync(dir+'/cordis.patch.yml',dialect.dump(rows,{noRefs:true}));
 fs.writeFileSync(project+'/test-data/lifecycle-run.json',JSON.stringify({home,runId,result:home+'/result.json'}));console.log(JSON.stringify({home,runId,version,qqNetwork:false,productionDataCopied:false}));

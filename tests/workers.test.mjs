@@ -20,6 +20,7 @@ test('Root retains Creator and model selection; only native Spawn gets the trust
  const config=parent.config.plugins[0].config[0].config;
  assert.deepEqual(config.allowedAgentPresets,selectedWorkerIds(['worker-review'],['worker-community']));
  assert.equal(config.maxDepth,1);assert.equal(config.agentPreset,'worker-general');assert.equal(config.modelSelectionSettings,true);
+ assert.equal(parent.config.plugins[0].config[0].name,'dsh-character-memory-tools/subagent.mjs');
  assert.equal(parent.config.plugins[0].config[1],fork);assert.equal(parent.config.plugins[1],fs);
  assert(!('toolFilter' in config));assert(!('persona' in config));
  assert.throws(()=>configureWorkers({config:{plugins:[]}}),/changed/);

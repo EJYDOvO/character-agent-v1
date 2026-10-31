@@ -3,10 +3,11 @@ import { scheduledEvents } from './schedule.mjs';
 import { confirmationEvidence } from './confirmation.mjs';
 import { auditBindings } from './bindings.mjs';
 import { protectSession } from './boundary.mjs';
+import { createOutbox } from './outbox.mjs';
 import { DatabaseSync } from 'node:sqlite';
 import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { dirname, resolve } from 'node:path';
 export const name='character-identity';
 const digest=s=>createHash('sha256').update(s).digest('hex');
 // One revocable delegation slot per Bot, including module reloads.
@@ -26,8 +27,9 @@ export function apply(ctx,config) {
  if(previous&&previous.value!==fingerprint){db.close();throw Error('Identity scope changed; use a separate state directory or an explicit reviewed migration');}
  db.prepare("INSERT OR IGNORE INTO identity_state VALUES('scope',?)").run(fingerprint);
  db.prepare('INSERT OR IGNORE INTO qq_bindings SELECT session,conversation,? FROM routes WHERE conversation=?').run(presetId,conversationScope.conversationId);
- db.prepare("UPDATE outbox SET status='unknown' WHERE status='sending'").run();
- let runtime,detach,closed=false,pumping=false,auditing,gatewayEpoch=0;const listeners=new Set(),bound=new Set(),inputs=new Map();
+ // The durable Outbox (single writer); interrupted 'sending' rows become unknown once the previous owner closed.
+ const outbox=createOutbox({db,key:resolve(config.stateFile),logger:ctx.logger});
+ let runtime,detach,closed=false,auditing,gatewayEpoch=0;const listeners=new Set(),bound=new Set(),inputs=new Map();
  function isCurrentId(id){
   if(closed||!runtime)return false;
   const manager=runtime.manager,key=manager.sessionKey('c2c',binding.ownerId);
@@ -81,22 +83,24 @@ export function apply(ctx,config) {
   // must be issued by current, live QQ manager admission, never cold restore.
   if(hasReminderBinding(agent.id)&&ctx.get?.('agentPresets')?.composedPreset(agent.ctx)!==presetId)throw Error('Restored QQ Schedule preset mismatch');
  }
- async function pump(){
-  if(closed||!runtime||pumping)return;pumping=true;
-  try{for(const row of db.prepare("SELECT * FROM outbox WHERE status='pending' AND conversation=? ORDER BY at LIMIT 20").all('qq-'+digest(`${binding.appId}:c2c:${binding.ownerId}`))){
-   if(closed||!runtime)break;
-   if(!db.prepare("UPDATE outbox SET status='sending' WHERE id=? AND status='pending'").run(row.id).changes)continue;
-   try{await runtime.sender.sendMarkdown({scope:'c2c',targetId:binding.ownerId},row.text);if(!closed)db.prepare("UPDATE outbox SET status='sent' WHERE id=?").run(row.id);}
-   catch{if(!closed)db.prepare("UPDATE outbox SET status='unknown' WHERE id=?").run(row.id);}
-  }}finally{pumping=false;}
+ // Delivery of the Owner Conversation's pending rows through the attached
+ // Gateway's Agent I/O notifier (no direct Gateway send). Before every part the
+ // notifier re-runs this check: still this Gateway attachment with the Owner-only
+ // policy, the Owner's private Conversation, and for a reminder the persisted
+ // binding of the Session it came from (a rotated Session is fine; an unproven
+ // one is refused). Without a notifier rows stay pending.
+ function gatewayValid(value){try{validateGateway(value.config);return true;}catch{return false;}}
+ function pump(){
+  const value=runtime,epoch=gatewayEpoch;
+  if(closed||!value?.notifications)return Promise.resolve();
+  return outbox.pump({notifier:value.notifications,conversation:conversationScope.conversationId,target:{type:'direct',id:binding.ownerId},
+   // A reminder without its recorded source Session cannot be re-verified: it stays pending, explicitly.
+   eligible:(row,source)=>row.kind!=='scheduled_reminder'||!!source,
+   authorize:(row,source,target)=>!closed&&runtime===value&&gatewayEpoch===epoch&&gatewayValid(value)&&target.type==='direct'&&target.id===binding.ownerId
+    &&row.conversation===conversationScope.conversationId&&(row.kind!=='scheduled_reminder'||hasReminderBinding(source))});
  }
- function enqueue({eventId,kind,text,conversation}){
-  if(closed)throw Error('Identity disposed');
-  if(!['scheduled_reminder','task_completed','task_failed','task_timeout','maintenance_result','configured_alert'].includes(kind)||typeof eventId!=='string'||!eventId||eventId.length>256||typeof text!=='string'||!text.trim()||text.length>3000)throw Error('Invalid explicit event');
-  const old=db.prepare('SELECT * FROM outbox WHERE id=?').get(eventId);
-  if(old&&(old.kind!==kind||old.conversation!==conversation||old.text!==text))throw Error('Notification id conflict');
-  db.prepare("INSERT OR IGNORE INTO outbox VALUES(?,?,?,?, 'pending',?)").run(eventId,kind,conversation,text,new Date().toISOString());
- }
+ const enqueue=event=>outbox.enqueue(event);
+ const statusOf=id=>({status:outbox.status(id)});
  const service=Object.freeze({
   authorize,forSession,validateGateway,
   isCurrentAgent(agent){return !!agent&&ctx.get?.('agents')?.get(agent.id)===agent&&isCurrentId(agent.id)&&!!forSession(agent.id);},
@@ -142,20 +146,22 @@ export function apply(ctx,config) {
    manager.admitInteractionInput=admit;
    if(value.bot){let slot=ingressSlots.get(value.bot);if(!slot){slot={};ingressSlots.set(value.bot,slot);value.bot.use(async(m,next)=>{if(!slot.admit)throw Error('Character ingress detached');await slot.admit(m);return next();});}slot.admit=admit;}
    detach=()=>{if(runtime!==value||gatewayEpoch!==epoch)return;runtime=undefined;gatewayEpoch++;const slot=value.bot&&ingressSlots.get(value.bot);if(slot?.admit===admit)slot.admit=null;if(manager.admitInteractionInput===admit){if(previousAdmission===undefined)delete manager.admitInteractionInput;else manager.admitInteractionInput=previousAdmission;}if(manager.preserveScheduledSession===preserve){if(previousScheduleBridge===undefined)delete manager.preserveScheduledSession;else manager.preserveScheduledSession=previousScheduleBridge;}if(manager.getOrCreate===wrap)manager.getOrCreate=original;if(manager.rebuildSession===wrapRebuild)manager.rebuildSession=rebuild;identity.clear();bound.clear();inputs.clear();};
-   void reconcile().catch(()=>ctx.logger?.warn('QQ Schedule ownership audit blocked; unproven Sessions remain unauthorized'));void pump();return detach;
+   void reconcile().catch(()=>ctx.logger?.warn('QQ Schedule ownership audit blocked; unproven Sessions remain unauthorized'));outbox.releaseHeld();void pump().catch(()=>ctx.logger?.warn('Character Outbox pump blocked; durable state retained'));return detach;
   },
-  async notify(trusted,event){authorize(trusted,'send');enqueue({...event,conversation:trusted.conversationId});await pump();return db.prepare('SELECT status FROM outbox WHERE id=?').get(event.eventId);},
+  async notify(trusted,event){authorize(trusted,'send');enqueue({...event,conversation:trusted.conversationId,source:trusted.sessionId});await pump();return statusOf(event.eventId);},
   async notifySystem({eventId,kind,text,target}){
    if(!runtime||target.scope!=='c2c'||target.targetId!==binding.ownerId)throw Error('Owner notification required');
    // Existing QQTK ledger provides stable event text (maintenance job id / task status).
    if(typeof eventId!=='string'||!eventId.startsWith('qqtk:'))throw Error('Stable QQTK event id required');
    const conversation='qq-'+digest(`${binding.appId}:c2c:${binding.ownerId}`);
-   enqueue({eventId,kind,text,conversation});await pump();const result=db.prepare('SELECT status FROM outbox WHERE id=?').get(eventId);if(result.status!=='sent')throw Error('Notification delivery '+result.status);return result;
+   enqueue({eventId,kind,text,conversation});await pump();const result=statusOf(eventId);
+   // The status travels with the error: Remote Ops records the Outbox status, not a guess.
+   if(result.status!=='sent')throw Object.assign(Error('Notification delivery '+result.status),{status:result.status});return result;
   },
-  async notifyConversation(scope,event){service.validateConversation(scope);if(typeof event.eventId!=='string'||!event.eventId.startsWith('long-task:'))throw Error('Stable task event id required');enqueue({...event,conversation:conversationScope.conversationId});await pump();return db.prepare('SELECT status FROM outbox WHERE id=?').get(event.eventId);},
-  notificationStatus(scope,id){service.validateConversation(scope);return db.prepare('SELECT status FROM outbox WHERE id=? AND conversation=?').get(id,conversationScope.conversationId)?.status??null;},
-  inspect(trusted){authorize(trusted,'read');return db.prepare('SELECT id,kind,status,at FROM outbox WHERE conversation=? ORDER BY at DESC LIMIT 30').all(trusted.conversationId);},
-  cancel(trusted,eventId){authorize(trusted,'write');return db.prepare("UPDATE outbox SET status='cancelled' WHERE id=? AND conversation=? AND status='pending'").run(eventId,trusted.conversationId).changes===1;}
+  async notifyConversation(scope,event){service.validateConversation(scope);if(typeof event.eventId!=='string'||!event.eventId.startsWith('long-task:'))throw Error('Stable task event id required');enqueue({...event,conversation:conversationScope.conversationId});await pump();return statusOf(event.eventId);},
+  notificationStatus(scope,id){service.validateConversation(scope);return outbox.status(id,conversationScope.conversationId);},
+  inspect(trusted){authorize(trusted,'read');return outbox.inspect(trusted.conversationId);},
+  cancel(trusted,eventId){authorize(trusted,'write');return outbox.cancel(eventId,trusted.conversationId);}
  });
  // Retired/unknown Character roots cannot run tools or an LLM, including Web
  // followups. Cold Schedule recovery only installs the fail-closed boundary.
@@ -178,7 +184,8 @@ export function apply(ctx,config) {
     if(!agent||agent.session!==session||ctx.get?.('agentPresets')?.composedPreset(agent.ctx)!==presetId)throw Error('Untrusted reminder root');
     if(!hasReminderBinding(id))await reconcile();
     if(closed||!hasReminderBinding(id))throw Error('Unproven reminder ownership');
-    for(const notification of scheduledEvents(message))enqueue({...notification,conversation:conversationScope.conversationId});await pump();
+    // The Session the reminder came from is recorded with the row, so the binding is checked again at send time.
+    for(const notification of scheduledEvents(message))enqueue({...notification,conversation:conversationScope.conversationId,source:id});await pump();
    }catch{ctx.logger?.warn('Schedule notification blocked: ownership or native framing not verified');}})();}
  });
  ctx.provide('characterIdentity',service);
@@ -193,5 +200,7 @@ export function apply(ctx,config) {
    onEvidence:fn=>service.onIngress(fn),
    confirmationEvidence(c,{memory,quote}){authorize(c,'write');return confirmationEvidence(service.latestInput(c),memory,quote);}
   }));
- ctx.effect(()=>{const timer=setInterval(()=>void pump(),5000);return()=>{clearInterval(timer);detach?.();closed=true;identity.clear();listeners.clear();db.close();};});
+ // Close order: no new pumps, Gateway detached, queued hand-overs cancelled and
+ // their rows returned to pending, in-flight parts settled, then the database.
+ ctx.effect(()=>{const timer=setInterval(()=>void pump().catch(()=>ctx.logger?.warn('Character Outbox pump blocked; durable state retained')),5000);return async()=>{clearInterval(timer);detach?.();closed=true;await outbox.close();identity.clear();listeners.clear();db.close();};});
 }

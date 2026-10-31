@@ -12,6 +12,7 @@ export function configureWorkers(character,specialists=[],community=[]){
  const delegation=character.config.plugins.find(p=>p.id==='delegation');
  const spawn=delegation?.config.find(p=>p.id==='tool-subagent'&&p.config?.provider==='spawn');
  if(!spawn)throw Error('Official Creator Spawn composition changed; review required');
+ spawn.name='dsh-character-memory-tools/subagent.mjs';
  spawn.config={...spawn.config,agentPreset:'worker-general',allowedAgentPresets:ids,maxDepth:1};
  return character;
 }
