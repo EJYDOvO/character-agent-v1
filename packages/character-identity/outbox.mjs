@@ -35,7 +35,9 @@ export function createOutbox({db,key,logger,now=Date.now,retryAfterMs=60_000}){
  function* pending(conversation){
   let cursor;
   while(true){
-   const page=db.prepare("SELECT * FROM outbox WHERE status='pending' AND conversation=?"+(cursor?' AND (at,id)>(?,?)':'')+' ORDER BY at,id LIMIT 20').all(conversation,...(cursor?[cursor.at,cursor.id]:[]));
+   // Equal timestamps keep SQLite insertion order (including a reminder batch),
+   // not hash/id order. rowid already exists; no schema or event-id migration.
+   const page=db.prepare("SELECT *,rowid AS queue_order FROM outbox WHERE status='pending' AND conversation=?"+(cursor?' AND (at,rowid)>(?,?)':'')+' ORDER BY at,rowid LIMIT 20').all(conversation,...(cursor?[cursor.at,cursor.queue_order]:[]));
    yield* page;if(page.length<20)return;cursor=page.at(-1);
   }
  }

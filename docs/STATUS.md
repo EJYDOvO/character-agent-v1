@@ -10,7 +10,7 @@ Notification：主动通知统一经 Agent I/O 发送，保留稳定目标、持
 - **授权**：通知发往 Owner 私聊的稳定 Conversation，不要求来源 Session 仍是当前 Session。每个分片前复核：仍是同一次 Gateway 附加、Owner-only 访问配置、Owner 私聊 Conversation；提醒另须其来源 Session 仍有持久 `qq_bindings` 证据（来源 Session 随行记在 `identity_state` 的 `outbox-source:<eventId>`，不改表结构）。无绑定证据的根仍被拒绝；升级前遗留、没有来源记录的待发提醒保持 pending，不发送，等待人工审查。普通聊天、HITL 的当前 Session 检查与 Memory ACL 不变。
 - **状态**：pending → sending → sent | unknown | partial | not-sent，或 pending → cancelled。持久认领后才交出；进程中断留下的 sending 在下一个所有者启动时记为 unknown，永不重发；只有平台之前被证明未发出（未授权、未准入、Gateway 关闭、队列满）或限流的尝试回到 pending 并暂缓；平台明确拒绝记为 not-sent。终态写入只作用于本所有者仍持有的 sending 行；HMR 时新实例等旧实例关闭后才恢复和发送。新增的 not-sent/partial 对旧代码只是未知状态（回滚安全）。
 - **入口修复**：此前 pump 正在运行时 `notifySystem` 会立刻看到 pending 并抛错，Remote Ops 把实际稍后送达的通知记为 failed；现在 pump 串行并为后到调用补跑一轮，错误携带 Outbox 状态。
-- **定向复审修复**：Pump 补跑使用最新附着上下文；旧尝试的迟到拒绝不能覆盖新附着释放的授权暂缓。I/O ID 使用事件哈希、实例 UUID 与尝试号，保持原始持久事件 ID，并满足 I/O 的 256 字符限制。关闭等待真实在途交接和前任所有者，重复 close/连续 HMR 不提前释放 SQLite；若底层永不结束则保持关闭等待，宁可暂缓接管。分页越过暂缓行，20 条缺来源的旧提醒不再阻塞后续合法事件。自动 Pump 的存储故障捕获后明确告警。
+- **定向复审修复**：Pump 补跑使用最新附着上下文；旧尝试的迟到拒绝不能覆盖新附着释放的授权暂缓。I/O ID 使用事件哈希、实例 UUID 与尝试号，保持原始持久事件 ID，并满足 I/O 的 256 字符限制。关闭等待真实在途交接和前任所有者，重复 close/连续 HMR 不提前释放 SQLite；若底层永不结束则保持关闭等待，宁可暂缓接管。分页越过暂缓行，20 条缺来源的旧提醒不再阻塞后续合法事件；同时间戳按既有 SQLite rowid 保留入账顺序，不按事件 ID 重排。自动 Pump 的存储故障捕获后明确告警。
 - **Remote Ops**（QQTK `1.1.1-test.2`，Character 部署不需要）：与 Character 集成时只由 Outbox 发送；独立运行时经通知器发送并如实记录状态，不再直接调用 Sender。
 - **启停与排序**：QQ `notifications.enabled: false` 时不打开通知器，Outbox 中的通知保持 pending。通知与聊天共用同一 Conversation 的 I/O 队列（先后顺序、有界、可取消），没有优先级或公平性保证；Outbox 一次只交出一条，不会成串阻塞聊天。
 - **部署依赖**：需要 `dsh-agent-io@0.1.0-test.7`（部署计划在补丁调用 `openNotifications()` 时要求，已安装 test.6 须显式 `--agent-io-artifact` 升级）与 Character test.26 包（Identity 变更，Core 成套升版）；SQLite 不迁移、不改表。
@@ -19,7 +19,7 @@ PR 初次验证（历史基线，未部署、未连接 QQ）：QQTK 轻量 190�
 
 未验证：真实 QQ 主动推送额度、通知在手机上的显示；生产 Outbox 上的升级（部署时应先离线审计 pending/sending 行）；跨服务优先级与公平性；多进程同时打开同一 Outbox（依赖单活部署约束）；`run-generic-probe` 使用生产凭据，未运行。
 
-定向复审追加验证（未部署）：Character 单元 243/243、安全审计 33/33；QQTK 单元 194/194、SDK 隔离审计及边界 38/38，两份补丁重建并在上游快照应用一致。新增回归覆盖重附着时六类旧发送结果及并发调用、保留 I/O 缓存的 HMR 重试、发送 ID 长度、连续 HMR 与重复 close、暂缓行分页、真实临时 SQLite 写锁/只读故障，以及 Remote Ops 初次落盘失败、写入结果不确定、终态写入失败和旧实例迟到写回。rc.3 Interaction/Notification 与 Inspector 探针通过；Lifecycle 的一次重启阶段出现原生 Subagent `cannot create effect on inactive context`，后续全新 Profile 复测及未改 PR Head 的两次对照通过，根因尚未确认，不将首次失败抹去或宣称稳定性完全验收。
+定向复审追加验证（未部署）：Character 单元 244/244、安全审计 33/33；QQTK 单元 194/194、SDK 隔离审计及边界 38/38，两份补丁重建并在上游快照应用一致。新增回归覆盖重附着时六类旧发送结果及并发调用、保留 I/O 缓存的 HMR 重试、发送 ID 长度、连续 HMR 与重复 close、暂缓行分页、固定同毫秒入账的批量 FIFO、真实临时 SQLite 写锁/只读故障，以及 Remote Ops 初次落盘失败、写入结果不确定、终态写入失败和旧实例迟到写回。rc.3 Interaction/Notification 与 Inspector 探针通过；Lifecycle 的一次重启阶段出现原生 Subagent `cannot create effect on inactive context`，后续全新 Profile 复测及未改 PR Head 的两次对照通过，根因尚未确认，不将首次失败抹去或宣称稳定性完全验收。首次推送的 Ubuntu CI 捕获分页实现将同毫秒批量提醒按事件 ID 重排的回归，已以固定时间用例复现并改用入账顺序；未降低原顺序断言。
 
 升级/回滚边界：尚未保护真实运行数据。从不包含本修复的旧代码升级，或回滚到旧代码，必须停止旧 Host 并确认退出后再切换，不能依赖旧实现的 10 秒关闭超时或跨版本 HMR。新实现内部 HMR 的所有权防护不能约束仍在执行的旧版代码。底层发送永久不结束时，关闭会等待而不放开所有权；需停净进程后以 unknown 屏障冷恢复，不盲目补发。
 

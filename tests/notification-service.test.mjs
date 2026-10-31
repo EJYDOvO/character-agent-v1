@@ -69,6 +69,13 @@ test('twenty held legacy reminders do not starve later legal notifications or cr
  try{await o.pump(opts);assert.equal(o.status('legal'),'sent');assert.equal(o.size().held,20);await o.pump(opts);assert.equal(n.requests.length,1,'held rows are neither sent nor retried in a busy loop');}
  finally{await o.close();db.close();}
 });
+test('same-millisecond events retain durable insertion order across held pages, not event-id order',async()=>{
+ const {db,file}=database(),o=createOutbox({db,key:file,now:()=>0}),n=notifier();
+ for(let i=0;i<20;i++)o.enqueue(event('held-'+i,'scheduled_reminder'));
+ o.enqueue(event('z-first'));o.enqueue(event('a-second'));
+ try{await o.pump(options(n,{eligible:r=>r.kind!=='scheduled_reminder'}));assert.deepEqual(n.sent,['[测试] z-first','[测试] a-second']);}
+ finally{await o.close();db.close();}
+});
 test('a crash while sending: the next owner records unknown and never resends; a failed claim or result write sends nothing again',async()=>{
  const {db,file}=database();
  db.prepare("INSERT INTO outbox VALUES('c','task_completed','qq-c','[测试] c','sending',?)").run(new Date().toISOString());
