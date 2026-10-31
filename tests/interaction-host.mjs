@@ -59,7 +59,7 @@ export function apply(ctx,config){
    const {createInteractionOutbound}=await import(pathToFileURL(config.qqFixture+'/dist/gateway/bootstrap.js').href);
    const {setupMiddlewares}=await import(pathToFileURL(config.qqFixture+'/dist/gateway/middleware-setup.js').href);
    const sent=[],bubbles=[],record={sessionKey:'fixture',sessionId:a.id,agent:a,scope:'c2c',peerId:'synthetic-owner',replyTarget:{scope:'c2c',targetId:'synthetic-owner',msgId:'synthetic-message'}};
-   const manager={ctx,getOrCreate:async()=>record,isCurrentSession:r=>r===record&&ctx.agents.get(a.id)===a,findBySessionId:id=>id===a.id?record:undefined,getSessionRecord:()=>record,approvalChannel:{pending:new Map()},questionChannel:{pending:new Map()}};
+   const manager={ctx,getOrCreate:async()=>record,isCurrentSession:r=>r===record&&ctx.agents.get(a.id)===a,findBySessionId:id=>id===a.id?record:undefined,getSessionRecord:()=>record,hitl:{waiting:()=>false}};
    // The installed dsh-agent-io's shared Conversation wiring (Iteration 03), as the Gateway opens it.
    const io=ctx.get('agentIO');assert(typeof io?.openConversation==='function','Installed dsh-agent-io has no openConversation (pre-Iteration 03 package)');
    conversation=io.openConversation({platform:'qq-official',adapter:'qq-official-gateway',accountId:'synthetic-interaction',manager,scopes:{direct:'c2c',group:'group'},admits:(scope,peer)=>scope==='c2c'&&peer==='synthetic-owner',onInput:(r,m,policy)=>{if(policy)manager.trackInteractionInput?.(r,m);}});
@@ -68,7 +68,7 @@ export function apply(ctx,config){
    // installed Unified I/O, sent by the reviewed QQ text adapter; the gateway sender is
    // never called directly for chat output, and there is no SDK stream.
    const direct=[],sender={async sendMarkdown(){direct.push('sendMarkdown');},openStream(){direct.push('openStream');throw Error('no stream');}};
-   const {createQQTextAdapter,accessAllows,QQ_SCOPES}=await import(pathToFileURL(config.qqFixture+'/dist/transport/qq-text-adapter.js').href);
+   const {createQQTextAdapter,accessAllows,QQ_SCOPES,hitlResponse}=await import(pathToFileURL(config.qqFixture+'/dist/transport/qq-text-adapter.js').href);
    const outbound=createInteractionOutbound(ctx,manager,sender,{streaming:true,textChunkLimit:3500,showToolResults:false},logger,ctx.tools,undefined,io,conversation);
    releaseOutbound=ctx.on('session/event',outbound);
    releaseInteractionAdapter=conversation.registerAdapter(createQQTextAdapter({limit:3500,split:t=>[t],replyTarget:(_r,id)=>outbound.delivery(id)?.target,
@@ -179,7 +179,7 @@ export function apply(ctx,config){
    assert.deepEqual(direct,[],'no Interaction output bypassed the Unified I/O');
    report.checks.push('All Interaction bubbles, hang-on lines and steered replies went through the installed Unified I/O; nothing used a direct send or SDK stream');
    const plainSent=[],ids=[],plainRecord={sessionKey:'plain',sessionId:base.id,agent:base,scope:'c2c',peerId:'synthetic-owner',replyTarget:{scope:'c2c',targetId:'synthetic-owner',msgId:'synthetic-plain'}};
-   const plainManager={ctx,getOrCreate:async(scope,peer,senderId,target)=>{assert.deepEqual([scope,peer,senderId],['c2c','synthetic-owner','synthetic-owner']);plainRecord.replyTarget=target;return plainRecord;},findBySessionId:id=>id===base.id?plainRecord:undefined,getSessionRecord:(s,peer)=>s==='c2c'&&peer==='synthetic-owner'?plainRecord:undefined,isCurrentSession:r=>r===plainRecord&&ctx.agents.get(base.id)===base,approvalChannel:{pending:new Map()},questionChannel:{pending:new Map()}};
+   const plainManager={ctx,getOrCreate:async(scope,peer,senderId,target)=>{assert.deepEqual([scope,peer,senderId],['c2c','synthetic-owner','synthetic-owner']);plainRecord.replyTarget=target;return plainRecord;},findBySessionId:id=>id===base.id?plainRecord:undefined,getSessionRecord:(s,peer)=>s==='c2c'&&peer==='synthetic-owner'?plainRecord:undefined,isCurrentSession:r=>r===plainRecord&&ctx.agents.get(base.id)===base,hitl:{waiting:()=>false}};
    const plainConfig={appId:'synthetic-app',streaming:false,textChunkLimit:3500,showToolResults:false,access:{c2cMode:'allowlist',c2cAllow:['synthetic-owner'],groupMode:'disabled',groupAllow:[]}};
    const plainConversation=io.openConversation({platform:'qq-official',adapter:'qq-official-gateway',accountId:'synthetic-app',manager:plainManager,scopes:QQ_SCOPES,admits:(scope,peer)=>accessAllows(plainConfig.access,scope,peer)});
    // Iteration 05 basic media: the reviewed sendMedia on real files; only the QQ bot is synthetic.
@@ -188,7 +188,7 @@ export function apply(ctx,config){
    const mediaDir=path.join(config.cwd,'media-probe');fs.mkdirSync(mediaDir,{recursive:true});const mediaConfig={sendFile:{restrictPaths:true,extraRoots:[]},cwd:fs.realpathSync(mediaDir)};
    const mediaCalls=[],mediaBot={creds:{},async uploadMedia(o){mediaCalls.push({stage:'upload',fileType:o.fileType,srvSendMsg:o.srvSendMsg,path:o.localPath});return {file_uuid:'synthetic-uuid',file_info:'synthetic-info'};},
     mediaApi:{async sendMediaMessage(_scope,_target,info,_creds,opts){mediaCalls.push({stage:'message',info,msgId:opts.msgId});return {id:'synthetic-media-'+mediaCalls.length};}}};
-   const releaseAdapter=plainConversation.registerAdapter(createQQTextAdapter({limit:3500,split:t=>[t],send:async(target,text)=>{plainSent.push({text,msgId:target.msgId});return {id:'receipt-'+plainSent.length};},
+   const releaseAdapter=plainConversation.registerAdapter(createQQTextAdapter({limit:3500,split:t=>[t],send:async(target,text,info)=>{plainSent.push({text,msgId:target.msgId,...(info?.keyboard?{keyboard:info.keyboard}:{})});return {id:'receipt-'+plainSent.length};},
     sendMedia:(target,attachment)=>sendMedia(mediaBot,new ReplyLimiter({limit:4}),mediaConfig,target,attachment)}));
    const plainHandler=createInteractionOutbound(ctx,plainManager,sender,plainConfig,logger,ctx.tools,null,{...io,sendMessage:r=>{ids.push(r.id);return io.sendMessage(r);}},plainConversation);
    const releasePlain=ctx.on('session/event',plainHandler);
@@ -251,6 +251,55 @@ export function apply(ctx,config){
       const remote=await io.sendMessage({target:plainConversation.target(plainRecord),origin:{sessionId:base.id},message:{attachments:[{kind:'image',resource:{type:'remote',url:'https://example.invalid/x.png'}}]}});
       assert.deepEqual([remote.status,remote.reason],['not-sent','unsupported']);
       report.checks.push('Installed dsh-agent-io basic media: QQ attachments reach the native input as descriptors; qqbot_send_file sends a real whitelisted file once through the I/O (upload, then media message), other targets, outside paths and remote resources are refused');report.media='exercised';
+      // Iteration 06 HITL Bridge: the native Approval service and userQuestions.ask() of
+      // the real Host reach the installed Bridge through their own waterfalls; prompts
+      // go out through the installed I/O and only the expected person's answer settles them.
+      {
+       const approval=ctx.get('approval'),questions=ctx.get('userQuestions');
+       assert(typeof approval?.decide==='function'&&typeof questions?.ask==='function','native Approval and userQuestions services');
+       const {openQQHITL}=await import(pathToFileURL(config.qqFixture+'/dist/gateway/bootstrap.js').href);
+       const hitl=openQQHITL(plainConversation,{...plainConfig,askTimeoutMs:60_000,requireMention:true},logger);plainManager.hitl=hitl;
+       const keyboardOf=m=>m.keyboard.content.rows.flatMap(r=>r.buttons).map(b=>b.action.data);
+       // A request the Bridge does not take: still open after a while, then cancelled natively.
+       const nativeWait=async agent=>{
+        const stop=new AbortController(),ask=questions.ask({agent,questions:[{id:'n',question:'native'}],signal:stop.signal}).then(()=>'answered',e=>e?.code),decided=approval.decide({agent,toolName:'probe_tool',signal:stop.signal},agent.session);
+        const state=await Promise.race([ask,decided.then(o=>'decided:'+o),sleep(500).then(()=>'pending')]);
+        stop.abort();assert.equal(await ask,'ASK_ABORTED');return [state,await decided];
+       };
+       const press=(data,user='synthetic-owner')=>{const response=hitlResponse({user_openid:user,data:{resolved:{button_data:data}}});return response?hitl.respond(response).status:'not-hitl';};
+       try{
+        let before=plainSent.length;
+        const allowed=approval.decide({agent:base,toolName:'probe_tool',reason:'probe'},base.session);await sleep(100);
+        const prompt=plainSent.at(-1);assert.equal(plainSent.length,before+1);assert.match(prompt.text,/执行审批[\s\S]*probe_tool/);
+        const [allow,deny]=keyboardOf(prompt);
+        assert.equal(press(allow,'stranger'),'rejected','a stranger is another Conversation');
+        assert.equal(press(allow),'accepted');assert.equal(await allowed,'allowed-once');assert.equal(press(deny),'rejected','one decision only');
+        const denied=approval.decide({agent:base,toolName:'probe_tool'},base.session);await sleep(100);
+        assert.equal(press(keyboardOf(plainSent.at(-1))[1]),'accepted');assert.equal(await denied,'rejected');
+        // userQuestions.ask() on the live root Agent: a button, then a typed answer claimed in the inbound scope.
+        before=plainSent.length;
+        const answered=questions.ask({agent:base,questions:[{id:'pick',question:'选哪个',options:[{label:'甲'},{label:'乙'}]},{id:'note',question:'备注'}]});await sleep(100);
+        assert.equal(press(keyboardOf(plainSent[before])[1]),'accepted');await sleep(100);
+        assert.equal(plainSent[before+1].keyboard,undefined,'a free-text question has no buttons');
+        const typed={conversation:{type:'direct',id:'synthetic-owner'},sender:{id:'synthetic-owner'},message:{id:'synthetic-hitl-answer',text:'下午'}};
+        assert.equal(hitl.answer(typed).status,'answered');assert.equal(hitl.answer(typed).status,'pass','nothing open any more');
+        assert.deepEqual(JSON.parse(JSON.stringify(await answered)),{answers:[{id:'pick',selected:['乙']},{id:'note',selected:[],custom:'下午'}]});
+        const redelivered=await channel.receive({conversation:{type:'direct',id:'synthetic-owner'},message:{id:'synthetic-hitl-answer',text:'下午'},sender:{id:'synthetic-owner'},platformData:{context:qqEvent()}});
+        assert.equal(redelivered.status,'duplicate','the claimed answer never becomes native input');
+        const stop=new AbortController(),aborted=questions.ask({agent:base,questions:[{id:'x',question:'中止测试'}],signal:stop.signal});await sleep(50);stop.abort();
+        await assert.rejects(aborted,e=>e?.name==='UserQuestionError'&&e.code==='ASK_ABORTED');
+        assert.equal(hitl.waiting(plainRecord),false);
+        // Another live Agent is not this Bridge's: its requests stay with the native
+        // answerers (waiting for a Web/Desktop client, none connected here) and send nothing to QQ.
+        before=plainSent.length;
+        assert.deepEqual(await nativeWait(full),['pending','cancelled']);
+        assert.equal(plainSent.length,before,'nothing of another Agent reaches QQ');
+        report.checks.push('Installed dsh-agent-io HITL Bridge on the real Host: native approval decide() and userQuestions.ask() reach it through their own waterfalls; prompts and buttons go through the I/O; only the owner settles a request, once; button and typed answers, abort and another Agent stay native');report.hitl='exercised';
+       }finally{hitl?.close();plainManager.hitl=undefined;}
+       const after=plainSent.length;
+       assert.deepEqual(await nativeWait(base),['pending','cancelled'],'after close the native answerers own the requests again');
+       assert.equal(plainSent.length,after);
+      }
      }finally{channel.close();}
      report.checks.push('Installed dsh-agent-io inbound: a QQ event becomes one native input through the shared Conversation handoff and its reply goes out through the I/O; duplicate push and stranger add nothing');report.inbound='exercised';
     }
