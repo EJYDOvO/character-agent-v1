@@ -2,6 +2,22 @@
 
 本页是版本与验收状态的统一入口。历史发布记录说明当时结果，不代表最新运行状态。
 
+## Iteration 07 源码（Character test.26 / Agent I/O test.7，未部署）
+
+Notification：主动通知统一经 Agent I/O 发送，保留稳定目标、持久 Outbox、原生 Schedule 与独立授权边界。全部为源码与隔离验证，**未部署、未合并**；运行实例为下一节的 Character test.25 / Agent I/O test.6。
+
+- **调用链**：原生 Schedule 提醒（`schedule:` + sha256(schedule_id, occurrence)）、Long Tasks 结果（`long-task:<run>`）、Remote Ops 维护/长任务提示（`qqtk:<key>`）与 `notify()` 都只写入 Character Identity 的既有 SQLite Outbox；Outbox 是唯一写入者，经 QQ Gateway 交来的 Agent I/O 通知器发送。原 `runtime.sender.sendMarkdown` 直发路径删除。通知不成为 Agent 输入，不产生 Turn。
+- **授权**：通知发往 Owner 私聊的稳定 Conversation，不要求来源 Session 仍是当前 Session。每个分片前复核：仍是同一次 Gateway 附加、Owner-only 访问配置、Owner 私聊 Conversation；提醒另须其来源 Session 仍有持久 `qq_bindings` 证据（来源 Session 随行记在 `identity_state` 的 `outbox-source:<eventId>`，不改表结构）。无绑定证据的根仍被拒绝；升级前遗留、没有来源记录的待发提醒保持 pending，不发送，等待人工审查。普通聊天、HITL 的当前 Session 检查与 Memory ACL 不变。
+- **状态**：pending → sending → sent | unknown | partial | not-sent，或 pending → cancelled。持久认领后才交出；进程中断留下的 sending 在下一个所有者启动时记为 unknown，永不重发；只有平台之前被证明未发出（未授权、未准入、Gateway 关闭、队列满）或限流的尝试回到 pending 并暂缓；平台明确拒绝记为 not-sent。终态写入只作用于本所有者仍持有的 sending 行；HMR 时新实例等旧实例关闭后才恢复和发送。新增的 not-sent/partial 对旧代码只是未知状态（回滚安全）。
+- **入口修复**：此前 pump 正在运行时 `notifySystem` 会立刻看到 pending 并抛错，Remote Ops 把实际稍后送达的通知记为 failed；现在 pump 串行并为后到调用补跑一轮，错误携带 Outbox 状态。
+- **Remote Ops**（QQTK `1.1.1-test.2`，Character 部署不需要）：与 Character 集成时只由 Outbox 发送；独立运行时经通知器发送并如实记录状态，不再直接调用 Sender。
+- **启停与排序**：QQ `notifications.enabled: false` 时不打开通知器，Outbox 中的通知保持 pending。通知与聊天共用同一 Conversation 的 I/O 队列（先后顺序、有界、可取消），没有优先级或公平性保证；Outbox 一次只交出一条，不会成串阻塞聊天。
+- **部署依赖**：需要 `dsh-agent-io@0.1.0-test.7`（部署计划在补丁调用 `openNotifications()` 时要求，已安装 test.6 须显式 `--agent-io-artifact` 升级）与 Character test.26 包（Identity 变更，Core 成套升版）；SQLite 不迁移、不改表。
+
+验证（本机，未部署、未连接 QQ）：QQTK 轻量 190（新增通知 7：稳定目标、伪造凭据、逐片授权与准入、与聊天同队列的顺序/队列满/取消、平台结果、Remote Ops 账本与唯一发送方）、边界 3、代码隔离 SDK 审计 35（新增 Q24：真实 SDK 消息代码发出的通知、无输入时主动推送、限额内复用被动回复 ID、超时/5xx 为 unknown、403 为 not-sent）、两份补丁重建一致且可应用；Character 单元 232（新增 Outbox/通知 10：去重与并发、各结果、授权暂缓、崩溃与落盘失败、HMR 交接、关闭、轮换后旧 Session 的合法提醒、伪造根与发送前撤销绑定/撤权、遗留提醒、pump 串行）、安全审计 33；变异检查 15/15 被捕获；隔离 rc.3 Host：Interaction 探针 26 项（已安装 test.7 的通知器与真实 Outbox：无当前 Session 的稳定目标、伪造凭据拒绝、聊天仍需当前 Session、中断与超时为 unknown 不重发），Inspector 探针（真实 Identity + 原生 Schedule 到期 → Outbox → 通知器，去重）与 Lifecycle 探针（轮换与冷恢复后的旧 Session 提醒、长任务结果、Manager 卸载重装不重放 Outbox）通过，`qqNetwork: false`。
+
+未验证：真实 QQ 主动推送额度、通知在手机上的显示；生产 Outbox 上的升级（部署时应先离线审计 pending/sending 行）；跨服务优先级与公平性；多进程同时打开同一 Outbox（依赖单活部署约束）；`run-generic-probe` 使用生产凭据，未运行。
+
 ## Iteration 06（Agent I/O test.6，已授权部署）
 
 2026-11-01 按授权部署：QQTK `main` `61ad840`（PR #7）的补丁与 70 个维护文件（新增 `ops.cjs` 与 `manage.ps1`：其 verify/Stage 改查 HITL Bridge 接线），Character `main` `4a2ac56`（PR #8）；已安装的 `dsh-agent-io` 经显式 `--agent-io-artifact` 由 test.5 升至 test.6，tarball 与在 `main` 上重跑的隔离 rc.3 探针（25 项，`hitl`/`inbound`/`media` 均已实测）所装的包逐字节一致。Character 包、Interaction test.9 与 Conversation Manager test.2 不变。

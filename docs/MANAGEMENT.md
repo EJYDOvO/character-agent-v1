@@ -18,7 +18,7 @@ test.8 的分层记忆已完成隔离验证及授权生产部署，验证范围�
 | 跨事件巩固 | Core `consolidation`、`consolidateIntervalMs` | 默认每作用域/Agent/模式低频 6 小时；相同输入跳过；来源不足不归纳 |
 | 确认事实 | `character_confirm` | 最新 10 分钟内真实 QQ 原文需逐字包含确认词和记忆完整陈述或 ID；泛泛的“确认”不能提升任意记忆置信度 |
 | 合并与遗忘 | `character_merge` / `character_forget` | 合并要求两条 revision 和高相似度、相同否定/数字形态；不同事实请纠错，不能强行合并。遗忘保留屏障 |
-| 通知记录 | `character_notifications` | 查看 sent/pending/unknown；unknown 不自动重发。先核对手机收件，再由 Owner 明确决定创建新的提醒或维护任务；不直接修改 SQLite 状态 |
+| 通知记录 | `character_notifications` | 查看 sent/pending/unknown（Iteration 07 起另有 partial/not-sent：部分分片已发、平台明确拒绝）；unknown 与 partial 不自动重发。QQ `notifications.enabled: false` 时通知保持 pending。先核对手机收件，再由 Owner 明确决定创建新的提醒或维护任务；不直接修改 SQLite 状态 |
 | 定时提醒 | 官方 `schedule_create/list/update/delete` 及官方 UI | 只允许明确任务；依赖官方 framing，版本变化需重测。不是主动闲聊 |
 | QQTK 运维与功能 | 既有 `/ops status`、`/ops features` 和 QQTK 管理流程 | 保留原审批及维护权限；QQTK 是独立版本化依赖，Core 只装配一次。增量见 `qqtk-notifications.patch` |
 | Creator / 人格 | 编辑角色定义后构建；`node scripts/ensure-build.cjs` 检查官方变更；stage/pack 自动调用 | 官方 Creator 变动会重新派生；重新构建不等于升级已验证，仍需隔离宿主测试和新版本产物 |

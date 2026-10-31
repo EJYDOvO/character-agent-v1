@@ -1,6 +1,7 @@
 import fs from 'node:fs';import assert from 'node:assert/strict';import {randomUUID} from 'node:crypto';import {pathToFileURL} from 'node:url';
 import {verifyCompaction} from './probe-verification.mjs';
 import {managerFixture} from './qq-manager-fixture.mjs';
+import {notifierFixture} from './notifier-fixture.mjs';
 const sdk=(process.env.DSH_CHARACTER_HOST_ROOT||process.env.DSH_INSTALL_ROOT)+'/resources/app.asar/dsh/node_modules/@deepseek-ai/';
 const {LlmAdapter,createUserMessage}=await import(pathToFileURL(sdk+'dsh-llm/lib/index.js').href);
 const {defineTool}=await import(pathToFileURL(sdk+'dsh-tools/lib/index.js').href);
@@ -30,7 +31,7 @@ export function apply(ctx,config){
    report.checks.push('Actual Extras Bundle tool is visible to Character; disable/remount preserves Core tools');
   }else assert(!ctx.tools.get('extras_contract_fixture',parent));
   const identity=ctx.characterIdentity,deliveries=[],manager=managerFixture();
-  release=identity.attach({manager,config:{appId:'mock-app',preset:'qq-character',access:{c2cMode:'allowlist',c2cAllow:['mock-owner'],groupMode:'disabled'}},sender:{async sendMarkdown(_t,text){deliveries.push(text);}}});
+  release=identity.attach({manager,config:{appId:'mock-app',preset:'qq-character',access:{c2cMode:'allowlist',c2cAllow:['mock-owner'],groupMode:'disabled'}},sender:{sendMarkdown:async()=>{throw Error('no direct Gateway send');}},notifications:notifierFixture(async(_t,text)=>{deliveries.push(text);})});
   const bind=async a=>{manager.commit({sessionId:a.id,agent:a,agentPreset:'qq-character',scope:'c2c',peerId:'mock-owner',senderId:'mock-owner'});await manager.getOrCreate('c2c','mock-owner','mock-owner',{scope:'c2c',targetId:'mock-owner'});};await bind(parent);
   let trusted=ctx.memoryIdentity.forSession(parent.id);const memory=ctx.dshMemory;
   const row=memory.remember(trusted,{kind:'semantic',statement:'隔离验收：优先保留错误栈并核对回滚记录。'},{sessionId:parent.id,eventSeq:1,messageId:'fixture-source',origin:'direct_user',quote:'隔离验收：优先保留错误栈并核对回滚记录。'});
@@ -107,7 +108,7 @@ export function apply(ctx,config){
   release?.();release=undefined;assert.throws(()=>memory.browse(trusted));report.checks.push('Gateway detach revokes Inspector/Memory authority');report.ok=true;
   if(config.preview&&config.extras){
    // Disposable synthetic fixture only; never shipped in the runtime plugin.
-   release=identity.attach({manager,config:{appId:'mock-app',preset:'qq-character',access:{c2cMode:'allowlist',c2cAllow:['mock-owner'],groupMode:'disabled'}},sender:{async sendMarkdown(){}}});await bind(parent);
+   release=identity.attach({manager,config:{appId:'mock-app',preset:'qq-character',access:{c2cMode:'allowlist',c2cAllow:['mock-owner'],groupMode:'disabled'}},sender:{sendMarkdown:async()=>{throw Error('no direct Gateway send');}},notifications:notifierFixture(async()=>{})});await bind(parent);
    const previewCapability=identity.forSession(parent.id);
    for(let i=0;i<24;i++)memory.remember(previewCapability,{kind:'semantic',statement:'合成分页验收条目 '+String(i).padStart(2,'0')},{sessionId:parent.id,eventSeq:1000+i,messageId:'preview:'+i,origin:'direct_user',quote:'合成分页验收条目 '+i});
    ctx.webServer.register({kind:'exact',path:'/fixture-login',handler(req,res){req.url=new URL(ctx.connection.authenticatedUrl(origin+'/')).search;req.url='/'+req.url;ctx.connection.authorizeIndex(req,res);}});

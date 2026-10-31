@@ -45,7 +45,7 @@ Character 应用保持一个仓库；所有交互平台 Adapter 未来统一进�
 | L1 | 基础 Media | 消息契约中的附件描述与平台上传/下载；高级媒体工具（看图、发文件等）保持为现有可选工具，不另立 L3 服务 |
 | L2 可选 | Interaction | 保留独立 Interaction Policy Plugin：输入插话、回复节奏、完整气泡分割、Hang-on。启用时加工 Agent 回复，关闭时透传；外部消息最终都经 I/O Sender 发送，不创建 Interaction 专属 I/O |
 | L3 可选 | HITL Bridge | 建议独立可选 Plugin；只桥接原生 Approval 与 `userQuestions.ask()` 的展示及可信回应，不创建第二个审批权威 |
-| L3 可选 | Notification | 建议独立可选 Plugin；复用 I/O 发送，保留稳定接收目标、持久 Outbox、去重状态与原生 Schedule |
+| L3 可选 | Notification | 建议独立可选 Plugin；复用 I/O 发送，保留稳定接收目标、持久 Outbox、去重状态与原生 Schedule（Iteration 07 源码：发送通道在 Agent I/O，持久 Outbox 留在 Character Identity，见路线图 3.6） |
 | Identity（横切） | 各模块分担 | Platform Adapter 验证实际平台连接与身份来源；Host 校验可信来源并执行准入、工具及会话权限；Character Identity 保留 Owner、Memory ACL、Worker、历史 Session 的专属安全策略。不建立取代现有身份系统的大型 Identity Plugin；默认各平台实际账号独立 |
 | Diagnostics（横切） | 各模块分担 | 统一事件关联字段与脱敏要求；各模块负责自己产生的事件；暂不建独立日志服务或强制安装的 Diagnostics Plugin |
 | 下层 Platform Adapters | 每平台一个 Package | 平台真实收发、协议、附件传输、限速/分片/回复目标；未来统一平台仓库 |
@@ -149,7 +149,7 @@ DSH 原生 Web/Desktop 聊天窗继续用 DSH 原生消息 UI、Session、渲染
 | 服务 | 目标职责与权威边界 | 仍待定 |
 | --- | --- | --- |
 | HITL Bridge | HITL = Human-in-the-Loop，人工介入；展示原生 Approval / `userQuestions.ask`，路由已验证回应，处理取消/超时；共享 I/O Sender，原生服务唯一裁决 | Iteration 06（已于 2026-11-01 授权部署）：Agent I/O 包内可选模块 `openHITL()`，经原生 waterfall 统一接入，提示与签发按钮经 `sendMessage()`；QQ 原通道已删除 |
-| Notification | 复用 I/O Sender、稳定 Conversation 目的地与持久 Outbox；去重、恢复和明确事件投递；复用原生 Schedule，不重造调度 | 建议独立可选 Plugin（ADR-057）；持久状态归属与切换在 Iteration 07 设计 |
+| Notification | 复用 I/O Sender、稳定 Conversation 目的地与持久 Outbox；去重、恢复和明确事件投递；复用原生 Schedule，不重造调度 | Iteration 07 源码（未部署）：Agent I/O `openNotifications()` + Character Identity Outbox 模块（唯一写入者）；Remote Ops 独立运行时经通知器，集成时只委托 Outbox |
 | Commands（L1） | 默认为 I/O 内部的命令入口解析/分发，Host 执行授权；不让平台字段授予能力 | Iteration 05（已于 2026-10-31 授权部署）：`openCommands()` 路由；QQ `/stop`、`/bot-*`、会话命令与 Remote Ops `/ops` 已迁移 |
 | Media（L1 基础/可选工具） | 基础消息附件属于 D1/L1；高级图片/音频/视频等工具保持现有可选工具，平台传输/路径权限留 Adapter/Host | Iteration 05（已于 2026-10-31 授权部署）：附件描述（可信资源与模型可见内容分开），QQ 入站附件/引用与 `qqbot_send_file` 已迁移；视觉理解未改 |
 
