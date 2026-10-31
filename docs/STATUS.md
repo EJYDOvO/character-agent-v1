@@ -2,9 +2,11 @@
 
 本页是版本与验收状态的统一入口。历史发布记录说明当时结果，不代表最新运行状态。
 
-## Iteration 07 源码（Character test.26 / Agent I/O test.7，未部署）
+## Iteration 07（Character test.26 / Agent I/O test.7，2026-11-01 已授权部署）
 
-Notification：主动通知统一经 Agent I/O 发送，保留稳定目标、持久 Outbox、原生 Schedule 与独立授权边界。全部为源码与隔离验证，**未部署**；运行实例为下一节的 Character test.25 / Agent I/O test.6。
+Notification：主动通知统一经 Agent I/O 发送，保留稳定目标、持久 Outbox、原生 Schedule 与独立授权边界。已从 Character PR #10（`main` `94dbeee`）和 QQTK PR #9（`main` `f928380`）的合并树部署：Character 六包 test.26、Agent I/O test.7、Remote Ops `1.1.1-test.2`；Interaction test.9、Inspector test.3、Long Tasks test.1、Conversation Manager test.2 保持原版本。
+
+部署验收：实际候选包在无生产凭据、无 QQ 连接的 rc.3 Host 中通过 Worker 启动及重启两阶段回归；停机一致性备份、最终路径冻结锁文件安装、补丁及运行代码逐文件校验通过。新 Host 的 Identity、Memory、Manager、Agent I/O、Remote Ops 与唯一 QQ Gateway 均激活，QQ connected、Host 空闲；无模块加载或 INACTIVE_EFFECT 错误。与停机快照比较，Memory 各表、既有 Session、Schedule、绑定、路由与模型偏好、两套通知账本保持一致，官方 ASAR 未改。旧 Profile 与校验备份仅存本机；未执行真实发送或生产故障注入。
 
 - **调用链**：原生 Schedule 提醒（`schedule:` + sha256(schedule_id, occurrence)）、Long Tasks 结果（`long-task:<run>`）、Remote Ops 维护/长任务提示（`qqtk:<key>`）与 `notify()` 都只写入 Character Identity 的既有 SQLite Outbox；Outbox 是唯一写入者，经 QQ Gateway 交来的 Agent I/O 通知器发送。原 `runtime.sender.sendMarkdown` 直发路径删除。通知不成为 Agent 输入，不产生 Turn。
 - **授权**：通知发往 Owner 私聊的稳定 Conversation，不要求来源 Session 仍是当前 Session。每个分片前复核：仍是同一次 Gateway 附加、Owner-only 访问配置、Owner 私聊 Conversation；提醒另须其来源 Session 仍有持久 `qq_bindings` 证据（来源 Session 随行记在 `identity_state` 的 `outbox-source:<eventId>`，不改表结构）。无绑定证据的根仍被拒绝；升级前遗留、没有来源记录的待发提醒保持 pending，不发送，等待人工审查。普通聊天、HITL 的当前 Session 检查与 Memory ACL 不变。
@@ -17,15 +19,15 @@ Notification：主动通知统一经 Agent I/O 发送，保留稳定目标、持
 
 PR 初次验证（历史基线，未部署、未连接 QQ）：QQTK 轻量 190（新增通知 7：稳定目标、伪造凭据、逐片授权与准入、与聊天同队列的顺序/队列满/取消、平台结果、Remote Ops 账本与唯一发送方）、边界 3、代码隔离 SDK 审计 35（新增 Q24：真实 SDK 消息代码发出的通知、无输入时主动推送、限额内复用被动回复 ID、超时/5xx 为 unknown、403 为 not-sent）、两份补丁重建一致且可应用；Character 单元 232（新增 Outbox/通知 10：去重与并发、各结果、授权暂缓、崩溃与落盘失败、HMR 交接、关闭、轮换后旧 Session 的合法提醒、伪造根与发送前撤销绑定/撤权、遗留提醒、pump 串行）、安全审计 33；变异检查 15/15 被捕获；隔离 rc.3 Host：Interaction 探针 26 项（已安装 test.7 的通知器与真实 Outbox：无当前 Session 的稳定目标、伪造凭据拒绝、聊天仍需当前 Session、中断与超时为 unknown 不重发），Inspector 探针（真实 Identity + 原生 Schedule 到期 → Outbox → 通知器，去重）与 Lifecycle 探针（轮换与冷恢复后的旧 Session 提醒、长任务结果、Manager 卸载重装不重放 Outbox）通过，`qqNetwork: false`。
 
-未验证：真实 QQ 主动推送额度、通知在手机上的显示；生产 Outbox 上的升级（部署时应先离线审计 pending/sending 行）；跨服务优先级与公平性；多进程同时打开同一 Outbox（依赖单活部署约束）；`run-generic-probe` 使用生产凭据，未运行。
+未验证：真实 QQ 主动推送额度、通知及审批按钮在手机上的显示；真实 pending/sending 记录的升级恢复（本次离线审计存量均为 sent，未注入故障）；跨服务优先级与公平性；多进程同时打开同一 Outbox（依赖单活部署约束）；`run-generic-probe` 使用生产凭据，未运行。
 
 定向复审追加验证（未部署）：Character 单元 247/247、安全审计 33/33；QQTK 单元 194/194、SDK 隔离审计及边界 38/38，两份补丁重建并在上游快照应用一致。新增回归覆盖重附着时六类旧发送结果及并发调用、保留 I/O 缓存的 HMR 重试、发送 ID 长度、连续 HMR 与重复 close、暂缓行分页、固定同毫秒入账的批量 FIFO、真实临时 SQLite 写锁/只读故障，以及 Remote Ops 初次落盘失败、写入结果不确定、终态写入失败和旧实例迟到写回。rc.3 Interaction/Notification 与 Inspector 探针通过；Lifecycle 的一次重启阶段出现原生 Subagent `cannot create effect on inactive context`，后续全新 Profile 复测及未改 PR Head 的两次对照通过，根因尚未确认，不将首次失败抹去或宣称稳定性完全验收。首次推送的 Ubuntu CI 捕获分页实现将同毫秒批量提醒按事件 ID 重排的回归，已以固定时间用例复现并改用入账顺序；未降低原顺序断言。
 
 后续生命周期排查：在真实 rc.3 的 Context 已关闭、Agent 尚未移出注册表的窗口重载原生 Spawn，首轮稳定复现同一 INACTIVE_EFFECT 调用点。既有 Tools 包内增加薄适配，仅过滤已关闭 Context，其他原生逻辑与错误透传；适配后压力探针 30 轮通过，正式 Lifecycle 探针增加每次启动三轮复现回归。原首次失败缺少阶段日志，无法追溯其具体热重载顺序。新增阶段标记供后续定位；不再将这类异常作为无法验证的假设，也不改官方 DSH。Worker 真实 Host 两阶段回归仍保留原生工具、白名单、深度和冷恢复断言。
 
-升级/回滚边界：尚未保护真实运行数据。从不包含本修复的旧代码升级，或回滚到旧代码，必须停止旧 Host 并确认退出后再切换，不能依赖旧实现的 10 秒关闭超时或跨版本 HMR。新实现内部 HMR 的所有权防护不能约束仍在执行的旧版代码。底层发送永久不结束时，关闭会等待而不放开所有权；需停净进程后以 unknown 屏障冷恢复，不盲目补发。
+升级/回滚边界：本次已完成停机备份和冷切换；未做生产回滚演练。从不包含本修复的旧代码升级，或回滚到旧代码，必须停止旧 Host 并确认退出后再切换，不能依赖旧实现的 10 秒关闭超时或跨版本 HMR。回退需成套恢复旧 Profile、维护代码和包策略，保留最新 Memory、Session 与通知状态，不能用旧账本覆盖当前结果。新实现内部 HMR 的所有权防护不能约束仍在执行的旧版代码。底层发送永久不结束时，关闭会等待而不放开所有权；需停净进程后以 unknown 屏障冷恢复，不盲目补发。
 
-## Iteration 06（Agent I/O test.6，已授权部署）
+## Iteration 06（Agent I/O test.6，历史部署，已由 Iteration 07 取代）
 
 2026-11-01 按授权部署：QQTK `main` `61ad840`（PR #7）的补丁与 70 个维护文件（新增 `ops.cjs` 与 `manage.ps1`：其 verify/Stage 改查 HITL Bridge 接线），Character `main` `4a2ac56`（PR #8）；已安装的 `dsh-agent-io` 经显式 `--agent-io-artifact` 由 test.5 升至 test.6，tarball 与在 `main` 上重跑的隔离 rc.3 探针（25 项，`hitl`/`inbound`/`media` 均已实测）所装的包逐字节一致。Character 包、Interaction test.9 与 Conversation Manager test.2 不变。
 
