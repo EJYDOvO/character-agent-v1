@@ -29,7 +29,7 @@ DSH 原生 Web/Desktop 聊天窗继续用原生 UI、Session、渲染和 Streami
 
 ## 当前事实与剩余讨论
 
-当前部署基线（2026-10-31）为 **Character test.25 / Interaction test.9 / Agent I/O test.5 / Conversation Manager test.2 / QQTK Iteration 05 补丁**；Iteration 01–05 已授权部署，Iteration 06（HITL Bridge）为源码与隔离验证，未部署（实时状态以 [STATUS](../STATUS.md) 为准）。统一平台仓库及 QQ Personal 尚未实现。真实 QQ 手机收件、审批按钮等尚未完整验收。切片顺序见 [路线图](IMPLEMENTATION_ROADMAP.md)。
+当前部署基线（2026-11-01）为 **Character test.25 / Interaction test.9 / Agent I/O test.6 / Conversation Manager test.2 / QQTK Iteration 06 补丁**；Iteration 01–06 已授权部署（实时状态以 [STATUS](../STATUS.md) 为准）。统一平台仓库及 QQ Personal 尚未实现。真实 QQ 手机收件、审批按钮等尚未完整验收。切片顺序见 [路线图](IMPLEMENTATION_ROADMAP.md)。
 
 剩余讨论：结果结构在附件/引用/Interaction 确认点接入后的扩展、逐泡发送状态持久化与恢复、跨服务排序与背压、具体 Package/Plugin 命名。跨平台关联、管理员授权声明和 QQ Personal 协议选型留后续，不擅自定稿。
 

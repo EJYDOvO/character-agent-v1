@@ -2,9 +2,18 @@
 
 本页是版本与验收状态的统一入口。历史发布记录说明当时结果，不代表最新运行状态。
 
-## Iteration 06 源码（Agent I/O test.6，未部署）
+## Iteration 06（Agent I/O test.6，已授权部署）
 
-HITL Bridge：原生审批与 `ask_user_question` 的 QQ 展示和作答迁移到 Agent I/O。全部为源码与隔离验证，**未部署、未合并**；运行实例为下一节的 Agent I/O test.5。
+2026-11-01 按授权部署：QQTK `main` `61ad840`（PR #7）的补丁与 70 个维护文件（新增 `ops.cjs` 与 `manage.ps1`：其 verify/Stage 改查 HITL Bridge 接线），Character `main` `4a2ac56`（PR #8）；已安装的 `dsh-agent-io` 经显式 `--agent-io-artifact` 由 test.5 升至 test.6，tarball 与在 `main` 上重跑的隔离 rc.3 探针（25 项，`hitl`/`inbound`/`media` 均已实测）所装的包逐字节一致。Character 包、Interaction test.9 与 Conversation Manager test.2 不变。
+
+- **第一次切换未完成并已自动回滚**：分离启动的 Windows PowerShell 继承了 pwsh 的模块路径，离线快照脚本找不到 `Get-FileHash`；失败发生在停机之后、快照/审计/Profile 替换/维护文件替换之前，部署脚本恢复策略文件并以原 Profile（Agent I/O test.5）重启，QQ 重新连接（`ready`）。留下一个空的快照目录 `20261101-035837`（0 个文件）。改用 Windows PowerShell 自身的模块路径后第二次切换成功。
+- **切换**：停机一致性快照 `20261101-035945`（404 个文件）；离线审计无未完成 Turn/审批（26/26）、无 active 提醒、Outbox 不变（sent 3）、Memory Schema 3 / 15 条；最终路径冻结锁文件安装与逐文件比对通过，维护完整性校验（新 `ops.cjs verify`）通过。
+- **启动后**：新 Host 13 个 Preset 健康、单一 QQ Gateway（`Bot ready` 一次、QQ `connected/ready`）、`agent-io` test.6 与 Manager 激活、官方 ASAR 未变、错误日志为空；Owner 上下文、只读 Inspector、未登录/外站拒绝、QQ 路由、旧偏好、提醒与 Outbox 检查通过。旧 Profile 保留以便回滚。
+- 部署前（11-01 03:09 起）旧 Host 的 QQ 健康记录停在 `reconnecting`：同期 Host 有 `ERR_NAME_NOT_RESOLVED`，为本机网络/DNS 中断；SDK 以 resume 重连成功时不更新该记录，因此当时无法确认是否已恢复。切换（含回滚那次重启）后 QQ 均为全新连接并 `ready`。
+
+未发送 QQ 验收消息：真实 QQ 审批/问答按钮的显示与点击、手机端仍未验收。
+
+HITL Bridge：原生审批与 `ask_user_question` 的 QQ 展示和作答迁移到 Agent I/O（QQTK PR #7 / Character PR #8，定向审查的多题发送竞态与文档基线修复后合并）。
 
 - **权威不变**：原生 Approval（`approval/request`）与 `userQuestions.ask()`（`user-questions/request`）仍是唯一业务权威：审批策略、结果闭合集合（`allowed-once|rejected|cancelled|unavailable`）、审计事件与 `ASK_ABORTED` 错误语义都不变。Bridge 只负责请求关联、展示、可信回应、取消、超时与状态清理。
 - **集中接入**：`dsh-agent-io@0.1.0-test.6` 在第一个平台打开 Bridge 时以 `prepend` 注册这两个原生 waterfall 的监听器一次，最后一个关闭时移除；不属于已打开 Bridge 当前 Session 的请求原样交给原生 Web/Desktop。不再修改全局 `userQuestions.ask`。
@@ -17,7 +26,7 @@ HITL Bridge：原生审批与 `ask_user_question` 的 QQ 展示和作答迁移�
 
 未验证：真实 QQ 按钮键盘的显示与点击（含 keyboard 权限、群聊点击字段）、手机端；同一 Session 并发的第二个审批仍为 `unavailable`；HITL 状态只在内存，重启即取消；`run-generic-probe` 使用生产凭据，未运行。
 
-## Iteration 05（Agent I/O test.5，已授权部署）
+## Iteration 05（Agent I/O test.5，2026-10-31 授权部署，已由 Iteration 06 取代）
 
 2026-10-31 按授权部署：QQTK `main` `47a2a43` 的补丁与 67 个维护文件、Character `main` `15ec724`；已安装的 `dsh-agent-io` 经显式 `--agent-io-artifact` 由 test.4 升至 test.5（tarball 与在 `main` 上重跑的隔离 rc.3 探针所装的包一致）。Character 包、Interaction test.9 与 Conversation Manager test.2 不变。停机一致性快照 400 个文件；离线审计无未完成 Turn/审批、无 active 提醒、Outbox 不变、Memory Schema 3 / 15 条；最终路径冻结锁文件安装与逐文件比对通过；新 Host 13 个 Preset 健康、单一 QQ Gateway、`agent-io` test.5 与 Manager 激活，部署后 Owner 上下文/Inspector/路由/提醒/Outbox 检查通过；旧 Profile 保留以便回滚。未发送 QQ 验收消息，真实 QQ 命令、媒体与手机端仍未验收。
 
