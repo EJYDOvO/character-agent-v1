@@ -2,13 +2,26 @@
 
 本页是版本与验收状态的统一入口。历史发布记录说明当时结果，不代表最新运行状态。
 
+## Iteration 05 源码（Agent I/O test.5，未部署）
+
+Commands 与基础 Media 抽离，并修复第四轮遗留的 Turn 取消控制器淘汰问题。全部为源码与隔离验证，**未部署、未合并**，运行实例仍是下一节的 Agent I/O test.4 / Interaction test.9。
+
+- **Commands**：QQTK `dsh-agent-io@0.1.0-test.5` 新增 I/O 内部命令路由（`conversation.openCommands()`）：识别、解析、在入站去重范围内一次性认领（`claim()`）与路由；执行与授权仍由命令所属插件负责。QQ 的 `/stop`、`/bot-*`、`/new`、`/compact`、`/model`、`/preset` 与 Remote Ops `/ops` 改经该路由，QQ `commandGate` 只做 @ 标记与群 @ 判断，位置仍在并发合并之前；SDK `slashCommand` 已移除。命令消息不会重复执行，也不会再成为 Agent 输入；未知命令仍作为普通聊天。审批/问答回应与显式更正保持原语义。
+- **基础 Media**：`sendMessage()` 与入站标准消息新增可选附件描述（图片/语音/视频/文件；可信资源 `resource` 与模型可见内容分开）及入站引用 `quote`。QQ 入站附件与引用改为标准描述，模型可见正文从描述组装（格式不变）；`qqbot_send_file` 改经 `sendMessage()` 作为附件消息发送——只能发往调用者 Agent 的当前会话（不再接受其他 openid）、路径白名单与符号链接解析保留并在发送时复核、上传与媒体消息分阶段分类（上传失败 `not-sent`，消息超时 `unknown` 不重发）、同轮同文件不重发。原 `mediaSender` 直发路径已删除。
+- **Iteration 04 遗留修复**：QQ Gateway 的 Turn 控制器改为租约：仍在 I/O 中的提交持有其控制器，容量（每 Session 8、全局 256）只淘汰空闲控制器，`/stop` 总能取消排队中的旧 Turn 输出；Session 释放（Conversation Manager `release`）与 Gateway 关闭时中止并清理；被持有的数量受 I/O 队列上限约束。
+- **Character**：部署计划在补丁使用 `openCommands()` 时要求 `dsh-agent-io` 同时提供 `openConversation()` 与 `openCommands()`（test.5），已安装 test.4 时须显式 `--agent-io-artifact` 升级；隔离 Interaction 探针新增命令与媒体检查。Character 运行包无改动。
+
+验证（本机，未部署、未连接 QQ）：QQTK 轻量 166（新增命令路由 10、Turn 控制器 8、QQ 媒体 12 及命令/取消集成项）、审批/边界 12、代码隔离 SDK 审计 32（新增真实 SDK MediaApi 的上传/发送与错误分类）、两份补丁重建一致且可应用、导出检查无本地密钥；Character 单元 220、安全审计 33；隔离 rc.3 Interaction 探针 24 项（含已安装 test.5 的命令路由与 QQ 门、真实文件经 I/O 的 `qqbot_send_file`、入站附件描述），`qqNetwork: false`。关键保护的变异检查（租约淘汰、命令认领/准入/门控、发送时白名单与真实路径复核、目标限制、上传阶段分类、远程资源、附件预检、未知不重试）均被测试捕获。
+
+未验证：真实 QQ 上传与手机展示（图片/语音/视频/文件的格式与大小限制）、真实群聊命令与 @ 行为、语音 STT；视觉理解等高级媒体工具未改；出站引用（`replyTo`）与远程 URL 附件未实现；`run-generic-probe` 使用生产凭据，未运行。
+
 ## Interaction test.9 / Agent I/O test.4 / QQTK Iteration 03–04（已授权部署）
 
-Character 其余包与 Core/Extras 不变（仍为 test.25，产物哈希与运行实例一致），仅 `dsh-interaction-policy` 升至 `0.1.0-test.9`；已安装的 `dsh-agent-io` 经部署计划新增的显式升级路径（`--agent-io-artifact`：先按固定记录复核已安装包，新包须为另一版本且提供 `openConversation()`）由 test.3 升至 test.4，所用 tarball 与隔离 rc.3 Interaction 探针（入站已实测）安装的包逐字节一致，旧 tarball 与旧 Profile 保留。QQ 补丁与 QQTK 维护源码来自 QQTK PR #5 `e01fcce`，Character 来自 PR #6 `811a880`（两 PR 均未合并）。
+Character 其余包与 Core/Extras 不变（仍为 test.25，产物哈希与运行实例一致），仅 `dsh-interaction-policy` 升至 `0.1.0-test.9`；已安装的 `dsh-agent-io` 经部署计划新增的显式升级路径（`--agent-io-artifact`：先按固定记录复核已安装包，新包须为另一版本且提供 `openConversation()`）由 test.3 升至 test.4，所用 tarball 与隔离 rc.3 Interaction 探针（入站已实测）安装的包逐字节一致，旧 tarball 与旧 Profile 保留。QQ 补丁与 QQTK 维护源码来自 QQTK PR #5 `e01fcce`，Character 来自 PR #6 `811a880`（部署时两 PR 尚未合并；之后已合并：QQTK `main` `51c0e41`、Character `main` `b880464`，合并后的代码除文档外与部署一致）。
 
 已按授权完成空闲门禁、停机一致性快照（395 个文件）与离线状态审计（无未完成 Turn/审批、无 active 提醒、Memory Schema 3 / 15 条），候选离线安装与最终路径冻结锁文件校验通过（已安装运行代码逐文件比对已审源码），替换 63 个 QQTK 维护文件后单活切换。启动后 13 个 Preset 健康、单一 QQ Gateway（`Bot ready` 一次）、`agent-io`（test.4）与 Manager 激活、官方 ASAR 未变、启动日志无错误；Owner 上下文、只读 Inspector、未登录/外站拒绝、QQ 路由、提醒与 Outbox 保持不变。未发送 QQ 验收消息；QQ 不再边生成边显示（短回复与最后一个气泡在生成结束后整条出现），实际分泡节奏与手机收件待真实对话确认。
 
-## Iteration 04 源码（Interaction test.9）
+## Iteration 04 源码（Interaction test.9，已随上文部署）
 
 Interaction `0.1.0-test.9` 只提交完整气泡（长回复在生成期间按定稿规则提前提交，其余在 settlement 后提交；不预览、不使用 `openStream`）。QQTK 补丁的桥接层把每个气泡、等待提示与工具/轮次错误都作为一条逻辑消息交给 Agent I/O `sendMessage()` → QQ 文本 Adapter：稳定逻辑 ID（Session/Turn/策略实例/回复/气泡）、按原生输入的回复目标、逐片权限与当前 Session 复核、`/stop`/撤回/Turn 中止取消、未确认气泡不重发并扣留同回复后续气泡。Interaction 专属 SDK Stream 与普通回复的 SDK 流式输出已移除（`streaming` 停用）。Agent I/O 公共接口不变（仍为 `0.1.0-test.4`）。范围见 [路线图](architecture-planning/IMPLEMENTATION_ROADMAP.md) 3.3。
 

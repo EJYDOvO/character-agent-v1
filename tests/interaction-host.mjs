@@ -1,6 +1,6 @@
 // Actual native Host/Agent loop, deterministic provider and synthetic transport.
 import fs from 'node:fs';import assert from 'node:assert/strict';import {randomUUID} from 'node:crypto';
-import {pathToFileURL} from 'node:url';
+import {pathToFileURL} from 'node:url';import path from 'node:path';
 import {registerHooks} from 'node:module';
 const sdk=(process.env.DSH_CHARACTER_HOST_ROOT||process.env.DSH_INSTALL_ROOT)+'/resources/app.asar/dsh/node_modules/@deepseek-ai/';
 const {LlmAdapter,createUserMessage}=await import(pathToFileURL(sdk+'dsh-llm/lib/index.js').href);
@@ -182,7 +182,14 @@ export function apply(ctx,config){
    const plainManager={ctx,getOrCreate:async(scope,peer,senderId,target)=>{assert.deepEqual([scope,peer,senderId],['c2c','synthetic-owner','synthetic-owner']);plainRecord.replyTarget=target;return plainRecord;},findBySessionId:id=>id===base.id?plainRecord:undefined,getSessionRecord:(s,peer)=>s==='c2c'&&peer==='synthetic-owner'?plainRecord:undefined,isCurrentSession:r=>r===plainRecord&&ctx.agents.get(base.id)===base,approvalChannel:{pending:new Map()},questionChannel:{pending:new Map()}};
    const plainConfig={appId:'synthetic-app',streaming:false,textChunkLimit:3500,showToolResults:false,access:{c2cMode:'allowlist',c2cAllow:['synthetic-owner'],groupMode:'disabled',groupAllow:[]}};
    const plainConversation=io.openConversation({platform:'qq-official',adapter:'qq-official-gateway',accountId:'synthetic-app',manager:plainManager,scopes:QQ_SCOPES,admits:(scope,peer)=>accessAllows(plainConfig.access,scope,peer)});
-   const releaseAdapter=plainConversation.registerAdapter(createQQTextAdapter({limit:3500,split:t=>[t],send:async(target,text)=>{plainSent.push({text,msgId:target.msgId});return {id:'receipt-'+plainSent.length};}}));
+   // Iteration 05 basic media: the reviewed sendMedia on real files; only the QQ bot is synthetic.
+   const {sendMedia}=await import(pathToFileURL(config.qqFixture+'/dist/gateway/bootstrap.js').href);
+   const {ReplyLimiter}=await import(pathToFileURL(config.qqFixture+'/dist/transport/reply-limiter.js').href);
+   const mediaDir=path.join(config.cwd,'media-probe');fs.mkdirSync(mediaDir,{recursive:true});const mediaConfig={sendFile:{restrictPaths:true,extraRoots:[]},cwd:fs.realpathSync(mediaDir)};
+   const mediaCalls=[],mediaBot={creds:{},async uploadMedia(o){mediaCalls.push({stage:'upload',fileType:o.fileType,srvSendMsg:o.srvSendMsg,path:o.localPath});return {file_uuid:'synthetic-uuid',file_info:'synthetic-info'};},
+    mediaApi:{async sendMediaMessage(_scope,_target,info,_creds,opts){mediaCalls.push({stage:'message',info,msgId:opts.msgId});return {id:'synthetic-media-'+mediaCalls.length};}}};
+   const releaseAdapter=plainConversation.registerAdapter(createQQTextAdapter({limit:3500,split:t=>[t],send:async(target,text)=>{plainSent.push({text,msgId:target.msgId});return {id:'receipt-'+plainSent.length};},
+    sendMedia:(target,attachment)=>sendMedia(mediaBot,new ReplyLimiter({limit:4}),mediaConfig,target,attachment)}));
    const plainHandler=createInteractionOutbound(ctx,plainManager,sender,plainConfig,logger,ctx.tools,null,{...io,sendMessage:r=>{ids.push(r.id);return io.sendMessage(r);}},plainConversation);
    const releasePlain=ctx.on('session/event',plainHandler);
    try{
@@ -207,6 +214,43 @@ export function apply(ctx,config){
       assert.equal(inputs().length,1,'duplicate push creates no second input');assert.equal(plainSent.length,before+1,'and no second reply');
       const stranger=await channel.receive({conversation:{type:'direct',id:'stranger'},message:{id:'synthetic-inbound-2',text:'hi'},sender:{id:'stranger'},platformData:{context:qqEvent()}});
       assert.equal(stranger.status,'rejected');
+      // Iteration 05 commands: the reviewed QQ gate on the installed I/O command router.
+      const {commandGate,qqCommand}=await import(pathToFileURL(config.qqFixture+'/dist/gateway/middleware-setup.js').href);
+      const router=plainConversation.openCommands({prefixes:['/']});let stops=0;
+      router.register(qqCommand({name:'stop',hidden:true,handler:()=>{stops++;return '已中止';}}));
+      const gate=commandGate(router),replies=[];
+      const cmd=(id,content,sender='synthetic-owner')=>({message:{kind:'c2c',senderId:sender,messageId:id,content},state:{},replyTarget:{scope:'c2c',targetId:sender,msgId:id},bot:{sendText:async(_t,c)=>replies.push(c)},log:logger,stop(r){this.stopped=r;}});
+      const through=async c=>{let passed=false;await gate(c,async()=>{passed=true;});return passed;};
+      const first=cmd('synthetic-cmd-1','/stop');assert.equal(await through(first),false);assert.equal(first.stopped,'command:handled:stop');assert.equal(stops,1);assert.deepEqual(replies,['已中止']);
+      const commandInputs=()=>Array.from({length:base.session.seq},(_,i)=>base.session.eventAt(i)).filter(e=>e?.type==='user/message'&&JSON.stringify(e.data).includes('/stop'));
+      const redelivered={...qqEvent(),message:{...qqEvent().message,messageId:'synthetic-cmd-1',content:'/stop'}};
+      await handleInbound(redelivered,logger,channel);await sleep(100);assert.equal(commandInputs().length,0,'the claimed command is a duplicate for the chat channel: no native input');
+      const again=cmd('synthetic-cmd-1','/stop');await through(again);assert.equal(again.stopped,'command:duplicate');assert.equal(stops,1);
+      const outsider=cmd('synthetic-cmd-2','/stop','stranger');await through(outsider);assert.equal(outsider.stopped,'command:rejected');assert.equal(stops,1);
+      assert.equal(await through(cmd('synthetic-cmd-3','/unknown-probe')),true,'unknown commands stay ordinary chat');
+      report.checks.push('Installed dsh-agent-io command router behind the reviewed QQ gate: /stop runs once and never becomes native input, a re-delivery is a duplicate, strangers and unknown commands are not run');
+      // Inbound media: QQ attachments become I/O descriptors and the native input describes them.
+      const withImage={...qqEvent(),message:{...qqEvent().message,messageId:'synthetic-inbound-media',content:'看图',attachments:[{content_type:'image/png',filename:'p.png',size:10,url:'https://example.invalid/p.png'}]}};
+      await handleInbound(withImage,logger,channel);await base.whenIdle();await sleep(100);
+      const mediaInput=Array.from({length:base.session.seq},(_,i)=>base.session.eventAt(i)).filter(e=>e?.type==='user/message'&&JSON.stringify(e.data).includes('看图'));
+      assert.equal(mediaInput.length,1);const mediaText=JSON.stringify(mediaInput[0].data);
+      assert(mediaText.includes('[图片]')&&mediaText.includes('Image: https://example.invalid/p.png'),'the model-visible body describes the attachment');
+      // Outbound media: qqbot_send_file on a real file through the installed I/O and the reviewed adapter.
+      const {registerSendFileTool}=await import(pathToFileURL(config.qqFixture+'/dist/media/send-file-tool.js').href);
+      const defs=[];plainManager.findByAgent=agent=>agent===base?plainRecord:undefined;
+      registerSendFileTool({get:n=>n==='tools'?{register:d=>defs.push(d)}:undefined},null,plainManager,mediaConfig,logger);
+      const tool=defs.find(d=>d.name==='qqbot_send_file'),png=path.join(mediaConfig.cwd,'chart.png');fs.writeFileSync(png,'synthetic-png');
+      const out=await tool.execute({file_path:png},{agent:base});
+      assert.deepEqual([out.fileName,out.fileUuid,out.target],['chart.png','synthetic-uuid','c2c:synthetic-owner']);
+      assert.deepEqual(mediaCalls.map(c=>c.stage),['upload','message']);assert.equal(mediaCalls[0].srvSendMsg,false);assert.equal(mediaCalls[0].path,fs.realpathSync(png));
+      assert(ids.some(id=>/^qq:.+:file:[0-9a-f]{16}$/.test(id??'')),'stable logical id of the file message');
+      await tool.execute({file_path:png},{agent:base});assert.equal(mediaCalls.length,2,'the same file in the same Turn is not resent');
+      await assert.rejects(tool.execute({file_path:png,target:'c2c:someone-else'},{agent:base}),/current conversation/);
+      const outsideFile=path.join(config.cwd,'outside-probe.txt');fs.writeFileSync(outsideFile,'x');
+      await assert.rejects(tool.execute({file_path:outsideFile},{agent:base}),/不在允许的目录内/);assert.equal(mediaCalls.length,2);
+      const remote=await io.sendMessage({target:plainConversation.target(plainRecord),origin:{sessionId:base.id},message:{attachments:[{kind:'image',resource:{type:'remote',url:'https://example.invalid/x.png'}}]}});
+      assert.deepEqual([remote.status,remote.reason],['not-sent','unsupported']);
+      report.checks.push('Installed dsh-agent-io basic media: QQ attachments reach the native input as descriptors; qqbot_send_file sends a real whitelisted file once through the I/O (upload, then media message), other targets, outside paths and remote resources are refused');report.media='exercised';
      }finally{channel.close();}
      report.checks.push('Installed dsh-agent-io inbound: a QQ event becomes one native input through the shared Conversation handoff and its reply goes out through the I/O; duplicate push and stranger add nothing');report.inbound='exercised';
     }
