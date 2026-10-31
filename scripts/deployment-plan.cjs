@@ -75,18 +75,29 @@ function verifiedAgentIO(live,core,patches,args=process.argv){
  const row=entries(core).find(r=>r.name===name);
  if(!row){assert(!required,'Reviewed QQ patch requires '+name+'; rebuild Character Core');return;}
  const manifest=JSON.parse(fs.readFileSync(path.join(live,'package.json')));
+ const arg=args.find(a=>a.startsWith('--agent-io-artifact='));
+ const reviewed=()=>{
+  const file=arg.slice('--agent-io-artifact='.length);
+  assert(path.isAbsolute(file)&&fs.existsSync(file),'Reviewed '+name+' tarball missing');
+  const pkg=tarPackage(file);assert.equal(pkg?.name,name,'Invalid '+name+' tarball');assert(typeof pkg.version==='string'&&pkg.version,'Invalid '+name+' version');
+  assert(!wiring||offers(tarEntry(file,'package/index.mjs')?.toString()),'Reviewed QQ patch needs '+needs);
+  return {name,file,sha256:hash(file),version:pkg.version,fresh:true};
+ };
  if(manifest.dependencies?.[name]){
   const installed=verifiedArtifact(live,name);
-  assert(!wiring||offers(fs.readFileSync(path.join(live,'node_modules',name,'index.mjs'),'utf8')),'Reviewed QQ patch needs '+needs+'; this plan does not upgrade the installed '+name+' yet');
-  return installed;
+  if(!arg){
+   assert(!wiring||offers(fs.readFileSync(path.join(live,'node_modules',name,'index.mjs'),'utf8')),'Reviewed QQ patch needs '+needs+'; the installed '+name+' '+installed.version+' lacks it: upgrade it with --agent-io-artifact=<absolute reviewed .tgz>');
+   return installed;
+  }
+  // Explicit upgrade of the installed, verified package. Pinned artifacts are
+  // immutable, so the replacement must carry another version; the previous
+  // tarball stays in plugin-packages and in the previous Profile for rollback.
+  const next=reviewed();
+  assert.notEqual(next.version,installed.version,name+' '+installed.version+' is already installed; a changed package needs a new version');
+  return {...next,upgradeFrom:installed.version};
  }
- const arg=args.find(a=>a.startsWith('--agent-io-artifact='));
  assert(arg,'First '+name+' install requires a reviewed tarball: --agent-io-artifact=<absolute .tgz>');
- const file=arg.slice('--agent-io-artifact='.length);
- assert(path.isAbsolute(file)&&fs.existsSync(file),'Reviewed '+name+' tarball missing');
- const pkg=tarPackage(file);assert.equal(pkg?.name,name,'Invalid '+name+' tarball');assert(typeof pkg.version==='string'&&pkg.version,'Invalid '+name+' version');
- assert(!wiring||offers(tarEntry(file,'package/index.mjs')?.toString()),'Reviewed QQ patch needs '+needs);
- return {name,file,sha256:hash(file),version:pkg.version,fresh:true};
+ return reviewed();
 }
 // Copy a first-install artifact next to the other immutable packages and pin it.
 function pinAgentIO(agentIO,root){

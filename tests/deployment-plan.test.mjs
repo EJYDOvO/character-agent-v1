@@ -126,8 +126,22 @@ test('A QQ patch that opens the Conversation wiring refuses a dsh-agent-io witho
  const manifest=JSON.parse(readFileSync(join(f.live,'package.json')));manifest.dependencies[name]=pin.source;write(join(f.live,'package.json'),manifest);
  const pins=JSON.parse(readFileSync(join(f.live,'character-artifacts.json')));pins[name]={source:pin.source,sha256:pin.sha256,version:pin.version};write(join(f.live,'character-artifacts.json'),pins);
  write(join(f.live,'node_modules',name,'package.json'),{name,version:'0.1.0-test.3'});write(join(f.live,'node_modules',name,'index.mjs'),"ctx.provide('agentIO',{sendMessage,registerAdapter,openInbound});");
- assert.throws(()=>plan.verifiedAgentIO(f.live,core,patches,[]),/does not upgrade the installed dsh-agent-io/);
+ assert.throws(()=>plan.verifiedAgentIO(f.live,core,patches,[]),/installed dsh-agent-io 0\.1\.0-test\.3 lacks it: upgrade it with --agent-io-artifact/);
  assert.equal(plan.verifiedAgentIO(f.live,core,[],[]).version,'0.1.0-test.3','the previous patch keeps the installed package');
+ // Explicit upgrade: verified like a first install, a new version, the old tarball kept.
+ assert.throws(()=>plan.verifiedAgentIO(f.live,core,patches,['--agent-io-artifact='+old]),/openConversation \(0\.1\.0-test\.4 or later\)/,'an upgrade to a package without the interface is refused');
+ const same=join(f.root,'same.tgz');tarball(same,'0.1.0-test.3',name,{'index.mjs':"ctx.provide('agentIO',{sendMessage,registerAdapter,openInbound,openConversation});"});
+ assert.throws(()=>plan.verifiedAgentIO(f.live,core,patches,['--agent-io-artifact='+same]),/already installed; a changed package needs a new version/);
+ const wrong=join(f.root,'wrong.tgz');tarball(wrong,'0.1.0-test.4','dsh-other',{'index.mjs':'openConversation'});
+ assert.throws(()=>plan.verifiedAgentIO(f.live,core,patches,['--agent-io-artifact='+wrong]),/Invalid dsh-agent-io tarball/);
+ assert.throws(()=>plan.verifiedAgentIO(f.live,core,patches,['--agent-io-artifact='+join(f.root,'missing.tgz')]),/tarball missing/);
+ const upgrade=plan.verifiedAgentIO(f.live,core,patches,['--agent-io-artifact='+next]);
+ assert.deepEqual([upgrade.fresh,upgrade.version,upgrade.upgradeFrom,upgrade.sha256],[true,'0.1.0-test.4','0.1.0-test.3',plan.hash(next)]);
+ const pinned=plan.pinAgentIO(upgrade,f.root);assert.deepEqual(pinned,{name,source:'file:'+join(f.root,'plugin-packages','dsh-agent-io-0.1.0-test.4.tgz').replaceAll('\\','/'),sha256:plan.hash(next),version:'0.1.0-test.4'});
+ assert.equal(plan.hash(join(f.root,'plugin-packages','dsh-agent-io-0.1.0-test.3.tgz')),pin.sha256,'the replaced tarball stays for rollback');
+ // A tampered installed artifact is still refused before any upgrade.
+ writeFileSync(join(f.root,'plugin-packages','dsh-agent-io-0.1.0-test.3.tgz'),Buffer.concat([readFileSync(old),Buffer.alloc(1)]));
+ assert.throws(()=>plan.verifiedAgentIO(f.live,core,patches,['--agent-io-artifact='+next]),/artifact hash changed/);
 });
 test('the Character QQ wrapper declares agentIO and generated Core installs dsh-agent-io',()=>{
  const adapter=readFileSync(new URL('../packages/character-qq-adapter/index.mjs',import.meta.url),'utf8'),build=readFileSync(new URL('../scripts/build.cjs',import.meta.url),'utf8');

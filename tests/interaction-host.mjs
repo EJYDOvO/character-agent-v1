@@ -35,7 +35,7 @@ export function apply(ctx,config){
  ctx.llm.registerAdapter(['interaction-fixture'],new Provider());
  ctx.tools.register(defineTool({name:'interaction_fixture',description:'Isolated synthetic tool',parameters:{},output:{schema:{type:'string'},render:(_a,v)=>[{type:'text',text:v}]},async execute(_a,{signal}){toolStarted=true;const aborted=()=>toolAborted=true;signal.addEventListener('abort',aborted,{once:true});try{await toolGate;return 'fixture-result';}finally{signal.removeEventListener('abort',aborted);}}}));
  ctx.effect(()=>{const timer=setTimeout(()=>void run(),700);return()=>clearTimeout(timer);});
- async function run(){const handles=[],report={ok:false,runId:config.runId,host:config.version,provider:'deterministic-fixture',qqNetwork:false,checks:[]};let resolver,releaseOutbound,conversation;
+ async function run(){const handles=[],report={ok:false,runId:config.runId,host:config.version,provider:'deterministic-fixture',qqNetwork:false,checks:[]};let resolver,releaseOutbound,releaseInteractionAdapter,conversation;
   try{
    assert(!ctx.get('qqGateway'));assert(!ctx.get('characterMemory'));
    const create=async preset=>{const h=await ctx.agents.create({sessionId:randomUUID(),agentOptions:{provider:'interaction-fixture',model:'fixture'},meta:{cwd:config.cwd,agentPreset:preset},setup:async c=>{await ctx.agentPresets.mount(c,preset);}});handles.push(h);return h.agent;};
@@ -64,8 +64,15 @@ export function apply(ctx,config){
    const io=ctx.get('agentIO');assert(typeof io?.openConversation==='function','Installed dsh-agent-io has no openConversation (pre-Iteration 03 package)');
    conversation=io.openConversation({platform:'qq-official',adapter:'qq-official-gateway',accountId:'synthetic-interaction',manager,scopes:{direct:'c2c',group:'group'},admits:(scope,peer)=>scope==='c2c'&&peer==='synthetic-owner',onInput:(r,m,policy)=>{if(policy)manager.trackInteractionInput?.(r,m);}});
    const logger={debug(){},info(){},warn(){},error(){}};
-   const sender={async sendMarkdown(target,t,opts){sent.push({t,msgId:target?.msgId,input:opts?.delivery?.input,reply:opts?.delivery?.reply});},openStream(target,meta){const row={text:'',done:false,msgId:target?.msgId,input:meta?.input,reply:meta?.reply,bubble:meta?.bubble};bubbles.push(row);return {async update(t){row.text=t;meta?.onDelivered?.();},async complete(){row.done=true;}};}};
-   releaseOutbound=ctx.on('session/event',createInteractionOutbound(ctx,manager,sender,{streaming:true,textChunkLimit:3500,showToolResults:false},logger,ctx.tools,undefined,io,conversation));
+   // Iteration 04: every Interaction bubble and status line is a logical message of the
+   // installed Unified I/O, sent by the reviewed QQ text adapter; the gateway sender is
+   // never called directly for chat output, and there is no SDK stream.
+   const direct=[],sender={async sendMarkdown(){direct.push('sendMarkdown');},openStream(){direct.push('openStream');throw Error('no stream');}};
+   const {createQQTextAdapter,accessAllows,QQ_SCOPES}=await import(pathToFileURL(config.qqFixture+'/dist/transport/qq-text-adapter.js').href);
+   const outbound=createInteractionOutbound(ctx,manager,sender,{streaming:true,textChunkLimit:3500,showToolResults:false},logger,ctx.tools,undefined,io,conversation);
+   releaseOutbound=ctx.on('session/event',outbound);
+   releaseInteractionAdapter=conversation.registerAdapter(createQQTextAdapter({limit:3500,split:t=>[t],replyTarget:(_r,id)=>outbound.delivery(id)?.target,
+    async send(target,t,info){const d=outbound.delivery(info.messageId),row={t,text:t,done:true,id:info.messageId,msgId:target?.msgId,input:d?.input,reply:d?.delivery?.reply,bubble:d?.delivery?.bubble,kind:d?.delivery?.kind};(row.kind==='assistant'?bubbles:sent).push(row);return {id:'receipt-'+(bubbles.length+sent.length)};}}));
    const middleware=[];setupMiddlewares({use:m=>middleware.push(m)},{access:{c2cMode:'allowlist',c2cAllow:['synthetic-owner'],groupMode:'disabled',groupAllow:[]},historyLimit:10,media:{enabled:false}},manager,logger,conversation);
    let admitted=false;await middleware[2]({message:{kind:'c2c',senderId:'stranger'},log:logger,stop(){}},async()=>{admitted=true;});assert(!admitted);
    report.checks.push('Actual modified QQ outbound and middleware load with real SDK; outsider blocked without a gateway');
@@ -78,10 +85,11 @@ export function apply(ctx,config){
    const handed=conversation.submit(record,'chat-case');assert.equal(handed.status,'accepted');assert.equal(handed.mode,'followup');assert.equal(handed.interactive,true);
    assert.equal(handed.message.source.kind,'user');assert.equal(typeof handed.message.id,'string','the native dsh-llm UserMessage');await a.whenIdle();await p.idle();
    report.checks.push('Shared handoff: one native UserMessage via the Host dsh-llm constructor, admitted to Interaction, followup on the idle Agent');
-   assert.deepEqual(bubbles.map(b=>b.text),['嗯，今天还不错。咖啡机终于修好了。']);assert(bubbles.every(b=>b.done));assert(!sent.length);
+   assert.deepEqual(bubbles.map(b=>b.text),['嗯，今天还不错。咖啡机终于修好了。']);assert(!sent.length);assert.deepEqual(direct,[]);
+   assert(bubbles[0].id.startsWith('qq:'+a.id+':')&&/:\d+:[0-9a-f]{8}:\d+\.\d+:assistant$/.test(bubbles[0].id),'stable logical id: Session, Turn, policy instance, reply, bubble');
    assert(Array.from({length:a.session.seq},(_,i)=>a.session.eventAt(i)).some(e=>e?.type==='user/message'&&(e.data?.message??e.data)?.source?.kind==='time-context'),'Native time-context projection must actually run');
    report.checks.push('Official time-context projection preserves trusted QQ admission and reply delivery');
-   report.checks.push('Actual native assistant-stream frames produce ordered bubbles, durable settlement does not duplicate');
+   report.checks.push('Actual native assistant-stream frames produce complete bubbles through the installed Unified I/O and QQ text adapter, with stable ids; durable settlement does not duplicate');
    const history=()=>JSON.stringify(Array.from({length:a.session.seq},(_,i)=>a.session.eventAt(i)));
    const agentsBefore=ctx.agents.store.size;
    await send('slow-case');assert.equal(sent.filter(x=>x.t==='嗯，再等我一下下。').length,1);assert.equal(sent.filter(x=>x.t==='还在处理中，稍等一下。').length,0);
@@ -168,7 +176,8 @@ export function apply(ctx,config){
    // Plain Agent without Interaction: native reply -> original QQ router -> installed
    // dsh-agent-io -> QQ text adapter, with the logical id from the real Host seq.
    assert(typeof io.sendMessage==='function');
-   const {createQQTextAdapter,accessAllows,QQ_SCOPES}=await import(pathToFileURL(config.qqFixture+'/dist/transport/qq-text-adapter.js').href);
+   assert.deepEqual(direct,[],'no Interaction output bypassed the Unified I/O');
+   report.checks.push('All Interaction bubbles, hang-on lines and steered replies went through the installed Unified I/O; nothing used a direct send or SDK stream');
    const plainSent=[],ids=[],plainRecord={sessionKey:'plain',sessionId:base.id,agent:base,scope:'c2c',peerId:'synthetic-owner',replyTarget:{scope:'c2c',targetId:'synthetic-owner',msgId:'synthetic-plain'}};
    const plainManager={ctx,getOrCreate:async(scope,peer,senderId,target)=>{assert.deepEqual([scope,peer,senderId],['c2c','synthetic-owner','synthetic-owner']);plainRecord.replyTarget=target;return plainRecord;},findBySessionId:id=>id===base.id?plainRecord:undefined,getSessionRecord:(s,peer)=>s==='c2c'&&peer==='synthetic-owner'?plainRecord:undefined,isCurrentSession:r=>r===plainRecord&&ctx.agents.get(base.id)===base,approvalChannel:{pending:new Map()},questionChannel:{pending:new Map()}};
    const plainConfig={appId:'synthetic-app',streaming:false,textChunkLimit:3500,showToolResults:false,access:{c2cMode:'allowlist',c2cAllow:['synthetic-owner'],groupMode:'disabled',groupAllow:[]}};
@@ -203,6 +212,6 @@ export function apply(ctx,config){
     }
    }finally{releasePlain?.();releaseAdapter();plainConversation.close();}
    report.ok=true;
-  }catch(e){report.ok=false;report.error=e.stack;}finally{releaseTool();releaseOutbound?.();conversation?.close();for(const h of handles)await h.dispose().catch(()=>{});resolver?.deregister();fs.writeFileSync(config.result,JSON.stringify(report,null,2));}
+  }catch(e){report.ok=false;report.error=e.stack;}finally{releaseTool();releaseOutbound?.();releaseInteractionAdapter?.();conversation?.close();for(const h of handles)await h.dispose().catch(()=>{});resolver?.deregister();fs.writeFileSync(config.result,JSON.stringify(report,null,2));}
  }
 }

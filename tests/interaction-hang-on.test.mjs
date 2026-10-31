@@ -13,7 +13,8 @@ function fixture(config={},drafter){
  const agent={status:'running',cancel(){},followup(){},steer(){}};
  const draft=drafter===null?undefined:(input=>{const d={...input,at:time};drafts.push(d);return (drafter??(()=>'嗯，我还在弄，稍等我一下。'))(input,d);});
  const p=new Interaction(agent,{hangOnMs:8000,throttleMs:10,...config},clock,draft);
- const transport={key:agent,deliveryReceipts:true,async sendText(text,meta){sent.push(['text',text,meta]);meta?.onDelivered?.();},openStream(meta){const b={text:'',closed:false,meta};bubbles.push(b);return {async update(t){b.text=t;sent.push(['update',t,meta]);},async complete(){b.closed=true;},cancel(){b.closed=true;}};}};
+ // Commit-only transport: a resolved send is the platform's confirmation.
+ const transport={key:agent,async sendText(text,meta){sent.push(['text',text,meta]);if(meta?.kind==='assistant')bubbles.push({text,meta});}};
  p.bind(transport);
  const event=(type,data={})=>p.event({type,data});
  let rev=0,attempt=0;const start=()=>{event('turn/start');p.frame({type:'start',attemptId:++attempt,revision:++rev});};
@@ -41,16 +42,17 @@ test('unfinished draft at 8s falls back to the fixed text; its late result is di
  pending.resolve('迟到的候选');await f.settle();await f.advance(20000);assert.equal(f.status().length,1);assert.equal(f.p.candidate,null);await f.p.dispose();
 });
 
-test('natural receipt before 8s aborts the draft and drops any candidate',async()=>{
+test('a delivered bubble before 8s aborts the draft and drops any candidate; generated text alone does not',async()=>{
  const pending=deferred();const f=fixture({},()=>pending.promise);f.start();await f.advance(6000);
- f.chunk('我看了一下。');await f.advance(20);f.bubbles[0].meta.onDelivered();assert(f.drafts[0].signal.aborted);
+ f.chunk('我看了一下。');await f.advance(20);assert(!f.drafts[0].signal.aborted,'not visible yet');
+ f.message('我看了一下。');await f.settle();assert(f.drafts[0].signal.aborted);
  pending.resolve('还在想');await f.settle();await f.advance(5000);assert.equal(f.status().length,0);await f.p.dispose();
- const g=fixture();g.start();g.chunk('很快就回复了。');await g.advance(20);g.bubbles[0].meta.onDelivered();await g.advance(10000);assert.equal(g.drafts.length,0);assert.equal(g.status().length,0);await g.p.dispose();
+ const g=fixture();g.start();g.message('很快就回复了。');await g.settle();await g.advance(10000);assert.equal(g.drafts.length,0);assert.equal(g.status().length,0);await g.p.dispose();
 });
 
 test('status receipts never count as natural delivery',async()=>{
  const f=fixture();f.start();await f.advance(8000);assert.equal(f.status().length,1);assert.equal(f.p.delivered,false);
- f.chunk('正文。');await f.advance(20);assert.equal(f.p.delivered,false);f.bubbles[0].meta.onDelivered();assert.equal(f.p.delivered,true);
+ f.chunk('正文。');await f.advance(20);assert.equal(f.p.delivered,false);f.message('正文。');await f.settle();assert.equal(f.p.delivered,true);
  assert.equal(f.status()[0][2].kind,'status');assert.equal(f.bubbles[0].meta.kind,'assistant');await f.p.dispose();
 });
 
@@ -82,14 +84,14 @@ test('unsafe, empty or failing drafts fall back to the fixed text',async()=>{
  assert.equal(hangOnLine('「嗯，稍等我一下。」\n'),'嗯，稍等我一下。');
 });
 
-test('drafting runs concurrently and never blocks the main stream',async()=>{
+test('drafting runs concurrently and never blocks generation',async()=>{
  const pending=deferred();const f=fixture({},()=>pending.promise);f.start();await f.advance(5600);
- f.chunk('正文先开始流式输出。');await f.advance(20);assert.deepEqual(f.bubbles.map(b=>b.text),['正文先开始流式输出。']);
+ f.chunk('正文先开始生成。');await f.advance(20);assert.equal(f.p.message.full,'正文先开始生成。');assert.equal(f.bubbles.length,0,'not a complete bubble yet');
  f.p.draft();assert.equal(f.drafts.length,1);await f.advance(2400);assert.equal(f.status().length,1);pending.resolve('无用');await f.p.dispose();
 });
 
 test('hang-on is a status line outside the content budget; content still respects maxBubbles',async()=>{
- const f=fixture({maxBubbles:3});delete f.transport.openStream;const gate=deferred();let first=true;
+ const f=fixture({maxBubbles:3});const gate=deferred();let first=true;
  f.transport.sendText=async(text,meta)=>{f.sent.push(['text',text,meta]);if(first){first=false;await gate.promise;}meta?.onDelivered?.();};
  f.start();f.message('我先检查一下。');await f.settle(false);await f.advance(8000,false);
  const text='第一份完整结果。'.repeat(40)+'\n\n'+'第二份完整结果。'.repeat(40)+'\n\n'+'第三份完整结果。'.repeat(40);
@@ -100,12 +102,13 @@ test('hang-on is a status line outside the content budget; content still respect
 });
 
 test('send order: status queued at 8s precedes later text and follows earlier queued text',async()=>{
- const f=fixture();delete f.transport.openStream;f.transport.sendText=async(text,meta)=>{f.sent.push(['text',text,meta]);};
+ const f=fixture();f.transport.sendText=async(text,meta)=>{f.sent.push(['text',text,meta]);};
  f.start();await f.advance(8000);f.message('后来的正文。');await f.p.idle();assert.deepEqual(f.sent.map(s=>s[2].kind),['status','assistant']);await f.p.dispose();
- // Earlier streamed text still awaiting its receipt is followed, never overtaken.
- const g=fixture();g.start();g.chunk('早到但未确认的正文。');await g.advance(20);await g.advance(8000);assert.deepEqual(g.sent.map(s=>[s[0],s[2].kind]),[['update','assistant'],['text','status']]);await g.p.dispose();
+ // An earlier bubble the platform refused is followed, never overtaken, and does not count as the reply.
+ const g=fixture();g.transport.sendText=async(text,meta)=>{g.sent.push(['text',text,meta]);if(meta.kind==='assistant')throw Object.assign(Error('refused'),{delivery:'not-sent'});};
+ g.start();g.message('被平台拒绝的正文。');await g.settle();await g.advance(8000);assert.deepEqual(g.sent.map(s=>s[2].kind),['assistant','status']);await g.p.dispose();
  // A static send that completes before the status runs is its own receipt: status dropped.
- const h=fixture();const gate=deferred();delete h.transport.openStream;h.transport.sendText=async(text,meta)=>{h.sent.push(['text',text,meta]);if(meta.kind==='assistant')await gate.promise;meta.onDelivered?.();};
+ const h=fixture();const gate=deferred();h.transport.sendText=async(text,meta)=>{h.sent.push(['text',text,meta]);if(meta.kind==='assistant')await gate.promise;meta.onDelivered?.();};
  h.start();h.message('先发出的正文。');await h.settle(false);await h.advance(8000,false);gate.resolve();await h.p.idle();assert.deepEqual(h.sent.map(s=>s[2].kind),['assistant']);assert.equal(h.p.bubbles,1);await h.p.dispose();
 });
 

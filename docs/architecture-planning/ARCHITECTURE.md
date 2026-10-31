@@ -29,7 +29,7 @@ Character 应用保持一个仓库；所有交互平台 Adapter 未来统一进�
 
 **源码核对**：
 
-- [Interaction policy](../../packages/interaction-policy/policy.mjs) 的 `bind(transport)` 要求 `sendText`，允许可选 `openStream`；[原生事件装配](../../packages/interaction-policy/index.mjs) 订阅 Agent/Session 事件。它已处理部分渐进分泡，但不是新的公共 I/O v1。
+- [Interaction policy](../../packages/interaction-policy/policy.mjs) 的 `bind(transport)` 要求 `sendText`（源码 test.9 起只提交完整气泡，不再使用 `openStream`）；[原生事件装配](../../packages/interaction-policy/index.mjs) 订阅 Agent/Session 事件。它已处理部分渐进分泡，但不是新的公共 I/O v1。
 - [QQTK bootstrap](https://github.com/EJYDOvO/harness-qq-toolkit-public/blob/2e8fd2299e8fb2358ac1c4e04d5b287dae1e6181/maintenance/qqbot-src/dist/gateway/bootstrap.js) 的 `createInteractionOutbound` 完成 `policy.bind`、回复目标、`sendText` 和条件 `openStream` 接线，仍包含 SDK stream。迁移需兼容/隔离这些旧路径，不能把它们提升为新公共契约。
 - QQTK 的 [QuestionChannel](https://github.com/EJYDOvO/harness-qq-toolkit-public/blob/2e8fd2299e8fb2358ac1c4e04d5b287dae1e6181/maintenance/qqbot-src/dist/features/question-channel.js) 仍包装共享 `userQuestions.ask()`；多平台不能分别照搬包装。
 - [Character Identity](../../packages/character-identity/index.mjs) 同时管理 Owner/当前路由门禁、历史提醒绑定、QQ bindings 和 SQLite Outbox；[Character QQ lifecycle](../../packages/character-qq-adapter/lifecycle.mjs) 仍包装 `qqRemoteOps.attach`。这些耦合是迁移依据，尚未抽离。
@@ -170,4 +170,4 @@ HITL 是统一术语；HITL Bridge 不是已发布插件。不能让多个平台
 3. 聊天、HITL、Notification 共用 Sender 时的跨服务排序与背压。
 4. 具体 Package/Plugin 命名、是否迁仓。
 
-QQ Personal 协议、管理员授权声明、跨平台关联及非即时聊天扩展留后续专项。Iteration 01/02（普通文本出站、普通聊天入站）已配套 test.24 授权部署；Iteration 03（Conversation Manager 统一 I/O 接线，`dsh-agent-io` 的 `openConversation()`）源码完成、未部署，见 [路线图](IMPLEMENTATION_ROADMAP.md) 3.2；下一步为 Iteration 04：Interaction 出站迁移。详见 [决策](DECISIONS.md)、[模块计划](MODULE_IMPLEMENTATION_PLAN.md)。
+QQ Personal 协议、管理员授权声明、跨平台关联及非即时聊天扩展留后续专项。Iteration 01/02（普通文本出站、普通聊天入站）已配套 test.24 授权部署；Iteration 03（Conversation Manager 统一 I/O 接线，`dsh-agent-io` 的 `openConversation()`）源码完成、未部署，见 [路线图](IMPLEMENTATION_ROADMAP.md) 3.2；Iteration 04（Interaction 出站迁移，全部 QQ 聊天气泡经 `sendMessage()`）源码完成、未部署，见 3.3；下一步为 Iteration 05。详见 [决策](DECISIONS.md)、[模块计划](MODULE_IMPLEMENTATION_PLAN.md)。

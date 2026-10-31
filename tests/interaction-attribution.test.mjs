@@ -4,15 +4,15 @@ import {Interaction} from '../packages/interaction-policy/policy.mjs';
 
 // QQ-shaped fixture: native events in DSH order (turn/start before user/message),
 // trusted ingress registration and a transport that can hold its queue open.
-function fixture({requireIngress=true,hold=false,failStream=false}={}){
+function fixture({requireIngress=true,hold=false,failSend=false}={}){
  let time=0,id=0,open;const timers=new Map(),sent=[],bubbles=[],traces=[];
  const clock={now:()=>time,set(fn,ms){timers.set(++id,{fn,at:time+ms});return id;},clear:i=>timers.delete(i)};
  const agent={status:'running',cancel(){},followup(){},steer(){}};
  const gate=hold?new Promise(r=>{open=r;}):Promise.resolve();
  const p=new Interaction(agent,{hangOnMs:8000,throttleMs:10},clock);
- const transport={key:agent,requireIngress,deliveryReceipts:true,trace:(e,f)=>traces.push([e,f]),
-  async sendText(text,meta){await gate;sent.push([text,meta]);meta?.onDelivered?.();},
-  openStream(meta){const b={text:'',meta,closed:false};bubbles.push(b);return {async update(t){await gate;if(failStream)throw Object.assign(Error('timeout'),{delivery:'unknown'});b.text=t;meta.onDelivered?.();},async complete(){b.closed=true;},cancel(){b.cancelled=true;}};}};
+ // Commit-only transport; failSend reports an unknown platform outcome for content.
+ const transport={key:agent,requireIngress,trace:(e,f)=>traces.push([e,f]),
+  async sendText(text,meta){await gate;if(failSend&&meta?.kind==='assistant'){bubbles.push([text,meta]);throw Object.assign(Error('timeout'),{delivery:'unknown'});}sent.push([text,meta]);}};
  p.bind(transport);
  let seq=0,rev=0,attempt=0,turn=0;
  const event=(type,data={})=>p.event({type,seq:++seq,data:{turn,...data}});
@@ -23,7 +23,7 @@ function fixture({requireIngress=true,hold=false,failStream=false}={}){
  const reply=text=>{event('assistant/message',{message:{content:[{type:'text',text}]}});p.frame({type:'end',turn,attemptId:attempt,revision:++rev,outcome:{eventType:'assistant/message'}});};
  const end=()=>event('turn/end',{reason:{kind:'completed'}});
  const advance=async ms=>{time+=ms;for(const [k,t]of [...timers])if(t.at<=time){timers.delete(k);t.fn();}await p.idle();};
- const out=()=>[...bubbles.map(b=>[b.text,b.meta]),...sent];
+ const out=()=>sent;
  return {p,agent,event,user,begin,step,reply,end,advance,sent,bubbles,traces,out,release:()=>open?.()};
 }
 const para=s=>(s+'。').repeat(80);
@@ -79,11 +79,11 @@ test('an admitted input steered mid-turn starts a new reply; the first input of 
  assert.deepEqual(f.out().map(([t,m])=>[t,m.input,m.reply,m.bubble]),[['第一个回答。','q1',1,1],['第二个回答。','q2',2,1]]);
 });
 
-test('unknown stream delivery is withheld without blind retry and is traced',async()=>{
- const f=fixture({failStream:true});f.begin('q1');f.reply('一段正文。');f.end();await f.p.idle();
- assert.equal(f.sent.length,0,'no static resend after an unknown stream outcome');
- const row=f.traces.find(([e])=>e==='stream-withheld');assert(row);assert.equal(row[1].reply,1);assert.equal(row[1].bubble,1);
- assert(f.p.errors.includes('stream-delivery-unknown'));
+test('unknown bubble delivery is withheld without blind retry and is traced',async()=>{
+ const f=fixture({failSend:true});f.begin('q1');f.reply('一段正文。');f.end();await f.p.idle();
+ assert.equal(f.bubbles.length,1,'one attempt');assert.equal(f.sent.length,0,'no resend after an unknown outcome');
+ const row=f.traces.find(([e])=>e==='bubble-failed');assert(row);assert.equal(row[1].reply,1);assert.equal(row[1].bubble,1);
+ assert(f.p.errors.includes('bubble-delivery-unknown'));
 });
 
 test('a step whose attempt opened before its steered input is attributed to that input',async()=>{
