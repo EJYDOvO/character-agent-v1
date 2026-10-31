@@ -146,7 +146,7 @@ export function apply(ctx,config) {
    manager.admitInteractionInput=admit;
    if(value.bot){let slot=ingressSlots.get(value.bot);if(!slot){slot={};ingressSlots.set(value.bot,slot);value.bot.use(async(m,next)=>{if(!slot.admit)throw Error('Character ingress detached');await slot.admit(m);return next();});}slot.admit=admit;}
    detach=()=>{if(runtime!==value||gatewayEpoch!==epoch)return;runtime=undefined;gatewayEpoch++;const slot=value.bot&&ingressSlots.get(value.bot);if(slot?.admit===admit)slot.admit=null;if(manager.admitInteractionInput===admit){if(previousAdmission===undefined)delete manager.admitInteractionInput;else manager.admitInteractionInput=previousAdmission;}if(manager.preserveScheduledSession===preserve){if(previousScheduleBridge===undefined)delete manager.preserveScheduledSession;else manager.preserveScheduledSession=previousScheduleBridge;}if(manager.getOrCreate===wrap)manager.getOrCreate=original;if(manager.rebuildSession===wrapRebuild)manager.rebuildSession=rebuild;identity.clear();bound.clear();inputs.clear();};
-   void reconcile().catch(()=>ctx.logger?.warn('QQ Schedule ownership audit blocked; unproven Sessions remain unauthorized'));outbox.releaseHeld();void pump();return detach;
+   void reconcile().catch(()=>ctx.logger?.warn('QQ Schedule ownership audit blocked; unproven Sessions remain unauthorized'));outbox.releaseHeld();void pump().catch(()=>ctx.logger?.warn('Character Outbox pump blocked; durable state retained'));return detach;
   },
   async notify(trusted,event){authorize(trusted,'send');enqueue({...event,conversation:trusted.conversationId,source:trusted.sessionId});await pump();return statusOf(event.eventId);},
   async notifySystem({eventId,kind,text,target}){
@@ -201,6 +201,6 @@ export function apply(ctx,config) {
    confirmationEvidence(c,{memory,quote}){authorize(c,'write');return confirmationEvidence(service.latestInput(c),memory,quote);}
   }));
  // Close order: no new pumps, Gateway detached, queued hand-overs cancelled and
- // their rows returned to pending, in-flight parts finished (bounded), then the database.
- ctx.effect(()=>{const timer=setInterval(()=>void pump(),5000);return async()=>{clearInterval(timer);detach?.();closed=true;await outbox.close();identity.clear();listeners.clear();db.close();};});
+ // their rows returned to pending, in-flight parts settled, then the database.
+ ctx.effect(()=>{const timer=setInterval(()=>void pump().catch(()=>ctx.logger?.warn('Character Outbox pump blocked; durable state retained')),5000);return async()=>{clearInterval(timer);detach?.();closed=true;await outbox.close();identity.clear();listeners.clear();db.close();};});
 }

@@ -327,7 +327,15 @@ export function apply(ctx,config){
        const statuses=Object.fromEntries(db.prepare('SELECT id,status FROM outbox').all().map(r=>[r.id,r.status]));
        assert.deepEqual(statuses,{crashed:'unknown',ok:'sent',lost:'unknown'},'interrupted → unknown, sent, timed out → unknown');
        assert.deepEqual(plainSent.slice(before).map(m=>m.text),['notify-ok'],'unknown and interrupted rows are never resent');
-       await outbox.close();db.close();notifier.close();
+       await outbox.close();
+       // Keep this installed I/O and its result cache alive while only Outbox
+       // reloads. A proven-unsent result must not poison the next owner's id.
+       let admitted=false;const retryOpts={...opts,authorize:()=>admitted};
+       const retry=createOutbox({db,key:dbFile});retry.enqueue({eventId:'hmr-retry',kind:'task_completed',text:'notify-hmr-retry',conversation:'qq-probe'});
+       await retry.pump(retryOpts);assert.equal(retry.status('hmr-retry'),'pending');await retry.close();
+       admitted=true;const next=createOutbox({db,key:dbFile});await next.pump(retryOpts);
+       assert.equal(next.status('hmr-retry'),'sent');assert.equal(plainSent.filter(m=>m.text==='notify-hmr-retry').length,1,'real I/O cache retained across Outbox HMR');
+       await next.close();db.close();notifier.close();
        report.checks.push('Installed dsh-agent-io notifier on the real Host: stable-target notification without a current Session, authority and Gateway admission per part, forged grant refused, chat stays Session-checked; the real Character Outbox records sent/unknown and never resends an interrupted or unknown row');report.notifications='exercised';
       }
      }finally{channel.close();}

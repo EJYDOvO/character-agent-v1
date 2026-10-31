@@ -11,6 +11,7 @@
 //   - Only a provably unsent attempt (not-sent before the platform, or a rate
 //     limit) returns to 'pending'; a platform refusal stays 'not-sent'.
 //   - Terminal writes apply only to the row this owner still holds ('sending').
+import {createHash,randomUUID} from 'node:crypto';
 const KINDS=['scheduled_reminder','task_completed','task_failed','task_timeout','maintenance_result','configured_alert'];
 // One owner per state file in a process (HMR may overlap an old and a new
 // instance): a new owner recovers and pumps only after the previous one closed.
@@ -19,7 +20,8 @@ const leases=globalThis[Symbol.for('dsh.character.outbox.v1')]??=new Map();
 export function createOutbox({db,key,logger,now=Date.now,retryAfterMs=60_000}){
  const previous=leases.get(key);let release;
  const lease={released:new Promise(r=>{release=r;})};leases.set(key,lease);
- let closed=false,running,again=false;const controller=new AbortController(),attempts=new Map(),held=new Map();
+ let closed=false,running,closing,again=false,latest,holdEpoch=0;
+ const instance=randomUUID(),controller=new AbortController(),attempts=new Map(),held=new Map();
  const warn=message=>{try{logger?.warn?.('Character Outbox: '+message);}catch{}};
  const ready=(previous?.released??Promise.resolve()).then(()=>{
   if(closed)return;
@@ -28,6 +30,15 @@ export function createOutbox({db,key,logger,now=Date.now,retryAfterMs=60_000}){
  });
  ready.catch(()=>{});
  const sourceOf=id=>db.prepare('SELECT value FROM identity_state WHERE key=?').get('outbox-source:'+id)?.value;
+ // Page past held rows as well as deliverable ones; a fixed first page would
+ // let twenty legacy/unauthorized reminders block every newer notification.
+ function* pending(conversation){
+  let cursor;
+  while(true){
+   const page=db.prepare("SELECT * FROM outbox WHERE status='pending' AND conversation=?"+(cursor?' AND (at,id)>(?,?)':'')+' ORDER BY at,id LIMIT 20').all(conversation,...(cursor?[cursor.at,cursor.id]:[]));
+   yield* page;if(page.length<20)return;cursor=page.at(-1);
+  }
+ }
 
  /** One explicit, Host-validated event; idempotent by id. source: the Session a reminder came from. */
  function enqueue({eventId,kind,text,conversation,source}){
@@ -53,10 +64,11 @@ export function createOutbox({db,key,logger,now=Date.now,retryAfterMs=60_000}){
   }
   return 'unknown';
  }
- async function round({notifier,conversation,target,eligible,authorize}){
+ async function round(options){
+  const {notifier,conversation,target,eligible,authorize}=options;
   let claimed=0;
-  for(const row of db.prepare("SELECT * FROM outbox WHERE status='pending' AND conversation=? ORDER BY at LIMIT 20").all(conversation)){
-   if(closed)break;
+  for(const row of pending(conversation)){
+   if(closed||options!==latest)break;
    if((held.get(row.id)??0)>now())continue;
    const source=sourceOf(row.id);
    if(!eligible(row,source)){held.set(row.id,Infinity);warn(`a ${row.kind} notification cannot be re-verified and stays pending`);continue;}
@@ -67,13 +79,17 @@ export function createOutbox({db,key,logger,now=Date.now,retryAfterMs=60_000}){
    // A new I/O id per attempt: the I/O remembers ids in memory, and a provably
    // unsent attempt must not be answered with its own earlier result.
    const attempt=(attempts.get(row.id)??0)+1;attempts.set(row.id,attempt);
+   const releasedAt=holdEpoch,eventKey=createHash('sha256').update(row.id).digest('hex');
    let result;
-   try{result=await notifier.send({id:`notify:${row.id}:${attempt}`,conversation:target,text:row.text,signal:controller.signal,authorize:t=>!closed&&authorize(row,source,t)});}
+   try{result=await notifier.send({id:`notify:${eventKey}:${instance}:${attempt}`,conversation:target,text:row.text,signal:controller.signal,authorize:t=>!closed&&authorize(row,source,t)});}
    catch{result={status:'unknown'};}
    const next=outcome(result);
    if(next==='pending'){
     // Not authorized now, not admitted, Gateway closing, queue full or rate limited: retried later, not hammered.
-    held.set(row.id,['unauthorized','invalid-target','closed','adapter-unavailable'].includes(result.reason)?Infinity:now()+retryAfterMs);
+    const attachmentHold=['unauthorized','invalid-target','closed','adapter-unavailable'].includes(result.reason);
+    // A new attachment may have released authorization holds while this old
+    // handoff was still queued. Its late refusal must not hold the new owner.
+    if(!attachmentHold||releasedAt===holdEpoch)held.set(row.id,attachmentHold?Infinity:now()+retryAfterMs);
    }
    try{db.prepare('UPDATE outbox SET status=? WHERE id=? AND status=?').run(next,row.id,'sending');}
    catch{warn('delivery result not recorded; the row stays sending and becomes unknown on restart');}
@@ -88,25 +104,30 @@ export function createOutbox({db,key,logger,now=Date.now,retryAfterMs=60_000}){
   */
  function pump(options){
   if(closed||!options?.notifier)return Promise.resolve();
+  latest=options;
   if(running){again=true;return running;}
   running=(async()=>{
-   try{await ready;do{again=false;while(!closed&&await round(options)>0);}while(again&&!closed);}
+   try{await ready;do{again=false;const active=latest;if(!closed&&(await round(active)>0||active!==latest))again=true;}while(again&&!closed);}
    finally{running=undefined;}
   })();
   return running;
  }
  /** Rows held back by an authorization failure are tried again (a new Gateway attachment). */
- const releaseHeld=()=>{for(const [id,until] of held)if(until===Infinity)held.delete(id);};
+ const releaseHeld=()=>{holdEpoch++;for(const [id,until] of held)if(until===Infinity)held.delete(id);};
  const status=(id,conversation)=>db.prepare('SELECT status FROM outbox WHERE id=?'+(conversation?' AND conversation=?':'')).get(...(conversation?[id,conversation]:[id]))?.status??null;
  const cancel=(id,conversation)=>db.prepare("UPDATE outbox SET status='cancelled' WHERE id=? AND conversation=? AND status='pending'").run(id,conversation).changes===1;
  const inspect=conversation=>db.prepare('SELECT id,kind,status,at FROM outbox WHERE conversation=? ORDER BY at DESC LIMIT 30').all(conversation);
  /** Stop: queued hand-overs are cancelled (provably unsent → pending), an in-flight part completes; then the lease is released. */
- async function close(){
-  if(closed)return;
+ function close(){
+  if(closing)return closing;
   closed=true;controller.abort();
   const pending=running;
-  if(pending)await Promise.race([pending.catch(()=>{}),new Promise(r=>setTimeout(r,10_000).unref?.())]);
-  release();if(leases.get(key)===lease)leases.delete(key);
+  // Abort is only cancellation of queued parts, not proof that an in-flight
+  // platform call stopped. Keep SQLite and the ownership fence until it settles.
+  // A closed successor must also wait for its predecessor (chained HMR).
+  closing=(async()=>{await ready.catch(()=>{});await pending?.catch(()=>{});
+   release();if(leases.get(key)===lease)leases.delete(key);
+  })();return closing;
  }
  return Object.freeze({ready,enqueue,pump,releaseHeld,status,cancel,inspect,sourceOf,close,size:()=>({held:held.size,attempts:attempts.size})});
 }
