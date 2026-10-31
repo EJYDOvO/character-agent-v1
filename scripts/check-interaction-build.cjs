@@ -3,7 +3,7 @@ const fs=require('node:fs'),path=require('node:path'),assert=require('node:asser
 const root=path.resolve(__dirname,'..');
 fs.mkdirSync(path.join(root,'test-data'),{recursive:true});
 const fixture=fs.mkdtempSync(path.join(root,'test-data','interaction-build-'));
-for(const file of ['package.json','scripts/build.cjs','scripts/build-settings.cjs','scripts/build-inputs.cjs','scripts/definition-source.cjs','scripts/installation.cjs','scripts/host-archive.cjs','packages/character-definition/loader.mjs','packages/character-definition/workers.mjs','packages/character-memory-tools/worker-policy.mjs','packages/interaction-policy/policy.mjs']){
+for(const file of ['package.json','scripts/build.cjs','scripts/build-settings.cjs','scripts/build-inputs.cjs','scripts/definition-source.cjs','scripts/installation.cjs','scripts/host-archive.cjs','packages/character-definition/loader.mjs','packages/character-definition/workers.mjs','packages/character-memory-tools/worker-policy.mjs','packages/character-memory-tools/subagent.mjs','packages/interaction-policy/policy.mjs']){
  const dest=path.join(fixture,file);fs.mkdirSync(path.dirname(dest),{recursive:true});fs.copyFileSync(path.join(root,file),dest);
 }
 fs.writeFileSync(path.join(fixture,'fixture.yaml'),'id: fixture\nname: Fixture\ncharacter:\n  identity: Isolated build fixture.\n');
@@ -29,6 +29,7 @@ for(const mode of ['on','off']){
  const schema=yaml.JSON_SCHEMA.extend(new yaml.Type('tag:yaml.org,2002:js',{kind:'scalar',construct:value=>({expression:value})}));
  const character=yaml.load(patch,{schema})[0].insert.find(row=>row.config?.id==='fixture-character');
  const spawn=character.config.plugins.find(p=>p.id==='delegation').config.find(p=>p.id==='tool-subagent');
+ assert.equal(spawn.name,'dsh-character-memory-tools/subagent.mjs');
  assert.deepEqual(spawn.config.allowedAgentPresets,manifest.workerPresets);
  assert.deepEqual(character.config.plugins.find(p=>p.id==='character-memory-tools').config.communityWorkerPresets,community);
  assert.equal(manifest.characterPluginIds.includes('interaction-policy'),mode==='on');

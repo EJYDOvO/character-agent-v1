@@ -6,6 +6,8 @@ test.22 收紧恢复：只有持久化 open/load 的原生同 ID 缺失错误允
 
 Identity 通过公开 `records / ownershipState / isCurrentSession` 契约绑定真实 Agent，SQLite routes 仅保留历史证据，不再作为当前主路由权威。Owner、项目/角色和 Memory capability 仍由 Identity 授权；Manager 不发放权限。平台 pending approval/question、额外 prompt 和 Typing 清理通过 Adapter 回调提供。
 
+rc.3 的 Character Spawn 通过既有 Tools 包内的轻量适配转调原生实现：仅为组件重载时的注册表扫描过滤已关闭 Context，保留原生配置与授权。它不改变 Conversation Manager 的销毁顺序、不修改官方模块，也不增加 Agent Manager。确定性复现与移除条件见 [Worker 文档](WORKERS.md#rc3-销毁与热重载适配)。
+
 test.13 在既有原生分析 Worker、Memory Inspector 上引入可选 QQ Session 生命周期和独立长期任务；test.14 收紧历史根权限并补充存量提醒审计。隔离与当前实例部署的验收边界统一见 [STATUS](STATUS.md)。阶段对照见 [路线图](IMPLEMENTATION_ROADMAP.md)，任务契约见 [Long Tasks](../packages/long-tasks/README.md)。
 
 test.16 的社区 Preset 修复只调整构建契约：`communityWorkerPresets` 可声明真实 ID 与展示别名，`allowedAgentPresets`、实际 Spawn 和持久目标始终使用真实 ID；不增加运行服务、权限或第三方安装路径。详细校验和隔离验收见 [Worker](WORKERS.md)。

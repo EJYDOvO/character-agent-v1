@@ -6,7 +6,7 @@ $node=Join-Path $env:DSH_INSTALL_ROOT 'resources/runtime/primary-runtime/depende
 $saved=@{};foreach($key in @('DSH_HOME','ELECTRON_RUN_AS_NODE','TEMP','TMP')){$saved[$key]=[Environment]::GetEnvironmentVariable($key,'Process')}
 $p=$null
 try{
- & $node (Join-Path $PSScriptRoot 'stage-lifecycle.cjs');if($LASTEXITCODE -ne 0){throw 'Lifecycle staging failed'}
+ & $node (Join-Path $PSScriptRoot 'stage-lifecycle.cjs') @args;if($LASTEXITCODE -ne 0){throw 'Lifecycle staging failed'}
  $run=Get-Content (Join-Path $project 'test-data/lifecycle-run.json') -Raw|ConvertFrom-Json
  $env:DSH_HOME=$run.home;$env:ELECTRON_RUN_AS_NODE='1';$env:TEMP=Join-Path $run.home 'tmp';$env:TMP=$env:TEMP
  for($phase=0;$phase -lt 2;$phase++){

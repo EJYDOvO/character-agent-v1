@@ -4,7 +4,7 @@
 
 ## Iteration 07 源码（Character test.26 / Agent I/O test.7，未部署）
 
-Notification：主动通知统一经 Agent I/O 发送，保留稳定目标、持久 Outbox、原生 Schedule 与独立授权边界。全部为源码与隔离验证，**未部署、未合并**；运行实例为下一节的 Character test.25 / Agent I/O test.6。
+Notification：主动通知统一经 Agent I/O 发送，保留稳定目标、持久 Outbox、原生 Schedule 与独立授权边界。全部为源码与隔离验证，**未部署**；运行实例为下一节的 Character test.25 / Agent I/O test.6。
 
 - **调用链**：原生 Schedule 提醒（`schedule:` + sha256(schedule_id, occurrence)）、Long Tasks 结果（`long-task:<run>`）、Remote Ops 维护/长任务提示（`qqtk:<key>`）与 `notify()` 都只写入 Character Identity 的既有 SQLite Outbox；Outbox 是唯一写入者，经 QQ Gateway 交来的 Agent I/O 通知器发送。原 `runtime.sender.sendMarkdown` 直发路径删除。通知不成为 Agent 输入，不产生 Turn。
 - **授权**：通知发往 Owner 私聊的稳定 Conversation，不要求来源 Session 仍是当前 Session。每个分片前复核：仍是同一次 Gateway 附加、Owner-only 访问配置、Owner 私聊 Conversation；提醒另须其来源 Session 仍有持久 `qq_bindings` 证据（来源 Session 随行记在 `identity_state` 的 `outbox-source:<eventId>`，不改表结构）。无绑定证据的根仍被拒绝；升级前遗留、没有来源记录的待发提醒保持 pending，不发送，等待人工审查。普通聊天、HITL 的当前 Session 检查与 Memory ACL 不变。
@@ -19,7 +19,9 @@ PR 初次验证（历史基线，未部署、未连接 QQ）：QQTK 轻量 190�
 
 未验证：真实 QQ 主动推送额度、通知在手机上的显示；生产 Outbox 上的升级（部署时应先离线审计 pending/sending 行）；跨服务优先级与公平性；多进程同时打开同一 Outbox（依赖单活部署约束）；`run-generic-probe` 使用生产凭据，未运行。
 
-定向复审追加验证（未部署）：Character 单元 244/244、安全审计 33/33；QQTK 单元 194/194、SDK 隔离审计及边界 38/38，两份补丁重建并在上游快照应用一致。新增回归覆盖重附着时六类旧发送结果及并发调用、保留 I/O 缓存的 HMR 重试、发送 ID 长度、连续 HMR 与重复 close、暂缓行分页、固定同毫秒入账的批量 FIFO、真实临时 SQLite 写锁/只读故障，以及 Remote Ops 初次落盘失败、写入结果不确定、终态写入失败和旧实例迟到写回。rc.3 Interaction/Notification 与 Inspector 探针通过；Lifecycle 的一次重启阶段出现原生 Subagent `cannot create effect on inactive context`，后续全新 Profile 复测及未改 PR Head 的两次对照通过，根因尚未确认，不将首次失败抹去或宣称稳定性完全验收。首次推送的 Ubuntu CI 捕获分页实现将同毫秒批量提醒按事件 ID 重排的回归，已以固定时间用例复现并改用入账顺序；未降低原顺序断言。
+定向复审追加验证（未部署）：Character 单元 247/247、安全审计 33/33；QQTK 单元 194/194、SDK 隔离审计及边界 38/38，两份补丁重建并在上游快照应用一致。新增回归覆盖重附着时六类旧发送结果及并发调用、保留 I/O 缓存的 HMR 重试、发送 ID 长度、连续 HMR 与重复 close、暂缓行分页、固定同毫秒入账的批量 FIFO、真实临时 SQLite 写锁/只读故障，以及 Remote Ops 初次落盘失败、写入结果不确定、终态写入失败和旧实例迟到写回。rc.3 Interaction/Notification 与 Inspector 探针通过；Lifecycle 的一次重启阶段出现原生 Subagent `cannot create effect on inactive context`，后续全新 Profile 复测及未改 PR Head 的两次对照通过，根因尚未确认，不将首次失败抹去或宣称稳定性完全验收。首次推送的 Ubuntu CI 捕获分页实现将同毫秒批量提醒按事件 ID 重排的回归，已以固定时间用例复现并改用入账顺序；未降低原顺序断言。
+
+后续生命周期排查：在真实 rc.3 的 Context 已关闭、Agent 尚未移出注册表的窗口重载原生 Spawn，首轮稳定复现同一 INACTIVE_EFFECT 调用点。既有 Tools 包内增加薄适配，仅过滤已关闭 Context，其他原生逻辑与错误透传；适配后压力探针 30 轮通过，正式 Lifecycle 探针增加每次启动三轮复现回归。原首次失败缺少阶段日志，无法追溯其具体热重载顺序。新增阶段标记供后续定位；不再将这类异常作为无法验证的假设，也不改官方 DSH。Worker 真实 Host 两阶段回归仍保留原生工具、白名单、深度和冷恢复断言。
 
 升级/回滚边界：尚未保护真实运行数据。从不包含本修复的旧代码升级，或回滚到旧代码，必须停止旧 Host 并确认退出后再切换，不能依赖旧实现的 10 秒关闭超时或跨版本 HMR。新实现内部 HMR 的所有权防护不能约束仍在执行的旧版代码。底层发送永久不结束时，关闭会等待而不放开所有权；需停净进程后以 unknown 屏障冷恢复，不盲目补发。
 

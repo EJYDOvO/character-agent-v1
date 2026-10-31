@@ -60,6 +60,14 @@ Root 策略（test.23）：内置 Worker 没有文件工具，Root 先读取所�
 
 ## 验证
 
+### rc.3 销毁与热重载适配
+
+Character 的 Spawn 声明使用现有 Tools 包内的 `subagent.mjs` 转调原生 `dsh-tool-subagent`，保留原生 Config、注入、模型选择、Provider、白名单、深度与工具授权。仅在原生组件重扫 Agent 注册表时，跳过 `fiber.assertActive()` 明确抛出 `INACTIVE_EFFECT` 的已关闭 Context；不修改注册表，不吞掉其他初始化错误，不新增运行时或权限服务。官方 Creator 和 Fork 声明不改。下一次安装须从本次源码重建匹配的 Core 与 Tools 包，不复用缺少新模块的旧产物。
+
+rc.3 的原生销毁先关闭 Context、后移除注册表项。普通工具变更通常有缓存保护；在该窗口热重载 standing Spawn 后，缓存重建会重新向已关闭 Context 注入工具。真实 Host 对照在首轮复现相同调用点的异常，适配后隔离压力验证 30 轮通过。原首次失败缺少阶段信息，无法证明当时发生了完全相同的热重载顺序。
+
+`scripts/run-lifecycle.ps1` 默认在两次 Host 启动中分别验证三轮上述竞态，同时检查活跃及新建 Agent 仍可获取原生 Spawn。`--native-subagent` 仅供隔离诊断：改用官方未适配模块，在 rc.3 上预期失败，用于未来宿主升级后复核并决定是否移除适配。它不是正常发布门禁的跳过开关。还须运行下面的 Worker Spawn/冷恢复与安全回归。
+
 - `npm test`、`npm run test:audit`：角色/名单、兼容入口、候选配置迁移、完整 Manager 状态、并发修改拒绝和切换失败回滚。
 - `scripts/check-interaction-build.cjs`：合成构建保留 Creator/Extras、真实 ID、无旧 Boundary 声明，每个内置 Worker 都装配工具范围。
 - `scripts/run-inspector.ps1 --workers`：十个原生 Preset 实际工具调用、未装配的 Root 工具缺席、QQ/Memory/任务授权拒绝、白名单、原生深度、父子通信、冷恢复与第二次 Host 启动。
