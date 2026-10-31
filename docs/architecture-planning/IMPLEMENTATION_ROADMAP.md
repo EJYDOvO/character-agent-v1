@@ -9,7 +9,7 @@
 | --- | --- | --- |
 | 运行装配 | Character **test.23** / QQTK **test.23** 已有授权部署记录；DSH **0.2.1-rc.3**、Node **24.21.0**、Windows | 不等于 Mac/其他 DSH 构建可安装或验收 |
 | 会话 | 独立 Conversation Manager **test.2**，QQTK 为薄会话适配；隔离恢复/唯一路由已有验证 | 模拟第二平台不代表真实第二平台；旧提醒根/单写入者约束保留 |
-| Interaction | **test.8** 已部署；源码 **test.9**（Iteration 04，未部署）只提交完整气泡，`bind` 只用 `sendText`，QQ 侧经 `sendMessage()` 发送 | 真实 QQ 手机收件与实机分泡节奏未验收 |
+| Interaction | **test.9** 已部署（Iteration 04）只提交完整气泡，`bind` 只用 `sendText`，QQ 侧经 `sendMessage()` 发送 | 真实 QQ 手机收件与实机分泡节奏未验收 |
 | Worker | 原生 Creator/Worker Preset、显式委派、工具范围守卫；test.23 记录 13 Preset 健康 | 部分 Host 探针限时未完成；真实任务质量另验 |
 | Memory/Inspector | SQLite Schema 3、记忆 L1/L2/L3、来源治理及可选 Inspector | 与通信 L1/L2/L3 无关；长期效果/桌面体验/大库性能另验 |
 | 通知/Long Tasks | 原生 Schedule + 既有持久 Outbox、稳定目标/去重及可选 Long Tasks | 通用 Notification 尚未抽离；手机投递未全验 |
@@ -74,7 +74,7 @@ Character 单元 215、安全审计 33、QQTK 轻量 55/审批 6 是 [STATUS](..
 
 ### 3.2 Iteration 03：Conversation Manager 统一 I/O 接线
 
-**状态**：源码完成（QQTK `dsh-agent-io@0.1.0-test.4`），自动化测试与隔离 rc.3 Host 探针通过；**未部署**，运行实例仍为 test.3；真实 QQ/手机未验收。接口见 QQTK `plugin-sources/dsh-agent-io/README.md` 的 `openConversation()`。
+**状态**：源码完成（QQTK `dsh-agent-io@0.1.0-test.4`），自动化测试与隔离 rc.3 Host 探针通过；已授权部署（部署计划显式升级 test.3 → test.4）；真实 QQ/手机未验收。接口见 QQTK `plugin-sources/dsh-agent-io/README.md` 的 `openConversation()`。
 
 **实现**：
 
@@ -89,7 +89,7 @@ Character 单元 215、安全审计 33、QQTK 轻量 55/审批 6 是 [STATUS](..
 
 ### 3.3 Iteration 04：Interaction 出站迁移
 
-**状态**：源码完成（Character Interaction `0.1.0-test.9` + QQTK 补丁；Agent I/O 仍为 `0.1.0-test.4`，公共接口不变），自动化测试与隔离 rc.3 Host 探针通过；**未部署**，真实 QQ/手机未验收。
+**状态**：源码完成（Character Interaction `0.1.0-test.9` + QQTK 补丁；Agent I/O 仍为 `0.1.0-test.4`，公共接口不变），自动化测试与隔离 rc.3 Host 探针通过；已授权部署，真实 QQ/手机未验收。
 
 **实现**：
 

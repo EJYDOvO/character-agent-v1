@@ -2,17 +2,23 @@
 
 本页是版本与验收状态的统一入口。历史发布记录说明当时结果，不代表最新运行状态。
 
-## Iteration 04 源码（Interaction test.9，未部署）
+## Interaction test.9 / Agent I/O test.4 / QQTK Iteration 03–04（已授权部署）
+
+Character 其余包与 Core/Extras 不变（仍为 test.25，产物哈希与运行实例一致），仅 `dsh-interaction-policy` 升至 `0.1.0-test.9`；已安装的 `dsh-agent-io` 经部署计划新增的显式升级路径（`--agent-io-artifact`：先按固定记录复核已安装包，新包须为另一版本且提供 `openConversation()`）由 test.3 升至 test.4，所用 tarball 与隔离 rc.3 Interaction 探针（入站已实测）安装的包逐字节一致，旧 tarball 与旧 Profile 保留。QQ 补丁与 QQTK 维护源码来自 QQTK PR #5 `e01fcce`，Character 来自 PR #6 `811a880`（两 PR 均未合并）。
+
+已按授权完成空闲门禁、停机一致性快照（395 个文件）与离线状态审计（无未完成 Turn/审批、无 active 提醒、Memory Schema 3 / 15 条），候选离线安装与最终路径冻结锁文件校验通过（已安装运行代码逐文件比对已审源码），替换 63 个 QQTK 维护文件后单活切换。启动后 13 个 Preset 健康、单一 QQ Gateway（`Bot ready` 一次）、`agent-io`（test.4）与 Manager 激活、官方 ASAR 未变、启动日志无错误；Owner 上下文、只读 Inspector、未登录/外站拒绝、QQ 路由、提醒与 Outbox 保持不变。未发送 QQ 验收消息；QQ 不再边生成边显示（短回复与最后一个气泡在生成结束后整条出现），实际分泡节奏与手机收件待真实对话确认。
+
+## Iteration 04 源码（Interaction test.9）
 
 Interaction `0.1.0-test.9` 只提交完整气泡（长回复在生成期间按定稿规则提前提交，其余在 settlement 后提交；不预览、不使用 `openStream`）。QQTK 补丁的桥接层把每个气泡、等待提示与工具/轮次错误都作为一条逻辑消息交给 Agent I/O `sendMessage()` → QQ 文本 Adapter：稳定逻辑 ID（Session/Turn/策略实例/回复/气泡）、按原生输入的回复目标、逐片权限与当前 Session 复核、`/stop`/撤回/Turn 中止取消、未确认气泡不重发并扣留同回复后续气泡。Interaction 专属 SDK Stream 与普通回复的 SDK 流式输出已移除（`streaming` 停用）。Agent I/O 公共接口不变（仍为 `0.1.0-test.4`）。范围见 [路线图](architecture-planning/IMPLEMENTATION_ROADMAP.md) 3.3。
 
-验证（本机，未部署、未连接 QQ）：Character 单元 219、安全审计 33；QQTK 轻量 128、审批/边界 12、代码隔离 SDK 审计 30（新代码隔离夹具）、两份补丁重建一致且可应用；关键保护的变异检查均被测试捕获；隔离 rc.3 Interaction 探针 22 项（真实 Agent/Interaction 的气泡、等待提示与 steer 回复全部经已安装的 Agent I/O，未调用直发或 SDK 流）。`run-generic-probe` 会以生产 QQ 凭据启动 Gateway，未运行。新 Interaction 与新 QQ 补丁须配套部署（新 Interaction 配旧补丁会绕过 I/O）。
+验证（部署前，本机、未连接 QQ）：Character 单元 219、安全审计 33；QQTK 轻量 128、审批/边界 12、代码隔离 SDK 审计 30（新代码隔离夹具）、两份补丁重建一致且可应用；关键保护的变异检查均被测试捕获；隔离 rc.3 Interaction 探针 22 项（真实 Agent/Interaction 的气泡、等待提示与 steer 回复全部经已安装的 Agent I/O，未调用直发或 SDK 流）。`run-generic-probe` 会以生产 QQ 凭据启动 Gateway，未运行。新 Interaction 与新 QQ 补丁须配套部署（新 Interaction 配旧补丁会绕过 I/O）。
 
-### Agent I/O 升级限制（部署保护，未绕过）
+### Agent I/O 升级限制（已解决，保护未绕过）
 
-运行实例仍为 `dsh-agent-io@0.1.0-test.3`。Iteration 03/04 的 QQ 补丁需要 test.4 的 `openConversation()`：Gateway 在旧包上启动即报错，Character 部署计划检测到补丁使用 `openConversation` 时拒绝已安装的旧包（“this plan does not upgrade the installed dsh-agent-io yet”）或不含该接口的新包。部署计划目前不能把已安装的 Agent I/O 原地升级，这一保护未被修改或绕过；部署 03/04 前须先单独实现并审查“已安装 Agent I/O 升级”步骤。
+部署计划现以显式 `--agent-io-artifact` 升级已安装的 Agent I/O（见上文与 [集成说明](INTEGRATION.md)）；不传参数时仍拒绝。以下为部署前的记录：运行实例当时为 `dsh-agent-io@0.1.0-test.3`。Iteration 03/04 的 QQ 补丁需要 test.4 的 `openConversation()`：Gateway 在旧包上启动即报错，Character 部署计划检测到补丁使用 `openConversation` 时拒绝已安装的旧包（“this plan does not upgrade the installed dsh-agent-io yet”）或不含该接口的新包。部署计划目前不能把已安装的 Agent I/O 原地升级，这一保护未被修改或绕过；部署 03/04 前须先单独实现并审查“已安装 Agent I/O 升级”步骤。
 
-## Iteration 03 源码（Agent I/O test.4，未部署）
+## Iteration 03 源码（Agent I/O test.4，随上文部署）
 
 QQTK `dsh-agent-io@0.1.0-test.4` 新增平台无关的 `openConversation()`：入站交接（Conversation Manager `getOrCreate` → `isCurrentSession` → 原生 `UserMessage` → Interaction `intervene`/`followup`）与出站可信路由（Manager 当前记录 + `isCurrentSession`，每个分片前复核）收在一处，出入站共用 `{platform, accountId, conversation}` 引用。QQ Official 入站、出站文本、显式更正与 `/stop` 已改用；Session Key、持久状态、Character Identity/Owner/Memory ACL 与 Conversation Manager 均未改。Character 包无改动，仅更新隔离 Interaction 探针、部署计划检查与文档：QQ 补丁使用 `openConversation()` 时，部署计划拒绝没有该接口的 `dsh-agent-io`（已安装的 test.3 或首次安装的旧 tarball），避免 Gateway 启动即失败；计划本身尚不支持升级已安装的 `dsh-agent-io`。
 
