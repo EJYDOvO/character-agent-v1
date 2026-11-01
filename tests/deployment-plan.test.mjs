@@ -9,6 +9,21 @@ import {execFileSync} from 'node:child_process';
 import {gzipSync} from 'node:zlib';
 const require=createRequire(import.meta.url),plan=require('../scripts/deployment-plan.cjs'),packages=require('../scripts/package-plan.cjs');
 const write=(file,value)=>{mkdirSync(dirname(file),{recursive:true});writeFileSync(file,typeof value==='string'?value:JSON.stringify(value));};
+test('Iteration 08 explicitly upgrades Manager/Remote Ops pins and retains reviewed routes and old artifacts',()=>{
+ const f=fixture(),name='dsh-conversation-manager',old=join(f.root,'manager-old.tgz'),state=join(f.root,'conversations.json');
+ tarball(old,'0.1.0-test.2',name);write(state,{sessionIds:{'existing-route':'retained-session'}});
+ const manifest=JSON.parse(readFileSync(join(f.live,'package.json')));manifest.dependencies[name]='file:'+old;write(join(f.live,'package.json'),manifest);
+ const pins=JSON.parse(readFileSync(join(f.live,'character-artifacts.json')));pins[name]={source:'file:'+old,sha256:plan.hash(old),version:'0.1.0-test.2'};write(join(f.live,'character-artifacts.json'),pins);write(join(f.live,'node_modules',name,'package.json'),{name,version:'0.1.0-test.2'});
+ const core=[{insert:[{name,config:{stateFile:state}}]}],patch=join(f.root,'iteration08.patch');write(patch,'qqGatewayLifecycle');
+ assert.throws(()=>plan.verifiedConversation(f.live,core,core,[],{qq:{source:patch}}),/test\.3/);
+ const next=join(f.root,'manager-next.tgz');tarball(next,'0.1.0-test.3',name,{'manager.mjs':'diagnostic(event,record,status){}'});
+ const selected=plan.verifiedConversation(f.live,core,core,['--conversation-artifact='+next],{qq:{source:patch}}),pin=plan.pinArtifact(selected,f.root);
+ assert.equal(selected.upgradeFrom,'0.1.0-test.2');assert.equal(pin.version,'0.1.0-test.3');assert.equal(plan.hash(old),pins[name].sha256);assert.equal(JSON.parse(readFileSync(state)).sessionIds['existing-route'],'retained-session');
+ const remote=join(f.root,'remote-next.tgz');tarball(remote,'1.1.1-test.3','dsh-remote-ops-local',{'index.js':'attach(value){}'});
+ assert.equal(plan.pinArtifact(plan.verifiedRemote(f.live,['--remote-ops-artifact='+remote]),f.root).version,'1.1.1-test.3');
+ assert.throws(()=>plan.verifiedRemote(f.live,['--remote-ops-artifact='+next]),/Invalid/);
+ assert.throws(()=>plan.verifiedConversation(f.live,core,core,['--conversation-artifact='+old],{qq:{source:patch}}),/new .* version/);
+});
 // Real gzip/tar metadata: do not substitute a filename assertion for package version.
 function tarball(file,version,name='dsh-remote-ops-local',extra={}){
  const entry=(path,body)=>{const header=Buffer.alloc(512);header.write(path);header.write(body.length.toString(8).padStart(11,'0'),124);return Buffer.concat([header,body,Buffer.alloc(Math.ceil(body.length/512)*512-body.length)]);};

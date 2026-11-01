@@ -2,7 +2,21 @@
 
 版本与部署状态统一见 [STATUS](STATUS.md)。本仓库不包含 DSH 本体，不是通用一键安装器；现有运维入口仍面向 desktop Profile、单 Owner 私聊及 QQTK 维护目录。普通 Agent 复用模块见 [REUSE](REUSE.md)。
 
-## test.21 的新增部署前提
+## Iteration 08 候选门禁（未部署）
+
+成套候选为 Character test.27、Agent I/O test.8、Conversation Manager test.3、Remote Ops `1.1.1-test.3` 与本轮 QQ 0.5.2 补丁；SDK 1.0.5 补丁保持兼容。Interaction test.9、Inspector test.3、Long Tasks test.1 不变。Character QQ Adapter 启动前检查 `gatewayLifecycleContractVersion:1`，QQ 入口要求 I/O 的 scoped reply；缺失即拒绝，不回退 Creator 或旧 Sender。
+
+已有 pin 默认保留。明确升级独立包时，使用 `--agent-io-artifact=<绝对 tgz 路径>`、`--conversation-artifact=<绝对 tgz 路径>`、`--remote-ops-artifact=<绝对 tgz 路径>`；准备脚本核对名称、变化后的版本、内容接口与哈希，并保留旧包。新补丁要求 Manager 的脱敏/诊断契约，旧 Manager 必须显式升级。状态文件仍须存在；没有空路由初始化或数据迁移。本轮只运行合成 Profile 的离线门禁，没有执行此命令操作真实环境。
+
+Iteration 09 的受控切换顺序：重新确认 main/候选 SHA 和包/补丁哈希 → 独立 Profile 冻结安装及完整原生回归 → 获得部署授权 → 空闲/审批/未完成任务检查 → 停净 Host 并一致备份 Memory、Session、Schedule、Manager、SQLite Outbox 和 JSON Ledger → 单活冷切换 → 检查所有必需服务、唯一 Gateway、当前 Session 与数据保留 → 用户手机验收。不能把 API accepted 当作手机到达；unknown/partial 禁止盲重发。没有这些证据不得自动进入下一步。
+
+Remote Ops 单独卸载会撤销旧命令和监听器，单独重装不自动接回存活 Gateway；必须重载 QQ Gateway 才能恢复新命令和通知器。重新准备候选时按最终源码重打包并验证哈希，不能使用复审前的同版本候选产物。长命令超过 300 秒输入回复授权不代表执行失败，应通过原有任务记录/通知核对，不要重发同一请求触发操作。
+
+手机验收至少包含：短/长文本与气泡、Hang-on、重复推送、/stop/更正、审批允许/拒绝及多题问答、附件、历史提醒与长任务/维护通知、关闭可选模块、重启和断网恢复。Desktop/Web 原生回退另验。观察到通知疑似丢失时先核对 Outbox 与 I/O 诊断，不重置账本。
+
+回滚必须先停净进程，再成套恢复旧 Profile、包/锁/补丁及维护策略；保留最新 Memory、Session、Schedule 和通知账本。旧代码不支持的新终态仍禁止重发；不要恢复旧 SQLite/JSON 快照覆盖新增记录。尚未执行生产回滚演练。
+
+## test.21 的历史引入步骤
 
 Core 声明独立 `dsh-conversation-manager@0.1.0-test.1`，QQ 补丁和 Character Adapter 原生依赖该服务，Identity 要求公开 ownership 契约。包源码在独立 QQTK 仓库，不由 Character pack 隐式重打包。必须先审阅/打包并在离线 Profile 中安装固定 tarball，记录 `character-artifacts.json` 的 source/version/SHA-256，再准备 Character 候选。
 
@@ -20,7 +34,7 @@ QQTK Iteration 01 起，QQ 补丁与 Character QQ 包装还原生依赖独立 `d
 - `prepare-deploy.cjs` / `prepare-host-upgrade.cjs` 共用依赖清单。Core 必需包必须存在；只有启用的 Inspector/Interaction/Long Tasks 才要求本次对应产物，未启用的已安装依赖保留。启用状态按自有 Core/Extras 和 Profile 覆盖计算，不自动扫描第三方任意代码动态装配。
 - 配置选择遵循原生 patch 的替换语义，保留 `!!js` 条件但不执行。Preset 的 `config.plugins` 不能用全局子 ID 覆盖；需修改所属 Preset 声明。条件启停无法静态判定时保守保留产物，实际启停仍由 Host 决定。
 - Extras 是否启用沿用 Profile；常规准备支持 `--extras` 显式启用。第三方搜索等已有 Bundle 保留，不能因替换 Core 而被移除。专业分析 Worker 在 Core 显式声明，与 Extras 启停无关。
-- Remote Ops 不再由 Character 隐式重打包或写死版本。验证当前安装版本、Profile 的 pin、tarball 包元数据和 SHA-256 后保留相同版本；缺少 pin、哈希不符或版本不符直接失败。独立升级 QQTK 须先完成其受控升级及验收。
+- Remote Ops 不由 Character 隐式重打包或写死版本。默认验证当前安装版本、Profile 的 pin、tarball 包元数据和 SHA-256 后保留相同版本；缺少 pin、哈希不符或版本不符直接失败。Iteration 08 支持以 `--remote-ops-artifact` 显式审查候选升级；没有参数不得更换版本，候选仍需独立验收。
 - 依据安装的 QQ Bot/SDK 版本选择两份版本化补丁；两条候选路径记录相同格式的版本/哈希。补丁文件、workspace、锁文件及已安装版本必须一致。没有匹配的已审阅补丁则拒绝准备。
 - `task-memory` 声明存在则停用，已停用保持停用，缺失不报错；旧 Bundle 不重新激活。保留旧依赖与数据，不导入、不删除。
 - `--inspector` 在唯一 Profile/Extras 声明上设置 `writable:false`。Inspector 是普通插件，不会自动获得 Bundle；Core 不依赖 Inspector。

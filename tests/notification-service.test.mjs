@@ -26,6 +26,12 @@ function notifier({outcome=()=>({status:'sent'}),before,inFlight}={}){
 const options=(n,extra={})=>({notifier:n,conversation:'qq-c',target:{type:'direct',id:'owner'},eligible:()=>true,authorize:()=>true,...extra});
 const event=(id,kind='task_completed',text='[测试] '+id)=>({eventId:id,kind,text,conversation:'qq-c'});
 const rows=db=>Object.fromEntries(db.prepare('SELECT id,status FROM outbox').all().map(r=>[r.id,r.status]));
+test('diagnostics correlate persistent events and unique I/O attempts, and observation faults never change delivery',async()=>{
+ const {db,file}=database(),events=[],n=notifier(),o=createOutbox({db,key:file,diagnostics:{emit(component,event,fields){events.push({component,event,...fields});if(event==='settle')throw Error('diagnostic only');}}});
+ o.enqueue(event('private-event'));await o.pump(options(n));assert.equal(o.status('private-event'),'sent');
+ const sending=events.find(r=>r.event==='send'),settled=events.find(r=>r.event==='settle');assert.equal(sending.notificationId,'private-event');assert.equal(sending.logicalId,n.requests[0].id);assert.equal(settled.logicalId,sending.logicalId);
+ assert(!JSON.stringify(events).includes('[测试]'));await o.close();db.close();
+});
 
 test('pending → sending → sent once; the same event enqueued twice or concurrently is one row and one send',async()=>{
  const {db,file}=database(),o=createOutbox({db,key:file}),n=notifier();

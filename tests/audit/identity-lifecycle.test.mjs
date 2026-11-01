@@ -1,13 +1,15 @@
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import path from 'node:path';import os from 'node:os';
 import {apply} from '../../packages/character-identity/index.mjs';
 import {managerFixture} from '../qq-manager-fixture.mjs';
-test('I01 detach and reattach to a retained Gateway does not leave a middleware rejecting every input',async t=>{
+test('I01 detach/reattach revokes old ingress and capability; the new trusted hook captures exactly once without SDK middleware',async t=>{
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'identity-audit-')),bindingFile=path.join(dir,'binding.json');fs.writeFileSync(bindingFile,JSON.stringify({appId:'fixture-app',ownerId:'fixture-owner'}));
  let service,dispose;apply({provide:(name,s)=>{if(name==='characterIdentity')service=s;},effect:f=>dispose=f()},{bindingFile,stateFile:path.join(dir,'state.sqlite')});t.after(()=>dispose());
  const middlewares=[],record={sessionId:'fixture-session',scope:'c2c',peerId:'fixture-owner',senderId:'fixture-owner',agentPreset:'qq-character',agent:{session:{seq:1}}};
  const manager=managerFixture(),config={appId:'fixture-app',preset:'qq-character',access:{c2cMode:'allowlist',c2cAllow:['fixture-owner'],groupMode:'disabled'}};manager.commit(record);
  const bot={use:fn=>middlewares.push(fn)},runtime={manager,bot,config,sender:{sendMarkdown:async()=>{}}};
- service.attach(runtime)();service.attach({...runtime});
- let called=false,i=0;const next=()=>i<middlewares.length?middlewares[i++]({message:{kind:'c2c',senderId:'fixture-owner',messageId:'fixture-message',content:'合成测试消息'}},next):(called=true);
- await assert.doesNotReject(async()=>next());assert.equal(called,true);
+ const evidence=[];service.onIngress((_handle,event)=>evidence.push(event));
+ const detach=service.attach(runtime),old=manager.admitInput,trusted=service.forSession(record.sessionId);detach();service.attach({...runtime});
+ const input={platform:'qq-official',adapter:'qq-official-gateway',accountId:'fixture-app',conversation:{type:'direct',id:'fixture-owner'},sender:{id:'fixture-owner'},message:{id:'fixture-message',text:'合成测试消息'}};
+ assert.throws(()=>old(record,input),/detached/);assert.throws(()=>service.authorize(trusted,'read'));
+ manager.admitInput(record,input);assert.equal(evidence.length,1);assert.equal(evidence[0].text,'合成测试消息');assert.equal(evidence[0].origin,'direct_user');assert.equal(middlewares.length,0);
 });

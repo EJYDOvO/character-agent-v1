@@ -10,8 +10,6 @@ import { mkdirSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 export const name='character-identity';
 const digest=s=>createHash('sha256').update(s).digest('hex');
-// One revocable delegation slot per Bot, including module reloads.
-const ingressSlots=globalThis[Symbol.for('dsh.character.ingress.v1')]??=new WeakMap();
 export function apply(ctx,config) {
   const presetId=config.presetId??'qq-character';
  const binding=JSON.parse(readFileSync(config.bindingFile,'utf8').replace(/^\uFEFF/,''));
@@ -28,14 +26,24 @@ export function apply(ctx,config) {
  db.prepare("INSERT OR IGNORE INTO identity_state VALUES('scope',?)").run(fingerprint);
  db.prepare('INSERT OR IGNORE INTO qq_bindings SELECT session,conversation,? FROM routes WHERE conversation=?').run(presetId,conversationScope.conversationId);
  // The durable Outbox (single writer); interrupted 'sending' rows become unknown once the previous owner closed.
- const outbox=createOutbox({db,key:resolve(config.stateFile),logger:ctx.logger});
+ // I/O is optional and may activate or reload after Identity. Never capture an
+ // absent/stale service at apply time, and never turn diagnostics into a dependency.
+ const diagnosticContext={platform:'qq-official',adapter:'qq-official-gateway',accountId:binding.appId,conversation:{type:'direct',id:binding.ownerId}};
+ const diagnostics={emit(component,event,fields){try{const view=runtime?.diagnostics??ctx.get?.('agentIO')?.diagnostics?.scope(diagnosticContext);view?.emit(component,event,{conversation:diagnosticContext.conversation,...fields});}catch{}}};
+ const outbox=createOutbox({db,key:resolve(config.stateFile),logger:ctx.logger,diagnostics});
  let runtime,detach,closed=false,auditing,gatewayEpoch=0;const listeners=new Set(),bound=new Set(),inputs=new Map();
  function isCurrentId(id){
-  if(closed||!runtime)return false;
-  const manager=runtime.manager,key=manager.sessionKey('c2c',binding.ownerId);
-  return manager.ownershipState(key).sessionId===id;
+  if(closed||!runtime||!gatewayValid(runtime))return false;
+  const manager=runtime.manager,record=[...manager.records()].find(r=>r.scope==='c2c'&&r.peerId===binding.ownerId&&r.sessionId===id);
+  if(!record||!manager.isCurrentSession(record))return false;
+  try{record.agent.ctx?.fiber?.assertActive?.();}catch{return false;}
+  return true;
  }
- function authorize(c,a){const trusted=identity.authorize(c,a);if(!isCurrentId(trusted.sessionId))throw Error('Historical QQ Session is not authorized');return trusted;}
+ function authorize(c,a){
+  let trusted;try{trusted=identity.authorize(c,a);if(!isCurrentId(trusted.sessionId))throw Error('Historical QQ Session is not authorized');}
+  catch(error){diagnostics?.emit('identity','authorize',{status:'rejected',reason:'unauthorized'});throw error;}
+  diagnostics?.emit('identity','authorize',{sessionId:trusted.sessionId,status:'accepted'});return trusted;
+ }
  function forSession(id){const trusted=identity.forSession(id);authorize(trusted,'read');return trusted;}
  function hasReminderBinding(id){return !!db.prepare('SELECT 1 FROM qq_bindings WHERE session=? AND conversation=? AND preset=?').get(id,conversationScope.conversationId,presetId);}
  function protect(agent){if(ctx.get?.('agentPresets')?.composedPreset(agent.ctx)===presetId)protectSession(agent);}
@@ -115,8 +123,10 @@ export function apply(ctx,config) {
   onIngress(fn){listeners.add(fn);return()=>listeners.delete(fn);},
   attach(value){
    if(closed||runtime)throw Error('Duplicate Character QQ gateway');validateGateway(value.config);
+   if(value.platform!==undefined&&(value.platform!=='qq-official'||value.adapter!=='qq-official-gateway'||value.accountId!==binding.appId))throw Error('Foreign Gateway identity');
    const manager=value.manager;if(!['sessionKey','currentSessionId','isCurrentSession','ownershipState','records'].every(k=>typeof manager[k]==='function'))throw Error('Conversation Manager ownership contract required');
    runtime=value;const epoch=++gatewayEpoch,original=manager.getOrCreate,rebuild=manager.rebuildSession;
+   diagnostics?.emit('identity','attach',{status:'active'});
    const wrap=async function(scope,peerId,senderId,target){
     if(runtime!==value||gatewayEpoch!==epoch||scope!=='c2c'||peerId!==binding.ownerId||senderId!==binding.ownerId||target?.scope!=='c2c'||target.targetId!==binding.ownerId)throw Error('Owner-only gateway');
     const record=await original.call(this,scope,peerId,senderId,target);if(runtime!==value||gatewayEpoch!==epoch)throw Error('Gateway detached during restore');bind(record);return record;
@@ -127,7 +137,7 @@ export function apply(ctx,config) {
    try{for(const record of manager.records())bind(record);for(const row of db.prepare('SELECT session FROM qq_bindings WHERE conversation=?').all(conversationScope.conversationId)){const agent=ctx.get?.('agents')?.get(row.session);if(agent)restoreBinding(agent);}}catch(e){manager.getOrCreate=original;manager.rebuildSession=rebuild;runtime=undefined;identity.clear();bound.clear();throw e;}
    // Shared trusted ingress for the ordinary pipeline and explicit correction.
    // The early correction adapter must not bypass Owner binding or L1 evidence.
-   const previousAdmission=manager.admitInteractionInput,previousScheduleBridge=manager.preserveScheduledSession;
+   const previousAdmission=manager.admitInteractionInput,previousInput=manager.admitInput,previousScheduleBridge=manager.preserveScheduledSession;
    const preserve=id=>!closed&&hasReminderBinding(id);
    manager.preserveScheduledSession=preserve;
    const admit=async m=>{
@@ -135,17 +145,22 @@ export function apply(ctx,config) {
     const msg=m.message;
     if(msg.kind!=='c2c'||msg.senderId!==binding.ownerId)throw Error('Owner ingress required');
     const record=await manager.getOrCreate('c2c',binding.ownerId,binding.ownerId,{scope:'c2c',targetId:binding.ownerId,msgId:msg.messageId});
-    const trusted=forSession(record.sessionId);
-    if(typeof msg.content==='string'&&msg.content.trim()&&msg.messageId){
-     const evidence=Object.freeze({sessionId:record.sessionId,eventSeq:record.agent.session.seq,origin:'direct_user',receivedAt:Date.now(),messageId:msg.messageId,text:msg.content.slice(0,8000)});
+    return record;
+   };
+   const capture=(record,input)=>{
+    if(runtime!==value||gatewayEpoch!==epoch)throw Error('Gateway detached');
+    if(!input||input.platform!=='qq-official'||input.adapter!=='qq-official-gateway'||input.accountId!==binding.appId||input.conversation?.type!=='direct'||input.conversation.id!==binding.ownerId||input.sender?.id!==binding.ownerId)throw Error('Untrusted Owner input');
+    if(!manager.isCurrentSession(record))throw Error('Superseded QQ input');
+    const trusted=forSession(record.sessionId),msg=input.message;
+    if(typeof msg?.text==='string'&&msg.text.trim()&&msg.id){
+     const evidence=Object.freeze({sessionId:record.sessionId,eventSeq:record.agent.session.seq,origin:'direct_user',receivedAt:Date.now(),messageId:msg.id,text:msg.text.slice(0,8000)});
      inputs.set(record.sessionId,evidence);
      for(const fn of listeners)try{fn(trusted,evidence);}catch{ctx.logger?.warn('Character ingress capture rejected');}
     }
-    return record;
    };
    manager.admitInteractionInput=admit;
-   if(value.bot){let slot=ingressSlots.get(value.bot);if(!slot){slot={};ingressSlots.set(value.bot,slot);value.bot.use(async(m,next)=>{if(!slot.admit)throw Error('Character ingress detached');await slot.admit(m);return next();});}slot.admit=admit;}
-   detach=()=>{if(runtime!==value||gatewayEpoch!==epoch)return;runtime=undefined;gatewayEpoch++;const slot=value.bot&&ingressSlots.get(value.bot);if(slot?.admit===admit)slot.admit=null;if(manager.admitInteractionInput===admit){if(previousAdmission===undefined)delete manager.admitInteractionInput;else manager.admitInteractionInput=previousAdmission;}if(manager.preserveScheduledSession===preserve){if(previousScheduleBridge===undefined)delete manager.preserveScheduledSession;else manager.preserveScheduledSession=previousScheduleBridge;}if(manager.getOrCreate===wrap)manager.getOrCreate=original;if(manager.rebuildSession===wrapRebuild)manager.rebuildSession=rebuild;identity.clear();bound.clear();inputs.clear();};
+   manager.admitInput=capture;
+   detach=()=>{if(runtime!==value||gatewayEpoch!==epoch)return;runtime=undefined;gatewayEpoch++;if(manager.admitInput===capture){if(previousInput===undefined)delete manager.admitInput;else manager.admitInput=previousInput;}if(manager.admitInteractionInput===admit){if(previousAdmission===undefined)delete manager.admitInteractionInput;else manager.admitInteractionInput=previousAdmission;}if(manager.preserveScheduledSession===preserve){if(previousScheduleBridge===undefined)delete manager.preserveScheduledSession;else manager.preserveScheduledSession=previousScheduleBridge;}if(manager.getOrCreate===wrap)manager.getOrCreate=original;if(manager.rebuildSession===wrapRebuild)manager.rebuildSession=rebuild;identity.clear();bound.clear();inputs.clear();};
    void reconcile().catch(()=>ctx.logger?.warn('QQ Schedule ownership audit blocked; unproven Sessions remain unauthorized'));outbox.releaseHeld();void pump().catch(()=>ctx.logger?.warn('Character Outbox pump blocked; durable state retained'));return detach;
   },
   async notify(trusted,event){authorize(trusted,'send');enqueue({...event,conversation:trusted.conversationId,source:trusted.sessionId});await pump();return statusOf(event.eventId);},

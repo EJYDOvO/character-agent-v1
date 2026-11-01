@@ -2,6 +2,8 @@
 
 在 DeepSeek Harness 上运行的角色 Agent 扩展，提供私人 QQ 接入、可配置角色和带来源的长期记忆。Character 从官方 Creator Preset 构建派生，保留其工具能力；角色设定不会增加系统权限。
 
+Iteration 08 候选为 **test.27 / Agent I/O test.8 / Conversation Manager test.3**，整理可信输入与 Gateway 生命周期、撤权和跨模块脱敏诊断；尚未部署。Remote Ops 与 Character 接入不再互为前提。调用链、唯一写入者和受控升级条件见 [架构](docs/ARCHITECTURE.md)、[集成](docs/INTEGRATION.md)及 [STATUS](docs/STATUS.md)。
+
 Iteration 07 Notification 采用 at-most-once handoff：不确定或部分发送的事件保留状态供核对，不自动重发。Gateway 重附着会切换待发队列的授权上下文；Outbox 热重载使用独立 I/O 尝试 ID。停用时等待在途交接结束才释放数据库，不能用本地超时证明平台未发送。验证与剩余限制见 [STATUS](docs/STATUS.md)。
 
 这是测试版源码仓库，不包含 DSH 本体，也不是一键安装器。2026-11-01 已授权部署 **Character test.26 / Interaction test.9 / Agent I/O test.7 / Conversation Manager test.2**，配套 QQTK Remote Ops `1.1.1-test.2` 和版本化补丁。启动、单 Gateway 与数据保留检查通过；真实 QQ 通知、审批按钮和手机显示仍待验收。版本及验证边界见 [STATUS](docs/STATUS.md)，安装与旧路由保护见 [集成说明](docs/INTEGRATION.md)。验证基线为 **Windows、Node.js 24.21.0、DSH 0.2.1-rc.3、QQ Bot 0.5.2 / SDK 1.0.5**；其他构建需重新验证。

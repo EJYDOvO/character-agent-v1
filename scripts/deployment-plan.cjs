@@ -56,12 +56,25 @@ function verifiedArtifact(live,name){
  assert.equal(pkg?.name,name,'Invalid '+name+' tarball');assert.equal(pkg?.version,installed.version,name+' tarball would change installed version; explicit upgrade required');
  return {name,source:'file:'+file.replaceAll('\\','/'),sha256:pin.sha256,version:installed.version};
 }
-const verifiedRemote=live=>verifiedArtifact(live,'dsh-remote-ops-local');
-function verifiedConversation(live,core,oldCore,args=process.argv){
+function reviewedUpgrade(live,name,args,flag,offers=()=>true){
+ const installed=verifiedArtifact(live,name),argument=args.find(a=>a.startsWith(flag+'='));
+ if(!argument)return installed;
+ const file=argument.slice(flag.length+1);assert(path.isAbsolute(file)&&fs.existsSync(file),'Reviewed '+name+' tarball missing');
+ const pkg=tarPackage(file);assert.equal(pkg?.name,name,'Invalid '+name+' tarball');
+ assert(typeof pkg.version==='string'&&pkg.version!==installed.version,'Changed artifact needs a new '+name+' version');
+ assert(offers(f=>tarEntry(file,'package/'+f)?.toString()),'Reviewed '+name+' lacks the required contract');
+ return {name,file,version:pkg.version,sha256:hash(file),fresh:true,upgradeFrom:installed.version};
+}
+const verifiedRemote=(live,args=process.argv)=>reviewedUpgrade(live,'dsh-remote-ops-local',args,'--remote-ops-artifact',read=>/\battach\(/.test(read('index.js')??''));
+function verifiedConversation(live,core,oldCore,args=process.argv,patches={}){
  const row=entries(core).find(r=>r.name==='dsh-conversation-manager');if(!row)return;
  assert(entries(oldCore).some(r=>r.name==='dsh-conversation-manager')||args.includes('--conversation-state-reviewed'),'Conversation extraction requires an offline routing/Schedule/notification inventory and explicit --conversation-state-reviewed');
  assert(path.isAbsolute(row.config?.stateFile)&&fs.existsSync(row.config.stateFile),'Reviewed Conversation state missing; never silently reset legacy routes');
- return verifiedArtifact(live,'dsh-conversation-manager');
+ const required=Object.values(patches).some(p=>/qqGatewayLifecycle/.test(fs.readFileSync(p.source,'utf8')));
+ const offers=read=>!required||/diagnostic\(event,record/.test(read('manager.mjs')??'');
+ const selected=reviewedUpgrade(live,'dsh-conversation-manager',args,'--conversation-artifact',offers);
+ if(!selected.fresh)assert(offers(file=>{try{return fs.readFileSync(path.join(live,'node_modules',selected.name,file),'utf8');}catch{return undefined;}}),'Iteration 08 requires Conversation Manager diagnostics/redaction (test.3); use --conversation-artifact');
+ return selected;
 }
 // The reviewed QQ patch injects agentIO and the gateway refuses to start without
 // it, so Core must declare dsh-agent-io and the candidate must pin its artifact.
@@ -74,8 +87,9 @@ function verifiedAgentIO(live,core,patches,args=process.argv){
  // Iteration 06 patch its HITL Bridge, the Iteration 07 patch its notifier: an older package would stop the Gateway
  // at start, so it is refused here.
  const wiring=sources.some(s=>/io\.openConversation\(/.test(s)),commands=sources.some(s=>/\.openCommands\(/.test(s)),hitl=sources.some(s=>/\.openHITL\(/.test(s)),notify=sources.some(s=>/\.openNotifications\(/.test(s));
- const needs=name+(notify?' with openNotifications (0.1.0-test.7 or later)':hitl?' with openHITL (0.1.0-test.6 or later)':commands?' with openCommands (0.1.0-test.5 or later)':' with openConversation (0.1.0-test.4 or later)');
- const offers=read=>(!wiring||/\bopenConversation\b/.test(read('index.mjs')??''))&&(!commands||/\bopenCommands\b/.test(read('conversation.mjs')??''))&&(!hitl||(/\bopenHITL\b/.test(read('conversation.mjs')??'')&&/\bcreateHITLBridge\b/.test(read('hitl.mjs')??'')))&&(!notify||/\bopenNotifications\b/.test(read('conversation.mjs')??''));
+ const scopedReplies=sources.some(s=>/conversation\.reply\(/.test(s));
+ const needs=name+(scopedReplies?' with scoped reply and diagnostics (0.1.0-test.8 or later)':notify?' with openNotifications (0.1.0-test.7 or later)':hitl?' with openHITL (0.1.0-test.6 or later)':commands?' with openCommands (0.1.0-test.5 or later)':' with openConversation (0.1.0-test.4 or later)');
+ const offers=read=>(!wiring||/\bopenConversation\b/.test(read('index.mjs')??''))&&(!commands||/\bopenCommands\b/.test(read('conversation.mjs')??''))&&(!hitl||(/\bopenHITL\b/.test(read('conversation.mjs')??'')&&/\bcreateHITLBridge\b/.test(read('hitl.mjs')??'')))&&(!notify||/\bopenNotifications\b/.test(read('conversation.mjs')??''))&&(!scopedReplies||(/\breply\b/.test(read('conversation.mjs')??'')&&/\bcreateDiagnostics\b/.test(read('diagnostics.mjs')??'')));
  const fromFile=dir=>file=>{try{return fs.readFileSync(path.join(dir,file),'utf8');}catch{return undefined;}};
  const row=entries(core).find(r=>r.name===name);
  if(!row){assert(!required,'Reviewed QQ patch requires '+name+'; rebuild Character Core');return;}
@@ -150,4 +164,4 @@ function entryYaml(yaml){
  const schema=yaml.JSON_SCHEMA.extend(type);
  return {load:(text,options)=>yaml.load(text,{...options,schema}),dump:(value,options)=>yaml.dump(value,{...options,schema})};
 }
-module.exports={select,disableLegacyMemory,verifyTaskExtras,verifiedRemote,verifiedConversation,verifiedAgentIO,pinAgentIO,patchPlan,verifyCandidate,entryYaml,hash};
+module.exports={select,disableLegacyMemory,verifyTaskExtras,verifiedRemote,verifiedConversation,verifiedAgentIO,pinAgentIO,pinArtifact:pinAgentIO,patchPlan,verifyCandidate,entryYaml,hash};

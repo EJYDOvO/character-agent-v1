@@ -58,6 +58,7 @@ export function apply(ctx,config){
   assert.equal(identity.route(trusted).automaticRotation,false);assert.equal(identity.route(trusted).session,parent.id);
   await bind(parent);const inputId='extract:'+randomUUID(),inputText='每次排查故障时我都会先整理日志，再检查近期变更。';
   await manager.admitInteractionInput({message:{kind:'c2c',senderId:'mock-owner',messageId:inputId,content:inputText}});
+  manager.admitInput(manager.record,{platform:'qq-official',adapter:'qq-official-gateway',accountId:'mock-app',conversation:{type:'direct',id:'mock-owner'},sender:{id:'mock-owner'},message:{id:inputId,text:inputText}});
   const extractUntil=Date.now()+12000;let extracted;while(Date.now()<extractUntil){extracted=memory.recall(trusted,'近期变更',16000).find(r=>JSON.parse(r.source).messageId===inputId);if(extracted)break;await sleep(100);}assert(extracted,'Current trusted ingress was not extracted');assert.equal(JSON.parse(extracted.source).inputOrigin,'direct_user');
   const l1Before=memory.browse(trusted,{layer:'l1'}).total;
   await parent.whenIdle();for(let i=0;i<5;i++)parent.session.append('user/message',createUserMessage({content:[{type:'text',text:('隔离压缩材料第 '+i+' 次整理日志。').repeat(180)}],source:{kind:'inspector-test-fixture'}}),{surfaceOp:'append'});

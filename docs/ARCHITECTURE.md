@@ -1,5 +1,34 @@
 # 运行架构与复用边界
 
+Iteration 08 候选（test.27，未部署）在 Iteration 07 上收紧身份、发送句柄和诊断，保留旧 principalId/conversationId/Session Key、Schema 与账本。版本和验证状态以 [STATUS](STATUS.md) 为准。
+
+当前外部通信主链：QQ SDK 的真实连接与准入 → Agent I/O 可信 Inbound（platform / adapter / account / Conversation 去重）→ Conversation Manager 唯一当前路由 → 原生 Agent / 可选 Interaction → Agent I/O 队列 → QQ Adapter 的分片、限额及平台 API。Web/Desktop 继续使用原生窗口通道。
+
+| 出口 | 发送权威与调用链 |
+|---|---|
+| 普通正文、Interaction 气泡/等待/工具错误 | 原生事件/Interaction 提交完整逻辑消息 → `sendMessage` → QQ 文本 Adapter；同一逻辑 ID 不重复交出 |
+| Commands 与会话获取失败提示 | 已认领/验证的入站对象 → `conversation.reply` 的短期输入回复授权 → 同一 I/O；不需要新建 Session，不授予 Memory 或通知权限 |
+| 审批、问答 | 原生 Approval/userQuestions 唯一结算 → 可选 HITL Bridge → 同一 I/O；QQ 只渲染/解码按钮 |
+| Schedule、Long Tasks、维护通知 | Character Outbox 唯一持久交出者 → `openNotifications` → 同一 I/O；独立 QQ 的 Remote Ops 使用其 JSON Ledger，二者不同时发送同一事件 |
+| Media | 路径授权与资源校验 → I/O 附件 → QQ Adapter → 上传及媒体消息 API；上传成功不是消息送达 |
+| Typing、WebSocket/Token、交互 ACK | QQ 协议控制操作，留在平台 Adapter；ACK 不结算或批准原生请求 |
+
+所有 I/O 目标新增显式 `adapter`；这是进程内身份范围补全，不重算持久 ID。旧的低层 `sendMessage/registerAdapter` 调用可在独立 `legacy` 范围配对使用；不能借缺少 adapter 的请求进入具名平台通道。排队任务绑定注册时的 Adapter 实例，HMR/撤权后不会接管新实例继续发送。
+
+Character Adapter 通过 QQ 自有入口的 Host-only `integration.qqGatewayLifecycle@1` 参数挂接 Identity（`lifecycle.mjs`），不再修改 Remote Ops 的 `attach`。它必须在 SDK 启动前完成绑定；不依赖同一 Cordis apply 中刚提供的服务立即可见。普通 QQ 不需要这个参数或 Character。Identity 保留 Manager 生命周期包装，使用公开 records/current/ownership 契约；当前授权还复核 Gateway Owner 策略、真实当前 record 与 Context 活性。原始 Memory 证据从 I/O 去重后的输入钩子进入，不再向 SDK Bot 插入 Character 中间件；platformData、昵称、群 Conversation 和模型参数不颁发能力。
+
+| 持久状态 | 唯一写入者 |
+|---|---|
+| Conversation Session/模型/Preset/轮换偏好 | Conversation Manager 的共享 PrefsStore；Identity routes 只是历史证据 |
+| Session 历史、Compaction、Schedule | 原生 DSH Session/Persistence/Schedule |
+| qq_bindings、历史 routes、身份 scope | Character Identity；不把历史绑定恢复为完整 Owner 权限 |
+| Character 通知 Outbox 与来源 | `character-identity/outbox.mjs`；Remote Ops 只委托并记录交接摘要 |
+| 独立 Remote Ops 的通知 JSON Ledger | Remote Ops；不能作为 Character Outbox 的第二个发送者 |
+| Memory/修订/治理/L1-L3 | Memory Core；Inspector 和 Tools 都调用 Core |
+| 长任务 task/run 记录 | Long Tasks 的原生 storageDomain；调度仍由原生 Schedule 执行 |
+
+诊断为可选、进程内有界观察，规范见 QQTK 的 `docs/DIAGNOSTICS.md`。同一 I/O 实例共享 HMAC 关联，原始身份/正文/凭据不进入事件；观察异常不改变授权或发送结果。SDK 默认错误中间件的直发异常路径已移除：进入 I/O 前的异常只记录固定 Host 提示，不能在没有输入授权时恢复旧 Sender 回退。
+
 test.21 候选将路由/生命周期从 QQTK 抽成独立 `dsh-conversation-manager`（源码在 QQTK 仓库的 `plugin-sources/`），已在隔离 rc.3 验证并随 test.21 授权部署，实际验收边界见 STATUS。它没有 QQ/Character/Memory 依赖；QQ Adapter 注入该服务。一个服务内各平台独占 namespace，共用唯一持久偏好实例。创建、恢复、Flush、Fork/Compaction 和 Schedule 均复用原生 API。
 
 test.22 收紧恢复：只有持久化 open/load 的原生同 ID 缺失错误允许创建，原生 resume 与 Preset 错误不再参与降级判断。关闭只释放每个生命周期一次，并等待先前的回收句柄；失败显式报告。Identity 保留现有包装，仅修复前置 epoch 和卸载归属检查。
@@ -26,7 +55,7 @@ Worker V2 使用官方 `subagent` 的 `agentPreset / allowedAgentPresets` 和 `s
 | Memory Tools 默认入口 | Character 身份、提示词、通知查询 | `memoryIdentity@1 + dshMemory + tools + systemPrompt`，Agent-scoped |
 | Tools `character.mjs` | 无独立边界 | 同包内专用入口：旧工具名、Character 提示、QQ 通知查询 |
 | Character Identity | QQ Owner、会话绑定、通知账本 | 原有职责 + 标准可信身份适配、QQ 全消息确认策略；通知 Outbox（`outbox.mjs`，唯一写入者）经 Agent I/O 通知器发送 |
-| Character QQ Adapter | QQTK attach 拦截 | 保留；只允许配置的 Character Preset，不接受解析失败降级 |
+| Character QQ Adapter | 包装 Remote Ops attach | Host-only 生命周期参数；只允许配置的 Character Preset，不接受解析失败降级 |
 | Definition / Creator 派生 | 固定默认路径和 Preset | 角色路径、Preset ID、数据目录可配置；官方 Creator 指纹变更触发重建 |
 
 ## 数据流
@@ -34,11 +63,13 @@ Worker V2 使用官方 `subagent` 的 `agentPreset / allowedAgentPresets` 和 `s
 ```mermaid
 flowchart LR
   QQ[QQ SDK 与入口白名单] --> G[单一 QQ Gateway]
-  G --> S[Sender / 审批 / 问答展示]
-  G --> CM[Conversation Manager / 唯一路由]
-  P[第二平台 Adapter] --> CM
-  CM --> A
-  S --> A[原生 DSH Agent]
+  G --> IN[Agent I/O Inbound]
+  P[模拟第二平台 Adapter] --> IN
+  IN --> CM[Conversation Manager / 唯一路由]
+  CM --> A[原生 DSH Agent / Interaction]
+  A --> OUT[Agent I/O Outbound]
+  OUT --> G
+  G <--> H[原生 Approval / HITL Bridge]
   G -.可选.-> O[Remote Ops]
   O -.可选.-> M[可信维护后端]
   G --> CI[Character QQ Adapter + Identity]
@@ -54,7 +85,7 @@ flowchart LR
 
 图中 CI 和 LI 是替代配置，单个作用域只装配一个 Provider。其他项目不需要安装 Character Identity、QQ Adapter 或两个 Character Bundle。
 
-Inspector 可以直接依赖 Core 的管理 API；Core 不反向依赖 Inspector，不新增接口服务。Character Adapter 对 Identity、Memory、Remote Ops 的组合依赖是项目边界，不能据此推断基础 QQ 或通用 Memory 也必须安装它们。旧 Worker 模块仅保留无操作兼容入口，新 Preset 不引用它。
+Inspector 可以直接依赖 Core 的管理 API；Core 不反向依赖 Inspector，不新增接口服务。Character Adapter 对 Identity、Memory 的组合依赖是项目边界，不要求 Remote Ops；基础 QQ 或通用 Memory 也不要求安装这些 Character 组件。旧 Worker 模块仅保留无操作兼容入口，新 Preset 不引用它。
 
 v0.7.8 主体目标已有实现，但项目范围仍由可信 binding 固定；尚无任务级 grants 或项目管理 UI。主路由/生命周期现由独立 Manager 管理，稳定通知目的地和 Outbox 仍在 Identity。原生 Schedule 固定原 Session，经持久 qq_bindings 冷恢复原根，不迁移提醒；长期任务仍使用原生 storageDomain 和独立任务根。旧 Task Memory 只有只读预览，正式导入未开发。
 

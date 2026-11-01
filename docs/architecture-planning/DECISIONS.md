@@ -106,18 +106,20 @@ Identity 与权限验证是**从 Iteration 01 起持续有效的安全门禁**�
 
 ## 5. 当前实现事实（不是上述新设计已落地）
 
-- 部署基线（当前）：Character **test.25** / Interaction **test.9** / Agent I/O **test.6** / Conversation Manager **test.2** / QQTK Iteration 06 补丁（2026-11-01）；验证基线为 DSH 0.2.1-rc.3、Windows、Node 24.21.0。（此前记录的 test.23 / Interaction test.8 为历史基线。）
+- 部署基线（当前）：Character **test.26** / Interaction **test.9** / Agent I/O **test.7** / Conversation Manager **test.2** / QQTK Iteration 07 补丁（2026-11-01）；验证基线为 DSH 0.2.1-rc.3、Windows、Node 24.21.0。（此前记录的 test.23 / Interaction test.8 为历史基线。）
 - Conversation Manager 已为 QQTK `plugin-sources` 内独立 Host Plugin；Interaction 已为 Character `packages` 内可选独立 Agent/Preset Plugin；Memory/Inspector/Long Tasks 等已有模块。
-- test.8 `policy.bind` 仍是 `sendText` / 可选 `openStream`；QQTK `createInteractionOutbound` 负责接线，QQ 官方 Bot/SDK 仍有 stream。此事实与 ADR-052 目标分别记录。（历史：Iteration 04 起 test.9 只用 `sendText`，QQ 聊天输出不再有 SDK stream。）
+- 历史 test.8 的 `policy.bind` 曾有 `sendText` / 可选 `openStream`；Iteration 04 起当前 test.9 只用 `sendText`，QQ 聊天输出没有 SDK stream，符合 ADR-052。原生 Web/Desktop 保持宿主原有 Streaming。
 - 原生窗口分泡/Hang-on 尚未完整适配；真实 QQ 手机收件、审批按钮和部分流式残留仍未完整验收。当前状态及测试数量见 [STATUS](../STATUS.md)。
 - Iteration 01 实现（已随 Character test.24 授权部署）：独立 Host Plugin `dsh-agent-io` 0.1.0-test.2 提供 `sendMessage()`，QQ 补丁内 QQ Official 文本 Adapter；未绑定 Interaction 的普通回复、Streaming 静态降级、工具错误与轮次错误提示已改走它，旧直接发送代码已删除。逻辑消息 ID 由原生 Session ID + 事件 seq + 类别派生，同 ID 异内容/目标判 `id-conflict`；去重仅进程内、有界，淘汰或重启后不提供 exactly-once。每片发送前复核访问配置与 Manager `isCurrentSession`；`/stop` 与 `aborted`/`interrupted` Turn 取消未交给 QQ 的输出。验证仅为自动化测试与隔离 rc.3 Host 探针，真实 QQ/手机未验收。Character 候选装配须同时安装并固定 `dsh-agent-io`。接口细节以 QQTK `plugin-sources/dsh-agent-io/README.md` 为准；合并不等于部署，部署基线不变。
 - Iteration 03 实现（已随 Iteration 04 授权部署，Agent I/O test.4）：`dsh-agent-io` 0.1.0-test.4 的 `openConversation()` 把入站交接（Manager `getOrCreate` → `isCurrentSession` → 原生输入 → Interaction）与出站可信路由收为平台无关接口，出入站共用 `{platform, accountId, conversation}`；QQ Official 已改用并删除原重复代码。Conversation Manager 未改，仍是唯一路由写入者。
 - Iteration 04 实现（已授权部署，PR 已合并）：Interaction test.9 只提交完整气泡（不预览、不用 `openStream`），QQ 桥接层把每个气泡、等待提示与工具/轮次错误都交给 `sendMessage()`；Interaction 专属 SDK Stream 与普通回复的 SDK 流式输出已移除，符合 ADR-052（公共发送只有 `sendMessage()`）。
-- Iteration 07 实现（源码，**未部署**）：Notification 未按 ADR-057 的建议单独成插件——发送通道是 Agent I/O 的 `openNotifications()`（与聊天同队列、同 Adapter），持久状态与授权仍是 Character Identity 的既有 SQLite Outbox（唯一写入者，ADR-055）；稳定目标不要求当前 Session，改由准入与通知方在每个分片前授权（ADR-059），普通聊天与 HITL 不放宽；unknown 不重放（ADR-060）。理由见路线图 3.6。
+- Iteration 07 实现（已于 2026-11-01 合并并授权部署）：Notification 未按 ADR-057 的建议单独成插件——发送通道是 Agent I/O 的 `openNotifications()`（与聊天同队列、同 Adapter），持久状态与授权仍是 Character Identity 的既有 SQLite Outbox（唯一写入者，ADR-055）；稳定目标不要求当前 Session，改由准入与通知方在每个分片前授权（ADR-059），普通聊天与 HITL 不放宽；unknown 不重放（ADR-060）。理由见路线图 3.6。
 - Iteration 06 实现（已于 2026-11-01 授权部署）：`dsh-agent-io` 0.1.0-test.6 的 HITL Bridge（Agent I/O 包内可选模块，未按 ADR-057 的建议单独成插件，理由见路线图 3.5）经原生 `approval/request`/`user-questions/request` waterfall 统一接入，提示与 Bridge 签发的按钮经 `sendMessage()`，回应校验 Conversation、预期作答者、请求引用与当前 Session；原生审批与问答仍是唯一权威，符合 ADR-054；QQ 原通道已删除。真实 QQ 按钮未验收。
 - Iteration 05 实现（已于 2026-10-31 授权部署）：`dsh-agent-io` 0.1.0-test.5 的命令路由（识别/解析/一次性认领/路由；执行与授权仍在命令所属插件）与基础附件描述（可信资源与模型可见内容分开），QQ 命令入口、入站附件/引用与 `qqbot_send_file` 已迁移，符合 ADR-057 的 L1 Commands/基础 Media 分工；真实 QQ 媒体与手机展示未验收。
 
 ## 6. 剩余待决（不提前定为最终 ADR）
+
+Iteration 08 实现说明（候选未部署）：ADR-050/058 的进程内身份范围补齐 Adapter；ADR-059 的队列绑定实际 Adapter 实例、当前 Context/Owner 授权重检；ADR-055 不改变历史 ID/Schema 或单写入者。Character 使用 Host-only `integration.qqGatewayLifecycle@1`，不包装 Remote Ops、不新增身份插件；Diagnostics v1 在既有 I/O 包内提供可选有界观察，HMAC 按账号分域，不成为权限证据。普通运行/SDK 日志去原值，命令和已准入的错误回复走 I/O，I/O 之前的异常传播且无直发回退。原生 Approval、Schedule、Worker 权限及通知 unknown 屏障不变。
 
 1. **返回结构的扩展**：ADR-060 已定区分原则；附件、引用、Interaction 气泡确认点接入后，结果结构是否需要扩展，在 Iteration 04/05 复核。
 2. **持久发送状态与恢复**：逐泡发送关联是否需要持久化、崩溃后如何恢复、与 Notification Outbox 的边界；不在未设计前认定现有 Outbox 覆盖聊天泡。
