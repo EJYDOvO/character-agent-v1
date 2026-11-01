@@ -19,3 +19,13 @@ test('native Spawn adapter propagates unexpected Context failures and never hide
 test('native Spawn adapter does not invent an unavailable Agent service',async()=>{
  const r=await compat.apply({get:()=>undefined},{provider:'fork'});assert.equal(r.list,undefined);assert.equal(r.ctx.get('agents'),undefined);
 });
+test('native Spawn view follows a replaced registry without mutating or globally owning either registry',async()=>{
+ const first=agent('first'),second=agent('second');let registry={list:()=>[first]};
+ const result=await compat.apply({get:()=>registry},{}),old=result.ctx.get('agents');
+ assert.deepEqual(old.list(),[first]);registry={list:()=>[second]};
+ assert.deepEqual(result.ctx.get('agents').list(),[second]);assert.deepEqual(old.list(),[first]);assert.deepEqual(registry.list(),[second]);
+});
+test('missing Context initialization and registry lookup failures propagate instead of filtering live Agents',async()=>{
+ await assert.rejects(()=>compat.apply({get:()=>({list:()=>[{id:'not-initialized'}]})},{}),TypeError);
+ const failure=Error('registry initialization failed');await assert.rejects(()=>compat.apply({get(){throw failure;}},{}),e=>e===failure);
+});

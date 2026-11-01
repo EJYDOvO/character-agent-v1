@@ -11,6 +11,16 @@ export function notifier(calls,result=()=>({status:'sent',parts:[{index:0,status
   calls.push([{scope:'c2c',targetId:request.conversation.id},request.text]);return result(request);}};
 }
 function fixture(directory=mkdtempSync(join(tmpdir(),'character-notify-')),binding={},host={}){const bindingFile=join(directory,'binding.json'),stateFile=join(directory,'state.sqlite');writeFileSync(bindingFile,JSON.stringify({appId:'app',ownerId:'owner',...binding}));let service,dispose;const events=new Map();host.agents??=new Map();const makeAgent=id=>{const a={id,session:{header:{id},seq:1},guards:[],gates:new Map()};a.ctx={get:n=>n==='characterIdentity'?service:n==='tools'?{guard:f=>a.guards.push(f)}:undefined,on:(n,f)=>a.gates.set(n,f)};host.agents.set(id,a);return a;};host.agentPresets??={composedPreset:()=> 'qq-character'};apply({get:n=>host[n],on:(n,fn)=>events.set(n,fn),provide:(n,s)=>{if(n==='characterIdentity')service=s;},effect:f=>dispose=f()},{bindingFile,stateFile});const calls=[],manager=managerFixture();manager.commit({sessionId:'session',scope:'c2c',peerId:'owner',senderId:'owner',agentPreset:'qq-character',agent:makeAgent('session')});const runtime={manager,config:{appId:'app',preset:'qq-character',access:{c2cMode:'allowlist',c2cAllow:['owner'],groupMode:'disabled'}},sender:{sendMarkdown:async()=>{throw Error('no direct Gateway send');}},notifications:notifier(calls)};return{directory,service,dispose,runtime,calls,events,makeAgent,host};}
+test('current Memory capabilities stop at Gateway policy revocation or Context disposal',async()=>{
+ const f=fixture();try{
+  f.service.attach(f.runtime);const trusted=f.service.forSession('session');
+  f.runtime.config.access.c2cAllow=[];
+  assert.throws(()=>f.service.authorize(trusted,'read'),/authoriz/i);
+  f.runtime.config.access.c2cAllow=['owner'];
+  f.runtime.manager.record.agent.ctx.fiber={assertActive(){throw Object.assign(Error('closed'),{code:'INACTIVE_EFFECT'});}};
+  assert.throws(()=>f.service.authorize(trusted,'write'),/authoriz/i);
+ }finally{await f.dispose();}
+});
 test('unique gateway and real trusted mock route; non-owner denied before session creation',async()=>{const f=fixture();try{f.service.attach(f.runtime);await assert.rejects(()=>f.runtime.manager.getOrCreate('c2c','stranger','stranger',{}),/Owner/);await assert.rejects(()=>f.runtime.manager.getOrCreate('group','owner','owner',{scope:'c2c',targetId:'owner'}),/Owner/);assert.throws(()=>f.service.attach(f.runtime),/Duplicate/);await f.runtime.manager.getOrCreate('c2c','owner','owner',{scope:'c2c',targetId:'owner'});assert.equal(f.service.forSession('session').role,'character');}finally{f.dispose();}});
 test('route inspection persists generation, keeps rotation opt-in, and preserves original Schedule roots',async()=>{
  let f=fixture();const directory=f.directory;
@@ -27,9 +37,12 @@ test('explicit correction admission retains Owner validation and raw evidence, t
  const f=fixture(),evidence=[];f.service.onIngress((_h,e)=>evidence.push(e));const detach=f.service.attach(f.runtime),admit=f.runtime.manager.admitInteractionInput;
  try{
   await assert.rejects(()=>admit({message:{kind:'c2c',senderId:'other',content:'更正：假来源'}}),/Owner/);
-  await admit({message:{kind:'c2c',senderId:'owner',messageId:'correction-1',content:'更正：保留原文件'},state:{injected:'错误内容'}});
+  const record=await admit({message:{kind:'c2c',senderId:'owner',messageId:'correction-1',content:'更正：保留原文件'},state:{injected:'错误内容'}});
+  const capture=f.runtime.manager.admitInput;
+  assert.throws(()=>capture(record,{platform:'forged'}),/Untrusted/);
+  capture(record,{platform:'qq-official',adapter:'qq-official-gateway',accountId:'app',conversation:{type:'direct',id:'owner'},sender:{id:'owner'},message:{id:'correction-1',text:'更正：保留原文件'}});
   assert.equal(evidence.length,1);assert.equal(evidence[0].text,'更正：保留原文件');assert.equal(evidence[0].origin,'direct_user');
-  detach();assert.equal(f.runtime.manager.admitInteractionInput,undefined);await assert.rejects(()=>admit({message:{kind:'c2c',senderId:'owner'}}),/detached/);
+  detach();assert.equal(f.runtime.manager.admitInput,undefined);assert.throws(()=>capture(record,{}),/detached/);assert.equal(f.runtime.manager.admitInteractionInput,undefined);await assert.rejects(()=>admit({message:{kind:'c2c',senderId:'owner'}}),/detached/);
  }finally{f.dispose();}
 });
 test('pending outbox belonging to a different owner is never sent to current binding',async()=>{let f=fixture();const directory=f.directory;f.dispose();const db=new DatabaseSync(join(directory,'state.sqlite'));db.prepare('INSERT INTO outbox VALUES(?,?,?,?,?,?)').run('other-owner','scheduled_reminder','qq-foreign','private previous-owner content','pending',new Date().toISOString());db.close();f=fixture(directory);try{f.service.attach(f.runtime);await new Promise(r=>setImmediate(r));assert.equal(f.calls.length,0);}finally{f.dispose();}});

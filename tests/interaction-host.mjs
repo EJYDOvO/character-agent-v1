@@ -218,10 +218,10 @@ export function apply(ctx,config){
       const {commandGate,qqCommand}=await import(pathToFileURL(config.qqFixture+'/dist/gateway/middleware-setup.js').href);
       const router=plainConversation.openCommands({prefixes:['/']});let stops=0;
       router.register(qqCommand({name:'stop',hidden:true,handler:()=>{stops++;return '已中止';}}));
-      const gate=commandGate(router),replies=[];
-      const cmd=(id,content,sender='synthetic-owner')=>({message:{kind:'c2c',senderId:sender,messageId:id,content},state:{},replyTarget:{scope:'c2c',targetId:sender,msgId:id},bot:{sendText:async(_t,c)=>replies.push(c)},log:logger,stop(r){this.stopped=r;}});
+      const gate=commandGate(router),replies=[],beforeCommand=plainSent.length;
+      const cmd=(id,content,sender='synthetic-owner')=>({message:{kind:'c2c',senderId:sender,messageId:id,content},state:{},replyTarget:{scope:'c2c',targetId:sender,msgId:id},bot:{sendText:async()=>{throw Error('Direct command send prohibited');}},log:logger,stop(r){this.stopped=r;}});
       const through=async c=>{let passed=false;await gate(c,async()=>{passed=true;});return passed;};
-      const first=cmd('synthetic-cmd-1','/stop');assert.equal(await through(first),false);assert.equal(first.stopped,'command:handled:stop');assert.equal(stops,1);assert.deepEqual(replies,['已中止']);
+      const first=cmd('synthetic-cmd-1','/stop');assert.equal(await through(first),false);assert.equal(first.stopped,'command:handled:stop');assert.equal(stops,1);assert.deepEqual(plainSent.slice(beforeCommand).map(m=>m.text),['已中止']);assert.deepEqual(replies,[]);
       const commandInputs=()=>Array.from({length:base.session.seq},(_,i)=>base.session.eventAt(i)).filter(e=>e?.type==='user/message'&&JSON.stringify(e.data).includes('/stop'));
       const redelivered={...qqEvent(),message:{...qqEvent().message,messageId:'synthetic-cmd-1',content:'/stop'}};
       await handleInbound(redelivered,logger,channel);await sleep(100);assert.equal(commandInputs().length,0,'the claimed command is a duplicate for the chat channel: no native input');

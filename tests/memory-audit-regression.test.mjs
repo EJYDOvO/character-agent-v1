@@ -188,7 +188,7 @@ test('actual layered probe body cannot report ok after a mocked compaction failu
 test('actual legacy LLM probe body rejects a done-zero job even when old results exist',async t=>{
   const f=fixture(t,'off'),result=path.join(f.dir,'llm-probe.json');let current;
   f.db.remember(f.c,{kind:'procedural',statement:'历史运行需要保留错误栈。'},{sessionId:f.c.sessionId,eventSeq:1,origin:'inference',extractor:'host-llm-v1',originalSessionId:'old-run'});
-  const identity={forSession:()=>current,attach:runtime=>{runtime.bot.use(async m=>{const id=f.db.enqueue(current,{sessionId:current.sessionId,eventSeq:2,messageId:m.message.messageId,text:m.message.content,origin:'direct_user'});f.db.db.prepare("UPDATE extraction_jobs SET status='done',error=? WHERE id=?").run(JSON.stringify({saved:0}),id);});return()=>{};}};
+  const identity={forSession:()=>current,attach:runtime=>{runtime.manager.admitInput=(_record,m)=>{const id=f.db.enqueue(current,{sessionId:current.sessionId,eventSeq:2,messageId:m.message.id,text:m.message.text,origin:'direct_user'});f.db.db.prepare("UPDATE extraction_jobs SET status='done',error=? WHERE id=?").run(JSON.stringify({saved:0}),id);};return()=>{};}};
   const ctx={effect:fn=>t.after(fn()),get:n=>n==='characterIdentity'?identity:f.db,agents:{create:async opts=>{current=f.bind({sessionId:opts.sessionId});return {agent:{session:{header:{id:opts.sessionId}}},dispose:async()=>{}};}}};
   const {apply}=await loadProbe('llm-host-probe.mjs');apply(ctx,{result,cwd:f.dir});const report=await readProbe(result);assert.equal(report.ok,false);assert.match(report.error,/saved no memory/);
 });

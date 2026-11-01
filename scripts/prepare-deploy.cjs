@@ -14,13 +14,14 @@ let rows=yaml.load(fs.readFileSync(live+'/cordis.patch.yml','utf8'));
 const core=yaml.load(fs.readFileSync(project+'/bundles/character-core/cordis.patch.yml','utf8')),extras=yaml.load(fs.readFileSync(project+'/bundles/character-extras/cordis.patch.yml','utf8'))||[];
 const workerUpgrade=require('./worker-upgrade.cjs');
 const oldCore=yaml.load(fs.readFileSync(live+'/node_modules/dsh-character-core/cordis.patch.yml','utf8'));
-const conversation=plan.verifiedConversation(live,core,oldCore);
+const patches=plan.patchPlan(live,path.resolve(process.env.DSH_QQTK_PROJECT||root),yaml);
+const conversation=plan.verifiedConversation(live,core,oldCore,process.argv,patches.patches);
 const workerMigration=workerUpgrade.upgrade(rows,oldCore,core);rows=workerMigration.value;
 const extrasEnabled=manifest.dsh.profile.bundles.includes('dsh-character-extras')||process.argv.includes('--extras');
 plan.verifyTaskExtras(live,extras,extrasEnabled,yaml);
 if(process.argv.includes('--inspector'))require('./inspector-declaration.cjs')(rows,extrasEnabled?extras:[]);
 const artifactPlan=require('./package-plan.cjs').verifiedPlan(project,sourceDigest,plan.select({profile:rows,core,extras,extrasEnabled}));
-const remote=plan.verifiedRemote(live),patches=plan.patchPlan(live,path.resolve(process.env.DSH_QQTK_PROJECT||root),yaml);
+const remote=plan.verifiedRemote(live);
 const agentIO=plan.verifiedAgentIO(live,core,patches.patches);
 const qq=rows.find(x=>x.id==='im-qqbot');assert.equal(qq.config.access.c2cMode,'allowlist');assert.equal(qq.config.access.c2cAllow.length,1);assert.equal(qq.config.access.groupMode,'disabled');
 const owner=JSON.parse(fs.readFileSync(root+'/data/maintenance/owner.json','utf8'));assert.equal(owner.openid,qq.config.access.c2cAllow[0]);
@@ -38,8 +39,8 @@ record.workerMigration={removed:workerMigration.removed,personas:workerMigration
 for(const pkg of artifactPlan){const f=pkg.filename,source=project+'/artifacts/packages/'+f,dest=root+'/plugin-packages/'+f;
  assert(fs.existsSync(source),'Missing artifact: '+pkg.name);if(fs.existsSync(dest))assert.equal(hash(dest),hash(source),'Immutable artifact differs: '+pkg.name);else fs.copyFileSync(source,dest);
  manifest.dependencies[pkg.name]='file:'+dest.replaceAll('\\','/');record.artifacts[pkg.name]={source:manifest.dependencies[pkg.name],sha256:hash(dest),version:pkg.version};}
-manifest.dependencies[remote.name]=remote.source;record.artifacts[remote.name]=remote;
-if(conversation){manifest.dependencies[conversation.name]=conversation.source;record.artifacts[conversation.name]=conversation;}
+const remotePin=plan.pinArtifact(remote,root);manifest.dependencies[remotePin.name]=remotePin.source;record.artifacts[remotePin.name]=remotePin;
+if(conversation){const pin=plan.pinArtifact(conversation,root);manifest.dependencies[pin.name]=pin.source;record.artifacts[pin.name]=pin;}
 if(agentIO){const pin=plan.pinAgentIO(agentIO,root);manifest.dependencies[pin.name]=pin.source;record.artifacts[pin.name]=pin;}
 manifest.dsh.profile.bundles=manifest.dsh.profile.bundles.filter(x=>!['@tencent-connect/dsh-qqbot','dsh-remote-ops-local','dsh-task-memory-local','dsh-character-core','dsh-character-extras'].includes(x));manifest.dsh.profile.bundles.push('dsh-character-core');if(extrasEnabled)manifest.dsh.profile.bundles.push('dsh-character-extras');
 qq.config.preset='qq-character';delete qq.name;plan.disableLegacyMemory(rows);

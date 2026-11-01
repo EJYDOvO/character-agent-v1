@@ -17,16 +17,18 @@ const KINDS=['scheduled_reminder','task_completed','task_failed','task_timeout',
 // instance): a new owner recovers and pumps only after the previous one closed.
 const leases=globalThis[Symbol.for('dsh.character.outbox.v1')]??=new Map();
 
-export function createOutbox({db,key,logger,now=Date.now,retryAfterMs=60_000}){
+export function createOutbox({db,key,logger,now=Date.now,retryAfterMs=60_000,diagnostics}){
  const previous=leases.get(key);let release;
  const lease={released:new Promise(r=>{release=r;})};leases.set(key,lease);
  let closed=false,running,closing,again=false,latest,holdEpoch=0;
  const instance=randomUUID(),controller=new AbortController(),attempts=new Map(),held=new Map();
  const warn=message=>{try{logger?.warn?.('Character Outbox: '+message);}catch{}};
+ const trace=(event,fields)=>{try{diagnostics?.emit('notification',event,fields);}catch{}};
  const ready=(previous?.released??Promise.resolve()).then(()=>{
   if(closed)return;
   const recovered=db.prepare("UPDATE outbox SET status='unknown' WHERE status='sending'").run().changes;
   if(recovered)warn(`${recovered} interrupted deliveries recorded as unknown; they are not resent`);
+  if(recovered)trace('recover',{status:'unknown',count:recovered});
  });
  ready.catch(()=>{});
  const sourceOf=id=>db.prepare('SELECT value FROM identity_state WHERE key=?').get('outbox-source:'+id)?.value;
@@ -52,7 +54,7 @@ export function createOutbox({db,key,logger,now=Date.now,retryAfterMs=60_000}){
   try{
    const inserted=db.prepare("INSERT OR IGNORE INTO outbox VALUES(?,?,?,?, 'pending',?)").run(eventId,kind,conversation,text,new Date(now()).toISOString()).changes===1;
    if(inserted&&typeof source==='string'&&source)db.prepare('INSERT OR IGNORE INTO identity_state VALUES(?,?)').run('outbox-source:'+eventId,source);
-   db.exec('COMMIT');return inserted;
+   db.exec('COMMIT');if(inserted)trace('enqueue',{notificationId:eventId,status:'pending'});return inserted;
   }catch(error){db.exec('ROLLBACK');throw error;}
  }
  // The status a terminal or retryable result leaves the row in.
@@ -73,17 +75,19 @@ export function createOutbox({db,key,logger,now=Date.now,retryAfterMs=60_000}){
    if(closed||options!==latest)break;
    if((held.get(row.id)??0)>now())continue;
    const source=sourceOf(row.id);
-   if(!eligible(row,source)){held.set(row.id,Infinity);warn(`a ${row.kind} notification cannot be re-verified and stays pending`);continue;}
+   if(!eligible(row,source)){held.set(row.id,Infinity);trace('hold',{notificationId:row.id,status:'pending',reason:'unverified-source'});warn('an unverified notification stays pending');continue;}
    // Durable claim before the hand-over; a failed write sends nothing.
    try{if(!db.prepare("UPDATE outbox SET status='sending' WHERE id=? AND status='pending'").run(row.id).changes)continue;}
-   catch{warn('claim not recorded; nothing sent');continue;}
+   catch{trace('reject',{notificationId:row.id,status:'pending',reason:'storage-error'});warn('claim not recorded; nothing sent');continue;}
    claimed++;
    // A new I/O id per attempt: the I/O remembers ids in memory, and a provably
    // unsent attempt must not be answered with its own earlier result.
    const attempt=(attempts.get(row.id)??0)+1;attempts.set(row.id,attempt);
    const releasedAt=holdEpoch,eventKey=createHash('sha256').update(row.id).digest('hex');
+   const logicalId=`notify:${eventKey}:${instance}:${attempt}`;
+   trace('send',{notificationId:row.id,logicalId,status:'sending'});
    let result;
-   try{result=await notifier.send({id:`notify:${eventKey}:${instance}:${attempt}`,conversation:target,text:row.text,signal:controller.signal,authorize:t=>!closed&&authorize(row,source,t)});}
+   try{result=await notifier.send({id:logicalId,conversation:target,text:row.text,signal:controller.signal,authorize:t=>!closed&&authorize(row,source,t)});}
    catch{result={status:'unknown'};}
    const next=outcome(result);
    if(next==='pending'){
@@ -93,8 +97,8 @@ export function createOutbox({db,key,logger,now=Date.now,retryAfterMs=60_000}){
     // handoff was still queued. Its late refusal must not hold the new owner.
     if(!attachmentHold||releasedAt===holdEpoch)held.set(row.id,attachmentHold?Infinity:now()+retryAfterMs);
    }
-   try{db.prepare('UPDATE outbox SET status=? WHERE id=? AND status=?').run(next,row.id,'sending');}
-   catch{warn('delivery result not recorded; the row stays sending and becomes unknown on restart');}
+   try{db.prepare('UPDATE outbox SET status=? WHERE id=? AND status=?').run(next,row.id,'sending');trace('settle',{notificationId:row.id,logicalId,status:next});}
+   catch{trace('state',{notificationId:row.id,logicalId,status:'sending',reason:'storage-error'});warn('delivery result not recorded; the row stays sending and becomes unknown on restart');}
   }
   return claimed;
  }

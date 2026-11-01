@@ -17,13 +17,14 @@ let rows=yaml.load(fs.readFileSync(live+'/cordis.patch.yml','utf8'));
 const plan=require('./deployment-plan.cjs'),sourceDigest=require('./source-digest.cjs')();
 const core=yaml.load(fs.readFileSync(project+'/bundles/character-core/cordis.patch.yml','utf8')),extras=yaml.load(fs.readFileSync(project+'/bundles/character-extras/cordis.patch.yml','utf8'))||[];
 const workerUpgrade=require('./worker-upgrade.cjs'),oldCore=yaml.load(fs.readFileSync(live+'/node_modules/dsh-character-core/cordis.patch.yml','utf8'));
-const conversation=plan.verifiedConversation(live,core,oldCore);
+const patchPlan=plan.patchPlan(live,path.resolve(process.env.DSH_QQTK_PROJECT||install),yaml);
+const conversation=plan.verifiedConversation(live,core,oldCore,process.argv,patchPlan.patches);
 const migration=workerUpgrade.upgrade(rows,oldCore,core);rows=migration.value;
 const extrasEnabled=manifest.dsh.profile.bundles.includes('dsh-character-extras');
 plan.verifyTaskExtras(live,extras,extrasEnabled,yaml);
 if(process.argv.includes('--inspector'))require('./inspector-declaration.cjs')(rows,extrasEnabled?extras:[]);
 const artifacts=require('./package-plan.cjs').verifiedPlan(project,sourceDigest,plan.select({profile:rows,core,extras,extrasEnabled}));
-const remote=plan.verifiedRemote(live),patchPlan=plan.patchPlan(live,path.resolve(process.env.DSH_QQTK_PROJECT||install),yaml);
+const remote=plan.verifiedRemote(live);
 const agentIO=plan.verifiedAgentIO(live,core,patchPlan.patches);
 const qq=rows.find(r=>r.id==='im-qqbot');
 assert.equal(qq?.config?.access?.c2cMode,'allowlist');assert.equal(qq.config.access.c2cAllow.length,1);assert.equal(qq.config.access.groupMode,'disabled');
@@ -37,8 +38,8 @@ for(const pkg of artifacts){
  if(fs.existsSync(dest))assert.equal(hash(source),hash(dest),'Immutable package differs');else fs.copyFileSync(source,dest);
  manifest.dependencies[name]='file:'+dest.replaceAll('\\','/');record.artifacts[name]={source:manifest.dependencies[name],sha256:hash(dest),version};
 }
-manifest.dependencies[remote.name]=remote.source;record.artifacts[remote.name]=remote;
-if(conversation){manifest.dependencies[conversation.name]=conversation.source;record.artifacts[conversation.name]=conversation;}
+const remotePin=plan.pinArtifact(remote,install);manifest.dependencies[remotePin.name]=remotePin.source;record.artifacts[remotePin.name]=remotePin;
+if(conversation){const pin=plan.pinArtifact(conversation,install);manifest.dependencies[pin.name]=pin.source;record.artifacts[pin.name]=pin;}
 if(agentIO){const pin=plan.pinAgentIO(agentIO,install);manifest.dependencies[pin.name]=pin.source;record.artifacts[pin.name]=pin;}
 if(nativeSchedule)manifest.dsh.profile.bundles=manifest.dsh.profile.bundles.filter(n=>n!=='@deepseek-ai/dsh-experimental-schedule-bundle');
 plan.disableLegacyMemory(rows);
