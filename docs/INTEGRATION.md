@@ -10,6 +10,8 @@
 
 Iteration 09 的受控切换顺序：重新确认 main/候选 SHA 和包/补丁哈希 → 独立 Profile 冻结安装及完整原生回归 → 获得部署授权 → 空闲/审批/未完成任务检查 → 停净 Host 并一致备份 Memory、Session、Schedule、Manager、SQLite Outbox 和 JSON Ledger → 单活冷切换 → 检查所有必需服务、唯一 Gateway、当前 Session 与数据保留 → 用户手机验收。不能把 API accepted 当作手机到达；unknown/partial 禁止盲重发。没有这些证据不得自动进入下一步。
 
+Remote Ops 单独卸载会撤销旧命令和监听器，单独重装不自动接回存活 Gateway；必须重载 QQ Gateway 才能恢复新命令和通知器。重新准备候选时按最终源码重打包并验证哈希，不能使用复审前的同版本候选产物。长命令超过 300 秒输入回复授权不代表执行失败，应通过原有任务记录/通知核对，不要重发同一请求触发操作。
+
 手机验收至少包含：短/长文本与气泡、Hang-on、重复推送、/stop/更正、审批允许/拒绝及多题问答、附件、历史提醒与长任务/维护通知、关闭可选模块、重启和断网恢复。Desktop/Web 原生回退另验。观察到通知疑似丢失时先核对 Outbox 与 I/O 诊断，不重置账本。
 
 回滚必须先停净进程，再成套恢复旧 Profile、包/锁/补丁及维护策略；保留最新 Memory、Session、Schedule 和通知账本。旧代码不支持的新终态仍禁止重发；不要恢复旧 SQLite/JSON 快照覆盖新增记录。尚未执行生产回滚演练。

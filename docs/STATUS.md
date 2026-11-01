@@ -28,6 +28,14 @@ GitHub Actions：运行代码一致的 `1fbe637` 已通过 Windows/Ubuntu 的单
 
 本轮不部署、不合并、不变更 Persona/Owner/Worker 授权、Memory Schema 或真实账本。Iteration 09 仅提供 [受控切换准备与实机清单](INTEGRATION.md#iteration-08-候选门禁未部署)。
 
+### Iteration 08 定向复审（基于 a9254e6 / QQTK b857dd2）
+
+最小复现确认两项缺陷：Remote Ops 卸载后旧命令仍能通过授权；同步 `onInput` 准入钩子抛错被错误记录为 unknown。QQTK 增加实例撤销检查、卸载释放监听器及异步 Tick 继续执行前的检查；钩子失败改为 before-handoff，允许 I/O 安全重投，真正的原生交接异常仍为 unknown。Character 运行代码不变，仅扩充真实 rc.3 Host 的卸载/重装、旧命令拒绝、Gateway 重建与新通知器投递回归。
+
+QQTK 单独重装不支持自动热接线，须重载 Gateway；已经开始的后端操作不能撤回。输入回复 300 秒有效期保留：长命令可能执行完成但 `replied:false`，不能重复执行或擅自改用主动推送。上游 SDK 预去重不会随 I/O 钩子失败回滚，QQ 自动重投并无保证，必要时需新消息。契约见 QQTK 通用集成说明。
+
+本轮回归：Character 单元 252、安全审计 33；QQTK 单元 212、SDK 36、边界 4，全部通过且无跳过，两份补丁一致。rc.3 隔离通信（含 Gateway 重建后的 Remote Ops 定时通知）、双进程 Lifecycle/HMR、Interaction 探针通过；Bot/模型合成，不代表手机送达。首次漏设夹具路径造成的 8 项跳过和边界入口失败未列为通过，已明确指定代码夹具后完整重跑。未部署、未合并。
+
 ## Iteration 07（Character test.26 / Agent I/O test.7，2026-11-01 已授权部署）
 
 Notification：主动通知统一经 Agent I/O 发送，保留稳定目标、持久 Outbox、原生 Schedule 与独立授权边界。已从 Character PR #10（`main` `94dbeee`）和 QQTK PR #9（`main` `f928380`）的合并树部署：Character 六包 test.26、Agent I/O test.7、Remote Ops `1.1.1-test.2`；Interaction test.9、Inspector test.3、Long Tasks test.1、Conversation Manager test.2 保持原版本。

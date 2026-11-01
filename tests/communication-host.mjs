@@ -16,7 +16,7 @@ export function apply(ctx,config){
    const activate=config.generic?undefined:(await import('../packages/character-qq-adapter/lifecycle.mjs')).activate;
    if(config.generic)assert.equal(ctx.get('characterIdentity'),undefined,'ordinary QQ fixture must have no Character Identity');
    else{const ops=await import(pathToFileURL(config.toolkit+'/plugin-sources/dsh-remote-ops/index.js').href);forks.push(await ctx.plugin(ops,{stateDirectory:config.cwd+'/ops',ownerId:'mock-owner'}));}
-   for(const disabled of [false,true]){
+   for(const [cycle,disabled] of (config.generic?[false,true]:[false,false,true]).entries()){
     if(disabled&&!config.generic){await forks.shift().dispose();assert.equal(ctx.get('qqRemoteOps'),undefined,'Character must work after Remote Ops unload');}
     const settings=ConfigSchema({appId:'mock-app',appSecret:'synthetic-not-a-credential',provider:'communication-fixture',model:'fixture',preset:config.generic?'cordis':'qq-character',cwd:config.cwd,access:{c2cMode:'allowlist',c2cAllow:['mock-owner'],groupMode:'disabled'},debug:false,media:{enabled:false},vision:{enabled:false},hitl:{enabled:!disabled},notifications:{enabled:!disabled}});
     let runtime,stage='registered';
@@ -32,7 +32,7 @@ export function apply(ctx,config){
     const previous=await runtime.manager.getOrCreate('c2c','mock-owner','mock-owner',{scope:'c2c',targetId:'mock-owner'});
     const inputCount=agent=>agent.session.snapshotEvents().filter(e=>e.type==='user/message'&&(e.data?.message??e.data)?.source?.kind==='user').length;
     const previousCount=inputCount(previous.agent);
-    const input={kind:'c2c',senderId:'mock-owner',senderIsBot:false,messageId:'message-'+disabled,content:'hello communication',attachments:[]};
+    const input={kind:'c2c',senderId:'mock-owner',senderIsBot:false,messageId:'message-'+cycle,content:'hello communication',attachments:[]};
     const received=await bot.push(input);assert.deepEqual(received.testErrors,[]);
     const record=runtime.manager.getSessionRecord('c2c','mock-owner');assert(record);await record.agent.whenIdle();
     for(let i=0;i<100&&!bot.sent.some(t=>t.includes('通信链路正常'));i++)await sleep(20);
@@ -41,8 +41,25 @@ export function apply(ctx,config){
     await bot.push(input);assert.equal(inputCount(record.agent),previousCount+1,'duplicate input creates no native message');
     if(!config.generic){
      const trusted=ctx.get('characterIdentity').forSession(record.sessionId);assert.equal(ctx.get('characterIdentity').latestInput(trusted).text,'hello communication','raw evidence comes from the trusted I/O hook, not the envelope');
-     if(!disabled){const before=bot.sent.length;await bot.push({...input,messageId:'command-'+disabled,content:'/ops status'});assert(bot.sent.length>before,'command reply must use I/O');await ctx.get('characterIdentity').notifySystem({eventId:'qqtk:communication-probe',kind:'configured_alert',text:'synthetic notification',target:{scope:'c2c',targetId:'mock-owner'}});const count=bot.sent.filter(t=>t==='synthetic notification').length;await ctx.get('characterIdentity').notifySystem({eventId:'qqtk:communication-probe',kind:'configured_alert',text:'synthetic notification',target:{scope:'c2c',targetId:'mock-owner'}});assert.equal(count,1);assert.equal(bot.sent.filter(t=>t==='synthetic notification').length,1);}
+     if(!disabled){const before=bot.sent.length;await bot.push({...input,messageId:'command-'+cycle,content:'/ops status'});assert.equal(bot.sent.length,before+1,'one command reply after Gateway reload');assert(bot.sent.at(-1).includes('connected'),'current Remote Ops must be attached');const eventId='qqtk:communication-probe-'+cycle;await ctx.get('characterIdentity').notifySystem({eventId,kind:'configured_alert',text:'synthetic notification',target:{scope:'c2c',targetId:'mock-owner'}});const count=bot.sent.filter(t=>t==='synthetic notification').length;await ctx.get('characterIdentity').notifySystem({eventId,kind:'configured_alert',text:'synthetic notification',target:{scope:'c2c',targetId:'mock-owner'}});assert.equal(count,1);assert.equal(bot.sent.filter(t=>t==='synthetic notification').length,1);
+      if(cycle===0){
+       const old=ctx.get('qqRemoteOps'),command=old.commands(runtime.manager)[0],call={message:input,command:{args:['features']}};
+       const listeners=(bot.handlers.get('ready')??[]).length;
+       await forks.shift().dispose();assert.equal(command.authorized(call)===true,false);await assert.rejects(()=>command.handler(call),/retired/);
+       assert.equal((bot.handlers.get('ready')??[]).length,listeners-1);
+       const n=bot.sent.length;await bot.push({...input,messageId:'retired-command',content:'/ops features'});assert.equal(bot.sent.length,n+1);assert(bot.sent.at(-1).includes('Gateway'));
+       const ops=await import(pathToFileURL(config.toolkit+'/plugin-sources/dsh-remote-ops/index.js').href);forks.unshift(await ctx.plugin(ops,{stateDirectory:config.cwd+'/ops',ownerId:'mock-owner'}));
+       for(let i=0;i<100&&!ctx.get('qqRemoteOps');i++)await sleep(20);
+       assert(ctx.get('qqRemoteOps')!==old);assert.equal((bot.handlers.get('ready')??[]).length,listeners-1,'reloading Remote Ops alone does not attach the notifier');
+       report.checks.push('Remote Ops unload revokes old commands/listeners; explicit Gateway reload attaches one fresh command/notifier');
+      }
+     }
      else assert.equal(runtime.manager.hitl,undefined,'HITL disabled leaves native requests unclaimed');
+     if(cycle===1){
+      fs.writeFileSync(config.cwd+'/ops/jobs/review.result.json',JSON.stringify({action:'Review',ok:true,finishedAt:new Date(Date.now()+1000).toISOString()}));
+      for(let i=0;i<190&&!bot.sent.some(t=>t.includes('维护 Review：成功'));i++)await sleep(100);
+      assert.equal(bot.sent.filter(t=>t.includes('维护 Review：成功')).length,1,'reloaded Remote Ops notifier must be attached after Gateway rebuild');
+     }
     }
     await fork.dispose();forks.pop();assert(bot.stopped);assert.equal(record.typingKeepAlive,undefined);assert.equal(runtime.manager.size,0);
     if(!config.generic)assert.throws(()=>ctx.get('characterIdentity').forSession(record.sessionId),'old Gateway handle must lose Memory authorization');
