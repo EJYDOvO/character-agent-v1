@@ -13,7 +13,7 @@ rc.3 新增通信验收使用实际 Gateway、中间件、I/O、Manager、Identi
 | 门禁（Windows / Node 24.21 / DSH 0.2.1-rc.3） | 结果与范围 |
 |---|---|
 | Character 单元 / 安全审计 | 252/252、33/33；SQLite 故障、Outbox HMR、撤权、Spawn 异常和显式依赖升级 |
-| QQTK 单元 / SDK 审计 / 边界 | 207/207、36/36、4/4，无跳过；SDK 是代码隔离夹具，无平台网络 |
+| QQTK 单元 / SDK 审计 / 边界 | 208/208、36/36、4/4，无跳过；SDK 是代码隔离夹具，无平台网络，含附件文件名/路径/异常日志脱敏 |
 | 补丁 | QQ 19 个文件、SDK 3 个文件重建一致，匹配上游快照可应用；许可及新增缓存原始快照保留 |
 | 新通信原生 Host | 完整 Character、普通 QQ 无 Character、Interaction 关闭、Remote Ops 缺失、HITL/通知关闭通过；诊断可串联通知与物理分片且无身份/正文 |
 | Interaction / HITL / Media | 既有原生探针 26 项通过，平台/网络/模型均为合成替身 |
@@ -21,6 +21,8 @@ rc.3 新增通信验收使用实际 Gateway、中间件、I/O、Manager、Identi
 | Core / Extras / 通用模块 | Core-only、Extras 真正工具启停、普通 Identity + Memory + Inspector 通过；自动提取与 Compaction、原生 Schedule→Outbox、HTTP Cookie/Origin/CAS/遗忘通过 |
 | 原生 Spawn 负对照 | 未适配的 rc.3 在已关闭 Context 仍留注册表时实际失败（INACTIVE_EFFECT）；保留薄适配，不将该负对照列作产品通过 |
 | 未运行 | 真实 QQ/手机、实际 Desktop GUI 点击、真实模型任务、生产升级/回滚与跨平台安装；本轮授权范围不覆盖这些验收 |
+
+GitHub Actions：运行代码一致的 `1fbe637` 已通过 Windows/Ubuntu 的单元及安全审计（[运行记录](https://github.com/EJYDOvO/character-agent-v1/actions/runs/41264262221)）；Hosted CI 未安装 DSH，不能替代上述本机原生 Host 门禁。QQTK 未配置同类 CI，本轮以本机隔离结果为准。
 
 剩余风险：本轮确认的 P1 均已修复，未发现可复现的 P0 或未修复 P1；这不是对未执行实机路径的安全证明。P2：真实手机按钮/额度/断网恢复未验收；rc.3 原生 Spawn 缺陷仍需自有薄适配；Remote Ops JSON 是交接时快照，Character 最终结果以 Outbox 为准；在途未知不自动重试，单活约束与发送永久挂起时的冷恢复限制保留。P3：I/O 重启后的聊天去重不持久化；HMAC 不跨 I/O 实例稳定关联；第三方任意 Host 代码属于可信计算基，不是恶意插件沙箱。
 
