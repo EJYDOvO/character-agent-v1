@@ -1,6 +1,6 @@
 # 阶段状态与后续路线
 
-本页对照 v0.7.8/ADR-050/055/058–062 与 S0–S5。Iteration 01–07 已合并，最后部署记录为 Character test.26 / I/O test.7 / Manager test.2 / Remote Ops test.2（DSH rc.3）；Iteration 08 test.27 是未部署候选。本轮未访问生产数据或重新验证在线状态，实际验收以 STATUS 为准。
+本页对照 v0.7.8/ADR-050/055/058–062 与 S0–S5。Iteration 01–08 已合并，最新授权部署（2026-11-02）为 Character test.27 / I/O test.8 / Manager test.3 / Remote Ops test.3（DSH rc.3）。受控冷切换已完成，真实 QQ/手机等实机验收仍待执行，详见 STATUS。
 
 | 下一步 | 现状、价值与最小交付 | 前置与验收 | 风险 |
 |---|---|---|---|

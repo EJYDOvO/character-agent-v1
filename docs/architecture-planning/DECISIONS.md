@@ -106,7 +106,7 @@ Identity 与权限验证是**从 Iteration 01 起持续有效的安全门禁**�
 
 ## 5. 当前实现事实（不是上述新设计已落地）
 
-- 部署基线（当前）：Character **test.26** / Interaction **test.9** / Agent I/O **test.7** / Conversation Manager **test.2** / QQTK Iteration 07 补丁（2026-11-01）；验证基线为 DSH 0.2.1-rc.3、Windows、Node 24.21.0。（此前记录的 test.23 / Interaction test.8 为历史基线。）
+- 部署基线（当前）：Character **test.27** / Interaction **test.9** / Agent I/O **test.8** / Conversation Manager **test.3** / QQTK Iteration 08 补丁（2026-11-02）；验证基线为 DSH 0.2.1-rc.3、Windows、Node 24.21.0。（此前记录的 test.23 / Interaction test.8 为历史基线。）
 - Conversation Manager 已为 QQTK `plugin-sources` 内独立 Host Plugin；Interaction 已为 Character `packages` 内可选独立 Agent/Preset Plugin；Memory/Inspector/Long Tasks 等已有模块。
 - 历史 test.8 的 `policy.bind` 曾有 `sendText` / 可选 `openStream`；Iteration 04 起当前 test.9 只用 `sendText`，QQ 聊天输出没有 SDK stream，符合 ADR-052。原生 Web/Desktop 保持宿主原有 Streaming。
 - 原生窗口分泡/Hang-on 尚未完整适配；真实 QQ 手机收件、审批按钮和部分流式残留仍未完整验收。当前状态及测试数量见 [STATUS](../STATUS.md)。
@@ -119,7 +119,7 @@ Identity 与权限验证是**从 Iteration 01 起持续有效的安全门禁**�
 
 ## 6. 剩余待决（不提前定为最终 ADR）
 
-Iteration 08 实现说明（候选未部署）：ADR-050/058 的进程内身份范围补齐 Adapter；ADR-059 的队列绑定实际 Adapter 实例、当前 Context/Owner 授权重检；ADR-055 不改变历史 ID/Schema 或单写入者。Character 使用 Host-only `integration.qqGatewayLifecycle@1`，不包装 Remote Ops、不新增身份插件；Diagnostics v1 在既有 I/O 包内提供可选有界观察，HMAC 按账号分域，不成为权限证据。普通运行/SDK 日志去原值，命令和已准入的错误回复走 I/O，I/O 之前的异常传播且无直发回退。原生 Approval、Schedule、Worker 权限及通知 unknown 屏障不变。
+Iteration 08 实现说明（2026-11-02 已合并部署）：ADR-050/058 的进程内身份范围补齐 Adapter；ADR-059 的队列绑定实际 Adapter 实例、当前 Context/Owner 授权重检；ADR-055 不改变历史 ID/Schema 或单写入者。Character 使用 Host-only `integration.qqGatewayLifecycle@1`，不包装 Remote Ops、不新增身份插件；Diagnostics v1 在既有 I/O 包内提供可选有界观察，HMAC 按账号分域，不成为权限证据。普通运行/SDK 日志去原值，命令和已准入的错误回复走 I/O，I/O 之前的异常传播且无直发回退。原生 Approval、Schedule、Worker 权限及通知 unknown 屏障不变。
 
 1. **返回结构的扩展**：ADR-060 已定区分原则；附件、引用、Interaction 气泡确认点接入后，结果结构是否需要扩展，在 Iteration 04/05 复核。
 2. **持久发送状态与恢复**：逐泡发送关联是否需要持久化、崩溃后如何恢复、与 Notification Outbox 的边界；不在未设计前认定现有 Outbox 覆盖聊天泡。

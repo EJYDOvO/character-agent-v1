@@ -1,13 +1,13 @@
 # DSH Character Agent：当前进度与渐进式重构路线图 v0.8
 
-> 更新：2026-11-01（Iteration 01–07 已合并；最近部署为 Iteration 07；Iteration 08 候选未部署）。2026-10-30 起开发方式改为按功能切片的渐进式重构（ADR-062）。GitHub 是后续文档维护的唯一主入口；旧 ChatGPT Library v0.7.8 仅为历史快照。
+> 更新：2026-11-02（Iteration 01–08 已合并；2026-11-02 已授权部署 Iteration 08；Iteration 09 实机验收尚未完成）。2026-10-30 起开发方式改为按功能切片的渐进式重构（ADR-062）。GitHub 是后续文档维护的唯一主入口；旧 ChatGPT Library v0.7.8 仅为历史快照。
 > 下列目标均为**设计决定，尚未实现**，除非标明已实现。每个切片的开发都在与生产隔离的环境进行，切片完成不等于部署；部署需另行授权并走既有门禁。
 
 ## 1. 当前源码与部署记录基线
 
 | 能力 | 当前事实 | 尚未完成的边界 |
 | --- | --- | --- |
-| 运行装配 | 当前授权部署（2026-11-01）：Character **test.26**、Interaction **test.9**、Agent I/O **test.7**、Conversation Manager **test.2** 与 QQTK Iteration 07 补丁（QQTK PR #9 / Character PR #10 已合并）；DSH **0.2.1-rc.3**、Node **24.21.0**、Windows | 不等于 Mac/其他 DSH 构建可安装或验收；真实 QQ 手机收件与分泡节奏未验收 |
+| 运行装配 | 当前授权部署（2026-11-01）：Character **test.27**、Interaction **test.9**、Agent I/O **test.8**、Conversation Manager **test.3** 与 QQTK Iteration 08 补丁（2026-11-02 Git 合并并授权部署）；DSH **0.2.1-rc.3**、Node **24.21.0**、Windows | 不等于 Mac/其他 DSH 构建可安装或验收；真实 QQ 手机收件与分泡节奏未验收 |
 | 会话 | 独立 Conversation Manager **test.2**，QQTK 为薄会话适配；隔离恢复/唯一路由已有验证 | 模拟第二平台不代表真实第二平台；旧提醒根/单写入者约束保留 |
 | Interaction | **test.9** 已部署（Iteration 04）只提交完整气泡，`bind` 只用 `sendText`，QQ 侧经 `sendMessage()` 发送 | 真实 QQ 手机收件与实机分泡节奏未验收 |
 | Worker | 原生 Creator/Worker Preset、显式委派；按 Preset 原生装配工具，无 Character 默认零工具 Boundary；Iteration 08 重跑十种 Preset/冷恢复通过 | 真实模型任务质量、手机主代审批另验 |
@@ -17,7 +17,7 @@
 
 Character 单元 215、安全审计 33、QQTK 轻量 55/审批 6 是 [STATUS](../STATUS.md) 的 test.23 **历史记录**（各迭代当前的测试数量见 STATUS 对应小节）；Host 探针多用合成 Sender/LLM。`--workers --manager` 在 55 秒期限内未完成，不列为通过。真实 QQ 手机收件、审批按钮、流式残留和生产回滚演练不能假定已验收。
 
-Iteration 08 候选已完成身份/句柄隔离、可选脱敏诊断、显式包升级门禁和 rc.3 原生组合回归（完整矩阵见 STATUS）。本轮未重跑真实 Preset Manager GUI，不覆盖旧的该项超时；未部署、未合并。Iteration 09 只做获授权后的冷切换与实机验收，不以源码通过代替上线。
+Iteration 08 候选已完成身份/句柄隔离、可选脱敏诊断、显式包升级门禁和 rc.3 原生组合回归（完整矩阵见 STATUS）。本轮未重跑真实 Preset Manager GUI，不覆盖旧的该项超时；已于 2026-11-02 另获授权合并并完成冷切换。Iteration 09 只做获授权后的冷切换与实机验收，不以源码通过代替上线。
 
 ## 2. 开发方式（ADR-062）
 

@@ -2,9 +2,9 @@
 
 本页是版本与验收状态的统一入口。历史发布记录说明当时结果，不代表最新运行状态。
 
-## Iteration 08 候选（Character test.27，未部署、未合并）
+## Iteration 08（Character test.27，2026-11-02 已合并、授权部署）
 
-基于 Character `fd45a84` 与 QQTK `77428ea` 的 main；计划配套 Agent I/O test.8、Conversation Manager test.3、Remote Ops `1.1.1-test.3` 和 QQ 0.5.2 补丁，SDK 1.0.5 补丁不变。Interaction test.9、Inspector test.3、Long Tasks test.1 不变。下节 Iteration 07 是最近一次部署记录，本轮没有读取生产数据或重新验证在线状态。
+基于 Character `fd45a84` 与 QQTK `77428ea` 的 main；已配套部署 Agent I/O test.8、Conversation Manager test.3、Remote Ops `1.1.1-test.3` 和 QQ 0.5.2 补丁，SDK 1.0.5 补丁不变。Interaction test.9、Inspector test.3、Long Tasks test.1 不变。下节 Iteration 07 是历史部署记录。开发与复审阶段未访问生产数据；下述上线验证在本次明确授权后执行。
 
 已确认并修复：不同 Adapter 共用去重范围；旧队列/分片接管 HMR 新 Adapter；handoff 缺少 Adapter 核对；Gateway 撤权/Context 关闭后 Memory capability 未即时失效；已关闭 Context 仍被 Manager 认作当前；不同 Conversation 共用消息 ID 时短期回复 ID 冲突；QQ 被动回复缓存串用不同账号的候选。均有修复前失败用例。命令、Session 获取失败提示和 SDK 默认错误回退的直发路径已清理，已替代的内部审批/问答类只保留明确拒绝入口；Character 改用显式 Host 生命周期钩子及 I/O 原始输入证据，不再包装 Remote Ops/SDK Bot。Manager 和 SDK 动态日志去原值，新增共享 HMAC 的可选有界诊断。
 
@@ -20,13 +20,15 @@ rc.3 新增通信验收使用实际 Gateway、中间件、I/O、Manager、Identi
 | Lifecycle / Worker | 双进程重启、每次启动三轮 Context 销毁/HMR、第二平台、历史提醒、任务与 Manager 重装通过；十种原生 Preset 工具/白名单/一级深度/父子通信/冷恢复通过 |
 | Core / Extras / 通用模块 | Core-only、Extras 真正工具启停、普通 Identity + Memory + Inspector 通过；自动提取与 Compaction、原生 Schedule→Outbox、HTTP Cookie/Origin/CAS/遗忘通过 |
 | 原生 Spawn 负对照 | 未适配的 rc.3 在已关闭 Context 仍留注册表时实际失败（INACTIVE_EFFECT）；保留薄适配，不将该负对照列作产品通过 |
-| 未运行 | 真实 QQ/手机、实际 Desktop GUI 点击、真实模型任务、生产升级/回滚与跨平台安装；本轮授权范围不覆盖这些验收 |
+| 未运行 | 真实 QQ/手机、实际 Desktop GUI 点击、真实模型任务与跨平台安装；生产冷切换及一次自动回退的后续授权结果见上线记录 |
 
 GitHub Actions：运行代码一致的 `1fbe637` 已通过 Windows/Ubuntu 的单元及安全审计（[运行记录](https://github.com/EJYDOvO/character-agent-v1/actions/runs/41264262221)）；Hosted CI 未安装 DSH，不能替代上述本机原生 Host 门禁。QQTK 未配置同类 CI，本轮以本机隔离结果为准。
 
 剩余风险：本轮确认的 P1 均已修复，未发现可复现的 P0 或未修复 P1；这不是对未执行实机路径的安全证明。P2：真实手机按钮/额度/断网恢复未验收；rc.3 原生 Spawn 缺陷仍需自有薄适配；Remote Ops JSON 是交接时快照，Character 最终结果以 Outbox 为准；在途未知不自动重试，单活约束与发送永久挂起时的冷恢复限制保留。P3：I/O 重启后的聊天去重不持久化；HMAC 不跨 I/O 实例稳定关联；第三方任意 Host 代码属于可信计算基，不是恶意插件沙箱。
 
-本轮不部署、不合并、不变更 Persona/Owner/Worker 授权、Memory Schema 或真实账本。Iteration 09 仅提供 [受控切换准备与实机清单](INTEGRATION.md#iteration-08-候选门禁未部署)。
+开发阶段不部署、不合并；2026-11-02 已另获授权完成合并与冷切换。Persona/Owner/Worker 授权及 Memory Schema 不变，账本没有重置。剩余实机清单见 [集成说明](INTEGRATION.md)。
+
+上线记录：Character merge `b744073`、QQTK merge `f468691`；9 个升级包离线及最终路径冻结安装通过，运行代码与已审源码、QQ/SDK 补丁逐文件一致。已持锁确认空闲、停机制作并校验一致性备份、保留旧 Profile。首次启动因日志未出现 Bot ready 而触发自动回退；复核后改用当前 ready 事件、匹配 Host boot/PID 和唯一活跃 Gateway 交叉核验，保留重复日志拒绝检查，第二次冷切换成功。新 Host 的全部 Preset 健康、Manager/I/O/唯一 QQ Gateway 活跃且 connected，官方 ASAR 未变。Memory 与协调库全部表、原生 Session/提醒存储、Manager 路由、模型偏好、绑定及 JSON Ledger 与停机基线一致；Inspector 保持只读，Owner 访问成功，未登录与跨 Origin 被拒绝。未发送 QQ 测试消息，手机/按钮与 Desktop 视觉仍未验收；本地详细证据与回滚点不公开上传。
 
 ### Iteration 08 定向复审（基于 a9254e6 / QQTK b857dd2）
 
@@ -34,7 +36,7 @@ GitHub Actions：运行代码一致的 `1fbe637` 已通过 Windows/Ubuntu 的单
 
 QQTK 单独重装不支持自动热接线，须重载 Gateway；已经开始的后端操作不能撤回。输入回复 300 秒有效期保留：长命令可能执行完成但 `replied:false`，不能重复执行或擅自改用主动推送。上游 SDK 预去重不会随 I/O 钩子失败回滚，QQ 自动重投并无保证，必要时需新消息。契约见 QQTK 通用集成说明。
 
-本轮回归：Character 单元 252、安全审计 33；QQTK 单元 212、SDK 36、边界 4，全部通过且无跳过，两份补丁一致。rc.3 隔离通信（含 Gateway 重建后的 Remote Ops 定时通知）、双进程 Lifecycle/HMR、Interaction 探针通过；Bot/模型合成，不代表手机送达。首次漏设夹具路径造成的 8 项跳过和边界入口失败未列为通过，已明确指定代码夹具后完整重跑。未部署、未合并。
+本轮回归：Character 单元 252、安全审计 33；QQTK 单元 212、SDK 36、边界 4，全部通过且无跳过，两份补丁一致。rc.3 隔离通信（含 Gateway 重建后的 Remote Ops 定时通知）、双进程 Lifecycle/HMR、Interaction 探针通过；Bot/模型合成，不代表手机送达。首次漏设夹具路径造成的 8 项跳过和边界入口失败未列为通过，已明确指定代码夹具后完整重跑。以上为部署前复审证据，后续授权部署见上段。
 
 ## Iteration 07（Character test.26 / Agent I/O test.7，2026-11-01 已授权部署）
 

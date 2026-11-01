@@ -1,6 +1,6 @@
 # 运行架构与复用边界
 
-Iteration 08 候选（test.27，未部署）在 Iteration 07 上收紧身份、发送句柄和诊断，保留旧 principalId/conversationId/Session Key、Schema 与账本。版本和验证状态以 [STATUS](STATUS.md) 为准。
+Iteration 08（test.27，2026-11-02 已合并部署）在 Iteration 07 上收紧身份、发送句柄和诊断，保留旧 principalId/conversationId/Session Key、Schema 与账本。版本和验证状态以 [STATUS](STATUS.md) 为准。
 
 当前外部通信主链：QQ SDK 的真实连接与准入 → Agent I/O 可信 Inbound（platform / adapter / account / Conversation 去重）→ Conversation Manager 唯一当前路由 → 原生 Agent / 可选 Interaction → Agent I/O 队列 → QQ Adapter 的分片、限额及平台 API。Web/Desktop 继续使用原生窗口通道。
 
