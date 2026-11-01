@@ -75,3 +75,5 @@ rc.3 的原生销毁先关闭 Context、后移除注册表项。普通工具变�
 - Core-only/Core+Extras 另验证 Creator、Memory/Compaction、Schedule/Outbox 和 Inspector。模型和 QQ Sender 为合成替身，不证明真实模型质量、审批收件或手机送达。
 
 当前部署与未验收事项见 [STATUS](STATUS.md)。职责划分参考 [dsh-plugin-cluster-preset](https://github.com/hu568/dsh-plugin-cluster-preset)，未复制其旧 toolFilter、委派 persona 或 Agent Loop；来源见 [第三方说明](../THIRD_PARTY_NOTICES.md)。
+
+Iteration 08 不修改 Spawn 适配或 Worker 授权。追加验证活跃 Agent 不被过滤、非 INACTIVE_EFFECT 和未初始化 Context 错误透传、Registry 替换不引入全局所有权；原生 Host 再跑销毁/HMR、十种 Preset/工具/白名单/一级深度/父子通信及完整重启。Context 已关闭但尚在注册表时，Manager 也拒绝新的普通输入，并将已证明未交接的输入保留为可重投；这不授予历史 Session 执行能力。真实模型质量与手机主代审批仍未验收。

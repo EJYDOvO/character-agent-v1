@@ -1,6 +1,14 @@
 # 阶段状态与后续路线
 
-本页对照归档 v0.7.8 的 S0–S5；当前 test.21 / Interaction test.7 已授权部署，实际验收以 STATUS 为准。本轮抽离平台无关 Conversation Manager；其他实例不继承此次授权。
+本页对照 v0.7.8/ADR-050/055/058–062 与 S0–S5。Iteration 01–07 已合并，最后部署记录为 Character test.26 / I/O test.7 / Manager test.2 / Remote Ops test.2（DSH rc.3）；Iteration 08 test.27 是未部署候选。本轮未访问生产数据或重新验证在线状态，实际验收以 STATUS 为准。
+
+| 下一步 | 现状、价值与最小交付 | 前置与验收 | 风险 |
+|---|---|---|---|
+| P0 / Iteration 08 | 身份撤销、Adapter 实例围栏、统一回复出口、脱敏关联与回归门禁；不开发新平台 | 双仓库 PR 审查，全部单元/安全/SDK/隔离 rc.3 测试；失败/跳过单列 | 跨模块启停、原生 Context 销毁与版本混装 |
+| P1 / Iteration 09 | 仅准备并在另行授权后受控部署及 QQ/Desktop 验收；证明实际交互可用 | 包/补丁/锁/SHA、空闲和一致备份、单活切换；手机文本/按钮/附件/通知/重连清单见 INTEGRATION | 平台额度、API accepted 与真实收件不同；unknown 不盲重发 |
+| P2 | 真实模型 Worker 质量与受限工具配置评测 | 原生权限、深度与父子通信先通过；同模型代表任务 A/B | 不能用 synthetic model 证明任务质量，不扩大默认授权 |
+| P3 | Memory 长期质量、召回/冷重建与 Long Tasks 业务结果验证 | 保留来源/CAS/遗忘屏障；长测与任务目标人工核对 | 提取/执行完成不是事实或业务成功 |
+| Future | 细粒度 grants、语义检索、账号关联、NapCat/Mac 等未批准能力 | 独立设计与授权；复用现有 Manager/I/O/原生 Approval | 不提前建设新 Runtime、权限库或平台仓库 |
 
 | 顺序 | 现状与最小后续范围 | 验收/依赖与风险 |
 |---|---|---|
