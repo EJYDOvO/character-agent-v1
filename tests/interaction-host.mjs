@@ -65,7 +65,7 @@ export function apply(ctx,config){
    report.checks.push('Native pi-ai per-model metadata and real read_image: image route reads a synthetic PNG; text-only route rejects; no model HTTP request');
    // Resolve only the copied QQ fixture against read-only installed dependencies.
    // No official file or installed node_modules is changed by these local hooks.
-   const fixtureUrl=pathToFileURL(config.qqFixture+'/').href,official=pathToFileURL((process.env.DSH_CHARACTER_HOST_ROOT||process.env.DSH_INSTALL_ROOT)+'/resources/app.asar/dsh/package.json').href,installed=pathToFileURL(process.env.DSH_INSTALL_ROOT+'/data/profiles/desktop/package.json').href;
+   const fixtureUrl=pathToFileURL(config.qqFixture+'/').href,official=pathToFileURL((process.env.DSH_CHARACTER_HOST_ROOT||process.env.DSH_INSTALL_ROOT)+'/resources/app.asar/dsh/package.json').href,installed=pathToFileURL(process.env.DSH_QQTK_PROJECT+'/package.json').href;
    resolver=registerHooks({resolve(specifier,context,next){if(context.parentURL?.startsWith(fixtureUrl)&&!specifier.startsWith('.')&&!specifier.startsWith('node:')&&!specifier.startsWith('file:'))return next(specifier,{...context,parentURL:specifier.startsWith('@deepseek-ai/')?official:installed});return next(specifier,context);}});
    const {createInteractionOutbound}=await import(pathToFileURL(config.qqFixture+'/dist/gateway/bootstrap.js').href);
    const {setupMiddlewares}=await import(pathToFileURL(config.qqFixture+'/dist/gateway/middleware-setup.js').href);

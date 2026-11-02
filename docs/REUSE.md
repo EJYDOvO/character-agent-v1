@@ -2,11 +2,11 @@
 
 实例版本统一见 [当前状态](STATUS.md)；源码默认与实例启用状态分开记录。
 
-原通用化验收宿主：DSH 0.2.0-rc.2 / Node 24 / Windows。test.9 在 0.2.1-rc.2 上重新验证通用 Memory 独立身份接入及完整 Character，见 [最新记录](RELEASE-test9.md)；纯 QQ 无 Remote Ops 的独立连接组合本次未重跑。本文件不是跨版本安装保证。不要向 Profile 安装第二套 DSH 核心，保留 `autoInstallPeers: false`。所有示例路径与身份都是占位值。
+当前目标 DSH 0.2.1-rc.3 / Node 24。各模块接口的隔离验证不等于真实 QQ 或其他平台验收。新安装见 INTEGRATION。
 
 ## 普通 Agent + QQ
 
-当前版本安装 QQ Bot、独立 `dsh-conversation-manager@0.1.0-test.1` 与（QQTK Iteration 01 起）独立 `dsh-agent-io`，应用 [QQTK](https://github.com/EJYDOvO/harness-qq-toolkit-public) 两份配套补丁。Profile 加载原生 base/web-app；无需 Character、Remote Ops、Memory。通用组合完成 rc.3 隔离验收；完整 Character 实例已授权部署，不能据此宣称普通 QQ 新装或其他平台已完成实机验收。
+当前版本安装 QQ Bot、独立 `dsh-conversation-manager@0.1.0-test.3` 与（QQTK Iteration 01 起）独立 `dsh-agent-io`，应用 [QQTK](https://github.com/EJYDOvO/harness-qq-toolkit-public) 两份配套补丁。Profile 加载原生 base/web-app；无需 Character、Remote Ops、Memory。通用组合完成 rc.3 隔离验收；完整 Character 实例已授权部署，不能据此宣称普通 QQ 新装或其他平台已完成实机验收。
 
 ```yaml
 # Profile pnpm-workspace.yaml 的相关部分
@@ -87,7 +87,7 @@ Host 层：
 
 每个项目使用自己的 DSH_HOME、绝对数据库路径和三元作用域。没有默认共用数据库；显式重复指定相同数据库及作用域才会共享，这是管理员配置行为。
 
-test.9 审计修复保留契约 v1、Schema 3 和现有工具参数。Host 的 `onEvidence` 同步更新短期话题，短消息不必永久入库；不要由模型调用这一入口。人格化新记录由 Core 标记形成策略，Assistant 不自动继承 Character/未知模式的旧条目，Character 仍可管理它们。详细模式与确认兼容行为见 [AUDIT-FIXES.md](AUDIT-FIXES.md)，此改动已部署于本机 test.9。
+test.9 审计修复保留契约 v1、Schema 3 和现有工具参数。Host 的 `onEvidence` 同步更新短期话题，短消息不必永久入库；不要由模型调用这一入口。人格化新记录由 Core 标记形成策略，Assistant 不自动继承 Character/未知模式的旧条目，Character 仍可管理它们。详细模式与确认兼容行为见 STATUS，此改动已部署于本机 test.9。
 
 ## Character 兼容配置
 

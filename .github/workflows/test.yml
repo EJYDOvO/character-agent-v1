@@ -17,6 +17,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
+      - name: Locked build dependencies
+        run: npm ci
       - name: Unit and security regression (no credentials or production services)
         run: npm test
       - name: Audit reproductions

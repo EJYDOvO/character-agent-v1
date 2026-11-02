@@ -4,7 +4,8 @@ const fs=require('node:fs'),path=require('node:path');
 const runtimeRoot=process.env.DSH_CHARACTER_HOST_ROOT||require('./installation.cjs').install;
 if(!path.isAbsolute(runtimeRoot))throw Error('DSH_CHARACTER_HOST_ROOT must be absolute');
 function openArchive(){
- const archive=path.join(runtimeRoot,'resources/app.asar'),fd=fs.openSync(archive,'r');
+ const resources=process.env.DSH_RESOURCES_DIR||path.join(runtimeRoot,fs.existsSync(path.join(runtimeRoot,'resources/app.asar'))?'resources':'Resources');
+ const archive=path.join(resources,'app.asar'),fd=fs.openSync(archive,'r');
  try{
   const prefix=Buffer.alloc(16);fs.readSync(fd,prefix,0,16,0);
   const bytes=Buffer.alloc(prefix.readUInt32LE(12));fs.readSync(fd,bytes,0,bytes.length,16);

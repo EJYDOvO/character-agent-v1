@@ -4,7 +4,7 @@ const project=path.resolve(__dirname,'..'),install=require('./installation.cjs')
 const run=args=>cp.execFileSync(process.execPath,args,{stdio:'pipe',windowsHide:true});
 run([project+'/scripts/stage-interaction.cjs']);const transport=JSON.parse(fs.readFileSync(project+'/test-data/interaction-run.json'));
 run([project+'/scripts/stage-inspector.cjs','--extras']);const probe=JSON.parse(fs.readFileSync(project+'/test-data/inspector-run.json'));
-const dir=probe.home+'/profiles/inspector',yaml=require(require.resolve('js-yaml',{paths:[install+'/data/profiles/desktop']})),dialect=require('./deployment-plan.cjs').entryYaml(yaml),rows=dialect.load(fs.readFileSync(dir+'/cordis.patch.yml','utf8'));
+const dir=probe.home+'/profiles/inspector',yaml=require('js-yaml'),dialect=require('./deployment-plan.cjs').entryYaml(yaml),rows=dialect.load(fs.readFileSync(dir+'/cordis.patch.yml','utf8'));
 const inserted=rows.find(r=>r.insert).insert,entry=inserted.find(r=>r.id==='inspector-probe');
 entry.name=pathToFileURL(project+'/tests/communication-host.mjs').href;entry.config.qqFixture=transport.home+'/qq-fixture';entry.config.toolkit=toolkit;
 const generic=process.argv.includes('--generic');entry.config.generic=generic;

@@ -1,12 +1,6 @@
-# Interaction Policy V1
+# Interaction Policy
 
-## test.7（已随 Character test.21 授权部署）
-
-修复已知工具全部完成后仍粘在 tool 阶段的问题；只有匹配的真实 tool/result 才清除最后一个执行标记，未知/尚在执行的工具与审批等待继续保护。连续分类期间的显式更正及空闲切换将已有输入按到达顺序一次性处理，丢弃迟到分类结果。没有改变 cancel/steer/followup、渐进分泡、Worker 续轮、动态等待提示及回执契约。
-
-实际 rc.3 Host 已验证工具后 priority/revise 中断文本、执行中工具不取消，以及原 16 项交互检查。Provider/分类器与 Sender 为合成替身，不代表模型分类质量或手机送达。QQ Typing 生命周期由配套 Conversation Manager Adapter 清理。其余 test.5/test.6 内容保留历史语境。
-
-当前源码为 Interaction **0.1.0-test.7**，配套 Character test.21、独立 Conversation Manager 和两份 QQTK 补丁，已随 Character test.21 部署，QQ 单连接检查通过，手机验收仍待完成。本轮在 DSH 0.2.1-rc.3 隔离验证；历史部署和实际验收见 [STATUS](STATUS.md)，不将旧版记录当作候选上线证明。
+当前源码 0.1.0-test.9；配套 Agent I/O test.8、Conversation Manager test.3、QQ Bot 0.5.2/SDK 1.0.5 两份补丁。源码与隔离验证不等于实机验收，见 [STATUS](STATUS.md)。
 
 ## 分工与启用
 
@@ -98,8 +92,8 @@ QQ 配置 deliveryDiagnostics:true 可记录本机限量脱敏的事件→气泡
 
 ## 验证
 
-test.5 新增 15 项单元测试，覆盖并发不阻塞、超时回退、取消/停止/审批、跨 Turn、发送顺序、状态回执隔离、`maxBubbles` 名额和模型路由；Character 单元 170 项、审计 33 项通过。实际 rc.3 Host 12 项交互检查通过，其中包括：经原生 `ctx.llm` 在继承路由上生成一次动态提示且不进入 Session 历史、生成超时回退固定文案、`hangon-model.json` 改路由。模型与 Sender 为合成替身，真实模型的提示质量、延迟和手机展示仍未验证。历史结果见 STATUS。
+当前回归覆盖分类超时、工具阶段、取消/停止/审批、跨 Turn、队列顺序、状态回执隔离与气泡预算。真实 rc.3 Host 使用合成模型与发送端验证原生生命周期；不等于手机或真实模型表现验收。结果范围统一见 STATUS。
 
-入口：npm test、npm run test:audit、scripts/run-interaction.ps1、scripts/run-lifecycle.ps1；QQTK SDK 测试必须指定代码隔离的 QQBOT_AUDIT_SDK_DIR / QQBOT_AUDIT_DIST，不使用生产凭据。测试结果保留在本地忽略目录。
+入口：npm test、npm run test:audit、scripts/run-interaction.ps1、scripts/run-lifecycle.ps1；QQTK 的 npm run test:audit 会自动生成代码隔离夹具（非默认目录时另设 DSH_CHARACTER_PROJECT），不使用生产凭据。测试结果保留在本地忽略目录。
 
 `run-interaction.ps1` 安装 QQTK 源码中的 dsh-agent-io，并要求其提供 Iteration 03 的 `openConversation()`：QQ 入站、出站文本与 Interaction 查询都经这一共享接线，旧包（无 `openConversation`）会使整次运行失败。原 `DSH_PROBE_INBOUND=optional` 兼容性开关已移除（新 QQ 代码无法在旧包上运行）；结果中 `inbound` 须为 `exercised`。

@@ -51,6 +51,8 @@ Iteration 08 候选已完成身份/句柄隔离、可选脱敏诊断、显式包
 
 各切片之间的部署由用户另行授权；切片完成后可以只合并源码不部署。目标平台仓库在 Iteration 10 前再决定建立时机，迭代期间不创建。
 
+Identity & Access（I1：Owner/Contact/Guest 角色与授权服务；I2：character / character-contact / character-guest Preset）目前只在独立开发分支 `feat/identity-access-i1-i2`，尚未合并、接线或部署；接入 Gateway、命令、HITL、Manager 与旧 `qq-character` 迁移前不进入本路线的已完成项。
+
 ### 3.1 Iteration 01：普通文本出站 Unified I/O
 
 **状态**：源码完成，自动化测试与隔离 rc.3 Host 探针通过；已随 Character test.24（Agent I/O test.3）授权部署，之后由 test.4 升级；真实 QQ/手机收件未验收。实现见 QQTK `plugin-sources/dsh-agent-io`，覆盖范围以其 README 为准。

@@ -1,7 +1,7 @@
 const fs=require('fs'),path=require('path'),crypto=require('crypto');
 const root=path.resolve(__dirname,'..'),install=require('./installation.cjs').install;
 const release=JSON.parse(fs.readFileSync(root+'/package.json','utf8')).version;
-const req=require('module').createRequire(install+'/data/profiles/desktop/package.json'),yaml=req('js-yaml');
+const yaml=require('js-yaml');
 class Expression {constructor(value){this.value=value;}}
 const expressionType=new yaml.Type('tag:yaml.org,2002:js',{kind:'scalar',construct:v=>new Expression(v),instanceOf:Expression,represent:v=>v.value});
 const schema=yaml.DEFAULT_SCHEMA.extend([expressionType]);
