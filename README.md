@@ -28,7 +28,7 @@
 
 ## 使用与边界
 
-- [架构与可信契约](docs/ARCHITECTURE.md)、[决策](docs/DECISIONS.md)、[跨项目复用](docs/REUSE.md)。
+- [架构与可信契约](docs/ARCHITECTURE.md)、[决策](docs/DECISIONS.md)、[路线图](docs/IMPLEMENTATION_ROADMAP.md)、[v0.8 架构规划与 ADR-040–062](docs/architecture-planning/README.md)、[跨项目复用](docs/REUSE.md)。
 - [记忆](docs/MEMORY-LAYERS.md)、[Inspector](docs/MEMORY-INSPECTOR.md)、[Interaction](docs/INTERACTION-POLICY.md)、[Worker](docs/WORKERS.md)、[Long Tasks](packages/long-tasks/README.md)。
 - [管理](docs/MANAGEMENT.md)、[来源与许可](docs/PROVENANCE.md)、[第三方声明](THIRD_PARTY_NOTICES.md)。
 
