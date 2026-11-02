@@ -2,9 +2,9 @@
 
 在 DeepSeek Harness 上运行的角色 Agent 扩展，提供私人 QQ 接入、可配置角色和带来源的长期记忆。Character 从官方 Creator Preset 构建派生，保留其工具能力；角色设定不会增加系统权限。
 
-**test.28 候选，未部署：** 手动 Memory 保存/纠错关联可信 L1，遗忘阻止在途提取改写复活；旧版缺少关联的已撤销来源先挂起核对。成功授权诊断限频，拒绝仍逐次记录；补充原生双题问答及精确段落格式规则。图片能力通过原生单模型配置显式声明，见[集成说明](docs/INTEGRATION.md#单模型图片能力声明)。当前模型的格式、双题、只读审批及图片理解已通过隔离补测；QQ 收件、人工按钮与手机显示仍须实机验收。
+**test.28，2026-11-02 已部署：** 手动 Memory 保存/纠错关联可信 L1，遗忘阻止在途提取改写复活；旧版缺少关联的已撤销来源先挂起核对。成功授权诊断限频，拒绝仍逐次记录；补充原生双题问答及精确段落格式规则。当前已补测模型的图片能力声明已应用，见[集成说明](docs/INTEGRATION.md#单模型图片能力声明)。真实模型隔离补测、冷切换及数据保留检查通过；QQ 收件、人工按钮与手机显示仍须实机验收。
 
-2026-11-02 已合并并授权部署 Iteration 08： **test.27 / Agent I/O test.8 / Conversation Manager test.3**，整理可信输入与 Gateway 生命周期、撤权和跨模块脱敏诊断；手机实际收件仍待验收。Remote Ops 与 Character 接入不再互为前提。调用链、唯一写入者和受控升级条件见 [架构](docs/ARCHITECTURE.md)、[集成](docs/INTEGRATION.md)及 [STATUS](docs/STATUS.md)。
+此前已部署 Iteration 08： **test.27 / Agent I/O test.8 / Conversation Manager test.3**，整理可信输入与 Gateway 生命周期、撤权和跨模块脱敏诊断。Remote Ops 与 Character 接入不再互为前提。调用链、唯一写入者和受控升级条件见 [架构](docs/ARCHITECTURE.md)、[集成](docs/INTEGRATION.md)及 [STATUS](docs/STATUS.md)。
 
 Iteration 07 Notification 采用 at-most-once handoff：不确定或部分发送的事件保留状态供核对，不自动重发。Gateway 重附着会切换待发队列的授权上下文；Outbox 热重载使用独立 I/O 尝试 ID。停用时等待在途交接结束才释放数据库，不能用本地超时证明平台未发送。验证与剩余限制见 [STATUS](docs/STATUS.md)。
 

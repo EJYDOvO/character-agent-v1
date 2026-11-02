@@ -8,7 +8,7 @@ rc.3 的原生 `read_image` 检查当前实际 provider/model 的 `inputModaliti
 
 test.28 候选准备支持显式 `--model-inputs=<本地审核过的 JSON 文件>`，可传给 `prepare-deploy.cjs` 或 `prepare-host-upgrade.cjs <候选目录名>`。文件格式为 `[{"provider":"provider-id","model":"model-id","input":["text","image"]}]`。仅允许修改已配置的原生 pi-ai `providers[provider].models[].input`；保留凭据引用、其他模型和配置，未知/重复目标、冲突的 modelOverrides 或读取失败会拒绝准备。rc.3 自定义 models 列表不能同时使用 modelOverrides。未提供参数则不改变能力声明，不能按模型名字自动推断支持图片。
 
-这只准备候选，部署仍需独立授权。无凭据隔离 Host 的原生元数据/read_image 正负对照通过；随后使用当前模型，在独立 Session 中实际读取随机合成 PNG，并正确识别颜色和数字。QQ 图片下载/展示及手机收件仍须实机验收，现有部署的能力声明未因此改变。
+准备候选不自动部署，切换仍需独立授权。无凭据隔离 Host 的原生元数据/read_image 正负对照通过；随后使用当前模型，在独立 Session 中实际读取随机合成 PNG，并正确识别颜色和数字。本机 test.28 已另获授权部署并应用该单模型声明，原生模型目录确认所选模型可用；QQ 图片下载/展示及手机收件仍须实机验收。
 
 ## Iteration 08 门禁与后续实例切换
 
