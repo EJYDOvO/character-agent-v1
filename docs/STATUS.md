@@ -17,3 +17,5 @@
 限制：Mac/Linux 原生环境未验收；历史 Session 的 cwd/附件绝对路径可能需要人工审阅；旧非标准数据布局无自动导入保证。真实 QQ、已有提醒/通知以及私有业务数据迁移须在另行授权的停机流程验证。
 
 尚未实现/本轮不扩展：跨平台账号关联、多用户/群聊、完整 Approval Router、向量检索、细粒度任务 grants、旧 Task Memory 正式导入。后续工作优先现有安全回归及实机验收，然后真实 Worker/Memory/Long Tasks 质量评估；不把路线图视为已交付。
+
+本轮迁移门禁：全新 Git 工作树执行 Character 单元 262/262、安全 35/35；QQTK 单元/边界 223/223、SDK 36/36，均无跳过；两份补丁重建并精确应用上游快照。三套新 Profile（普通 QQ、Core-only、完整可选组合）完成固定版本安装、哈希校验和真实 rc.3 启动装配，QQ 连接禁用。原生 Worker 冷恢复、Inspector/Memory/Compaction、通用模块、通信、Interaction/HITL/Media、双进程生命周期与 Schedule 重启回归使用合成数据。首次 Schedule 探针仍使用旧 Sender 的失败已保留在本地，夹具对齐当前通知接口后通过；运行时发送路径没有改变。
