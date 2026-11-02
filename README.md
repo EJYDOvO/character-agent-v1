@@ -35,3 +35,5 @@
 单 Owner QQ 私聊；人格化默认 Off。记忆与 Worker 结果不能修改 Persona、ACL 或审批。第三方 Preset 必须先审查安装，再加入真实 ID 白名单。Self Model 长期质量、真实模型任务表现、手机投递和跨系统数据迁移仍需专门验收。
 
 修改操作方式时同步维护对应文档。临时报告、日志、测试库和性能输出仅保留本地；公开库保留可复现的安全与功能回归。
+
+实验性 I1/I2 基础模块见 [Identity & Access](docs/IDENTITY-ACCESS.md)。尚未接入 Gateway/Core，当前仍是单 Owner；不能据此开放多用户。
