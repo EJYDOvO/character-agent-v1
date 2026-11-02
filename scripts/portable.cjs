@@ -12,7 +12,7 @@ function prepare(file,home,qqtk){
  if(c.extras||c.longTasks)selected.add('dsh-character-extras');if(c.longTasks)selected.add('dsh-character-long-tasks');if(c.interaction?.enabled)selected.add('dsh-interaction-policy');if(c.inspector?.enabled)selected.add('dsh-memory-inspector');
  const own=source.artifacts.filter(p=>selected.has(p.name)).map(p=>({...p,file:root+'/artifacts/packages/'+p.filename})),artifacts=[...q.pack(home+'/packages'),...own];
  const {rows,im}=q.baseRows(c,home);im.config.preset=build.presetId;
- rows.push(im,{id:'qq-remote-ops',disabled:!c.remoteOps?.enabled,config:{root:null,stateDirectory:home+'/remote-ops',ownerId:c.qq.ownerId}},{id:'character-identity',config:{memoryMode:c.memoryMode||'off'}});
+ rows.push(im,{id:'qq-remote-ops',disabled:!c.remoteOps?.enabled,config:{root:null,stateDirectory:home+'/remote-ops',ownerId:c.qq.ownerId}},{id:'character-identity',config:{presetId:build.presetId,bindingFile:data+'/binding.json',stateFile:data+'/coordination.sqlite',memoryMode:c.memoryMode||'off'}});
  if(c.inspector?.enabled)rows.push({insert:[{id:'memory-inspector',name:'dsh-memory-inspector',config:{writable:c.inspector.writable===true}}]});
  if(c.longTasks)rows.push({id:'long-tasks',disabled:false,config:{cwd:home+'/workspace'}});
  const manifest=JSON.parse(fs.readFileSync(root+'/artifacts/build-manifest.json'));fs.mkdirSync(data,{recursive:true});fs.writeFileSync(data+'/binding.json',JSON.stringify({appId:c.qq.appId,ownerId:c.qq.ownerId,characterId:manifest.characterId,projectId:c.projectId||'personal'},null,2),{mode:0o600});
