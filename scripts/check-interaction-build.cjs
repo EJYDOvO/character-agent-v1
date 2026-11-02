@@ -25,7 +25,7 @@ for(const mode of ['on','off']){
  assert(!patch.includes('id: preset-root-planner-worker'),'External presets must not be cloned or installed');
  assert(!manifest.workerPresets.includes('external-planner'));
  assert.deepEqual(manifest.settings.communityWorkerPresets,community);
- const yaml=require(require.resolve('js-yaml',{paths:[process.env.DSH_INSTALL_ROOT+'/data/profiles/desktop']}));
+ const yaml=require('js-yaml');
  const schema=yaml.JSON_SCHEMA.extend(new yaml.Type('tag:yaml.org,2002:js',{kind:'scalar',construct:value=>({expression:value})}));
  const character=yaml.load(patch,{schema})[0].insert.find(row=>row.config?.id==='fixture-character');
  const spawn=character.config.plugins.find(p=>p.id==='delegation').config.find(p=>p.id==='tool-subagent');

@@ -1,0 +1,29 @@
+{
+  "runtimeRoot": "<OFFICIAL_DSH_RUNTIME_DIRECTORY>",
+  "profileName": "character",
+  "definition": "<PRIVATE_PERSONA_YAML>",
+  "dataDirectory": "character",
+  "projectId": "personal",
+  "memoryMode": "off",
+  "model": {
+    "provider": "configured-provider",
+    "id": "configured-model",
+    "api": "openai-completions",
+    "baseURL": "https://provider.example.invalid/v1",
+    "apiKeyEnv": "MODEL_API_KEY",
+    "input": ["text"]
+  },
+  "qq": {
+    "enabled": true,
+    "appId": "<QQ_APP_ID>",
+    "ownerId": "<OWNER_OPENID>",
+    "appSecretEnv": "QQ_APP_SECRET"
+  },
+  "interaction": {"enabled": true},
+  "inspector": {"enabled": false, "writable": false},
+  "longTasks": false,
+  "extras": false,
+  "remoteOps": {"enabled": false},
+  "specialistWorkers": [],
+  "communityWorkerPresets": []
+}

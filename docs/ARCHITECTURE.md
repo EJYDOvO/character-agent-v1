@@ -1,6 +1,6 @@
 # 运行架构与复用边界
 
-Iteration 08（test.27，2026-11-02 已合并部署）在 Iteration 07 上收紧身份、发送句柄和诊断，保留旧 principalId/conversationId/Session Key、Schema 与账本。版本和验证状态以 [STATUS](STATUS.md) 为准。
+当前源码接口说明；安装与恢复见 INTEGRATION，验证边界见 STATUS。
 
 当前外部通信主链：QQ SDK 的真实连接与准入 → Agent I/O 可信 Inbound（platform / adapter / account / Conversation 去重）→ Conversation Manager 唯一当前路由 → 原生 Agent / 可选 Interaction → Agent I/O 队列 → QQ Adapter 的分片、限额及平台 API。Web/Desktop 继续使用原生窗口通道。
 
@@ -29,23 +29,17 @@ Character Adapter 通过 QQ 自有入口的 Host-only `integration.qqGatewayLife
 
 诊断为可选、进程内有界观察，规范见 QQTK 的 `docs/DIAGNOSTICS.md`。同一 I/O 实例共享 HMAC 关联，原始身份/正文/凭据不进入事件；观察异常不改变授权或发送结果。SDK 默认错误中间件的直发异常路径已移除：进入 I/O 前的异常只记录固定 Host 提示，不能在没有输入授权时恢复旧 Sender 回退。
 
-test.21 候选将路由/生命周期从 QQTK 抽成独立 `dsh-conversation-manager`（源码在 QQTK 仓库的 `plugin-sources/`），已在隔离 rc.3 验证并随 test.21 授权部署，实际验收边界见 STATUS。它没有 QQ/Character/Memory 依赖；QQ Adapter 注入该服务。一个服务内各平台独占 namespace，共用唯一持久偏好实例。创建、恢复、Flush、Fork/Compaction 和 Schedule 均复用原生 API。
 
-test.22 收紧恢复：只有持久化 open/load 的原生同 ID 缺失错误允许创建，原生 resume 与 Preset 错误不再参与降级判断。关闭只释放每个生命周期一次，并等待先前的回收句柄；失败显式报告。Identity 保留现有包装，仅修复前置 epoch 和卸载归属检查。
 
 Identity 通过公开 `records / ownershipState / isCurrentSession` 契约绑定真实 Agent，SQLite routes 仅保留历史证据，不再作为当前主路由权威。Owner、项目/角色和 Memory capability 仍由 Identity 授权；Manager 不发放权限。平台 pending approval/question、额外 prompt 和 Typing 清理通过 Adapter 回调提供。
 
 rc.3 的 Character Spawn 通过既有 Tools 包内的轻量适配转调原生实现：仅为组件重载时的注册表扫描过滤已关闭 Context，保留原生配置与授权。它不改变 Conversation Manager 的销毁顺序、不修改官方模块，也不增加 Agent Manager。确定性复现与移除条件见 [Worker 文档](WORKERS.md#rc3-销毁与热重载适配)。
 
-test.13 在既有原生分析 Worker、Memory Inspector 上引入可选 QQ Session 生命周期和独立长期任务；test.14 收紧历史根权限并补充存量提醒审计。隔离与当前实例部署的验收边界统一见 [STATUS](STATUS.md)。阶段对照见 [路线图](IMPLEMENTATION_ROADMAP.md)，任务契约见 [Long Tasks](../packages/long-tasks/README.md)。
 
-test.16 的社区 Preset 修复只调整构建契约：`communityWorkerPresets` 可声明真实 ID 与展示别名，`allowedAgentPresets`、实际 Spawn 和持久目标始终使用真实 ID；不增加运行服务、权限或第三方安装路径。详细校验和隔离验收见 [Worker](WORKERS.md)。
 
 Worker V2 使用官方 `subagent` 的 `agentPreset / allowedAgentPresets` 和 `spawn`。Core 声明 general、explore、librarian、oracle、metis、momus、planner；review 仍可选，社区引用经可信构建配置审查。Character 唯一 Root 保留完整 Creator，按需向 Planner 请求草案；Worker 是独立 Preset，工具/Skills 按原生 Scope 装配，不继承 QQ/Memory 或父历史，`maxDepth:1`。角色/白名单/Root 策略共用词表；Worker Preset 用原生 restrict/guard 屏蔽只读搜索以外的 Host 全局工具（见 WORKERS），不增加 Manager、Spawn Provider 或 Agent Loop；隔离验收及部署边界见 STATUS。Inspector 是额外可选双端插件：原生 `dsh.client` 将 React 页面注册到 `settings.section`，复用 DSH 导航、组件与主题；通过 Connection RPC 与受控 Core API 访问记忆。四个核心插件与可选 Extras 边界保持；详见 [Worker](WORKERS.md) 和 [Inspector](MEMORY-INSPECTOR.md)。
 
-**test.10 交互增量**：独立可选 `dsh-interaction-policy` 通过原生 Agent-scoped 事件和 Preset 服务隔离管理表达与发送策略。QQTK 只接入 Sender 与可信修正入口；Character Identity 复用原入站校验和证据逻辑提供提前接入钩子。没有新数据库、Planner 或 Agent Loop，原四插件和 Core/Extras 保留。test.5 的动态等待提示由插件入口注入生成回调，只读取 Persona 段落、调用原生 `llm`（不带 Session 归属），不新增插件或服务。详细接口及当前验证见 [Interaction Policy](INTERACTION-POLICY.md)。下文为既有记忆架构。
 
-这是源码实现说明。test.8 增加分层记忆与可选人格化；部署和验收范围见 [发布记录](RELEASE-test8.md)，详细层次、生命周期和限制见 [分层记忆](MEMORY-LAYERS.md)。四个核心 Character 运行时包保留；Definition 是构建模块，Core/Extras 是项目 Bundle。Extras 仅含默认停用的自有长期任务声明，不是第二个 QQ Gateway。
 
 | 组件 | 之前 | 现在 |
 |---|---|---|
@@ -104,13 +98,11 @@ Host 服务 `memoryIdentity`：
 
 Core 提供 `dshMemory`，保留 `characterMemory` 服务别名。SQLite 原有 `character` 列承载通用 namespace；旧 Character scope 值保持不变。test.8 的部署记录已确认生产迁移到 Schema 3；本次审计修复没有访问生产库，也没有再次部署。可选 Host 字段 `agentId`、`memoryMode`、`l3Tokens` 控制人格化与投影；模型不能填写这些权限字段。
 
-当前源码的读取先验证 Host、Agent 和形成模式，再排除退休证据，汇合可见用途做相关性排序与预算。冲突检查只在当前可见集合内进行，避免暴露另一 Agent 的私有条目。新形成的人格化来源带 `memoryPolicy`；Assistant 不读取 Character 或缺少模式标记的历史人格化记录。详细兼容边界见 [审计修复](AUDIT-FIXES.md)。
+当前源码的读取先验证 Host、Agent 和形成模式，再排除退休证据，汇合可见用途做相关性排序与预算。冲突检查只在当前可见集合内进行，避免暴露另一 Agent 的私有条目。新形成的人格化来源带 `memoryPolicy`；Assistant 不读取 Character 或缺少模式标记的历史人格化记录。详细兼容边界见 STATUS。
 
-test.12 审计进一步将内部可见性判断与公开脱敏分离，避免遗忘擦除公开 `source` 后反向影响内部授权。Inspector 使用授权 SQL 分页/统计，L3 Browse 按当前有效引用分页；L3 缓存只保存派生结果，每次仍授权，并按 SQLite 修改版本、外部连接变更、模式和时间失效。Schema 3 增加可重复创建索引，不新增记忆层或数据库。详见 [当前状态与验收边界](STATUS.md)。
 
 身份句柄只在当前进程有效，Session 恢复后重新由 Host 确认。示例 Provider 用实际 Agent 对象、挂载的 Preset 和 WeakSet 颁发/验证句柄。它用于可信单用户本机入口，不是互联网登录或多租户认证系统。能够加载任意 Host 插件的代码属于可信计算基，插件同进程执行不构成恶意代码沙箱。
 
-**历史 QQ 根修复（test.14，已部署）**：`routes` 加 QQTK 当前偏好路由共同决定完整身份，`qq_bindings` 仅保存提醒归属。冷恢复不会颁发完整能力；实际 Agent plane 的原生 tool guard、pre-step/request 门禁动态查询当前 Identity，停用后保持拒绝，当前主 Agent 保留 Creator。`isCurrentSession(record)` 核对真实 manager record、持久路由的内存镜像和 Agent 注册表，异步旧请求不得把主路由改回历史根。
 
 存量审计只读原生 `schedule.catalog()` 与 `sessionPersistence.stat()`；仅从固定作用域的 `routes/qq_bindings`、QQ prefs 当前/previousSessionId 出发，沿原生持久 `parentSession` 向祖先查证，并核对 Preset 与非委派根。Preset/cwd/消息正文相同都不能单独证明归属。启动/冷恢复可事务补齐已核实的**提醒绑定**，不修改主路由、Schedule 或 Memory；并发证据变化拒绝补写。归属不明的冷恢复在原生投递确认前拒绝，保留任务；已存活的未绑定根在原生 `followup` 接入前拒绝 Schedule，避免消费 occurrence，工具及模型也被拒绝。重载扫描已有 Character 根，实际 Agent 上的门禁动态查询新 Provider；不增加 inbox、调度器或权限存储。此处不替代有权加载任意 Host 插件的可信计算基。
 
