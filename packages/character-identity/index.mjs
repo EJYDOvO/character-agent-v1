@@ -13,6 +13,16 @@ export const name='character-identity';
 const digest=s=>createHash('sha256').update(s).digest('hex');
 export function apply(ctx,config) {
   const presetId=config.presetId??'qq-character';
+ // Owner Presets: the current id plus reviewed legacy ids of the same Owner
+ // composition (e.g. qq-character after the move to character). Historical
+ // Sessions, reminder bindings and Outbox sources of these ids stay the Owner's.
+ const legacyPresetIds=config.legacyPresetIds??[];
+ if(!Array.isArray(legacyPresetIds)||legacyPresetIds.some(id=>typeof id!=='string'||!id||id===presetId))throw Error('Invalid legacy Owner Preset ids');
+ const ownerPresets=new Set([presetId,...legacyPresetIds]),isOwnerPreset=id=>ownerPresets.has(id),presetList=[...ownerPresets],presetIn='preset IN ('+presetList.map(()=>'?').join(',')+')';
+ // Optional roles (Identity & Access): other admitted accounts use their own
+ // role Presets and never receive Owner identity, Memory, reminders or Outbox.
+ const roles=config.roles?.enabled===true,rolePresets=new Set(roles?config.roles.presets??[]:[]);
+ if(roles&&(!rolePresets.size||[...rolePresets].some(id=>typeof id!=='string'||!id||ownerPresets.has(id))))throw Error('Role Presets must be explicit and distinct from Owner Presets');
  const binding=JSON.parse(readFileSync(config.bindingFile,'utf8').replace(/^\uFEFF/,''));
  const identity=new Identity(binding);mkdirSync(dirname(config.stateFile),{recursive:true});
  const db=new DatabaseSync(config.stateFile);
@@ -23,7 +33,11 @@ export function apply(ctx,config) {
  CREATE TABLE IF NOT EXISTS identity_state(key TEXT PRIMARY KEY,value TEXT NOT NULL);`);
  const conversationScope=identity.conversationScope();
  const fingerprint=digest(JSON.stringify({...conversationScope,presetId})),previous=db.prepare("SELECT value FROM identity_state WHERE key='scope'").get();
- if(previous&&previous.value!==fingerprint){db.close();throw Error('Identity scope changed; use a separate state directory or an explicit reviewed migration');}
+ // Explicitly configured legacy Owner Preset ids are the reviewed migration: the same
+ // Owner/App/Character/project scope moves to the new Preset id; anything else stops.
+ const migrated=!!previous&&previous.value!==fingerprint&&legacyPresetIds.some(id=>previous.value===digest(JSON.stringify({...conversationScope,presetId:id})));
+ if(previous&&previous.value!==fingerprint&&!migrated){db.close();throw Error('Identity scope changed; use a separate state directory or an explicit reviewed migration');}
+ if(migrated){db.prepare("UPDATE identity_state SET value=? WHERE key='scope'").run(fingerprint);ctx.logger?.info?.('Character Identity scope moved to the configured Owner Preset id; legacy Owner Sessions remain bound');}
  db.prepare("INSERT OR IGNORE INTO identity_state VALUES('scope',?)").run(fingerprint);
  db.prepare('INSERT OR IGNORE INTO qq_bindings SELECT session,conversation,? FROM routes WHERE conversation=?').run(presetId,conversationScope.conversationId);
  // The durable Outbox (single writer); interrupted 'sending' rows become unknown once the previous owner closed.
@@ -47,13 +61,14 @@ export function apply(ctx,config) {
   if(successfulAuthorization.take(trusted.sessionId))diagnostics?.emit('identity','authorize',{sessionId:trusted.sessionId,status:'accepted'});return trusted;
  }
  function forSession(id){const trusted=identity.forSession(id);authorize(trusted,'read');return trusted;}
- function hasReminderBinding(id){return !!db.prepare('SELECT 1 FROM qq_bindings WHERE session=? AND conversation=? AND preset=?').get(id,conversationScope.conversationId,presetId);}
- function protect(agent){if(ctx.get?.('agentPresets')?.composedPreset(agent.ctx)===presetId)protectSession(agent);}
+ function hasReminderBinding(id){return !!db.prepare('SELECT 1 FROM qq_bindings WHERE session=? AND conversation=? AND '+presetIn).get(id,conversationScope.conversationId,...presetList);}
+ const composed=agent=>ctx.get?.('agentPresets')?.composedPreset(agent.ctx);
+ function protect(agent){if(isOwnerPreset(composed(agent)))protectSession(agent);}
  function evidence(){
   const manager=runtime?.manager,key=manager?.sessionKey('c2c',binding.ownerId),state=manager?.ownershipState(key);
   // scope fingerprint pins routes/qq_bindings; QQ prefs and native parentSession
   // are Host persistence. A matching Preset without this chain grants nothing.
-  return {bindings:db.prepare('SELECT session FROM qq_bindings WHERE conversation=? AND preset=?').all(conversationScope.conversationId,presetId).map(r=>r.session),
+  return {bindings:db.prepare('SELECT session FROM qq_bindings WHERE conversation=? AND '+presetIn).all(conversationScope.conversationId,...presetList).map(r=>r.session),
    roots:[db.prepare('SELECT session FROM routes WHERE conversation=?').get(conversationScope.conversationId)?.session,
     state?.sessionId,state?.previousSessionId].filter(Boolean)};
  }
@@ -61,7 +76,7 @@ export function apply(ctx,config) {
   if(closed)throw Error('Identity disposed');
   const state=evidence(),schedule=ctx.get?.('schedule'),persistence=ctx.get?.('sessionPersistence');
   if(!schedule||!persistence)throw Error('Native Schedule/persistence audit unavailable');
-  const result=await auditBindings({...state,schedules:await schedule.catalog(),presetId,readHeader:async id=>(await persistence.stat(id))?.header});
+  const result=await auditBindings({...state,schedules:await schedule.catalog(),presetId,presetIds:presetList,readHeader:async id=>(await persistence.stat(id))?.header});
   return {...result,evidence:JSON.stringify(state)};
  }
  async function reconcile(){
@@ -76,22 +91,28 @@ export function apply(ctx,config) {
    return result;
   })();try{return await auditing;}finally{auditing=undefined;}
  }
-  function validateGateway(c){if(c.appId!==binding.appId||c.preset!==presetId||c.access?.c2cMode!=='allowlist'||c.access.c2cAllow?.length!==1||c.access.c2cAllow[0]!==binding.ownerId||c.access.groupMode!=='disabled')throw Error('Owner gateway policy mismatch');}
+  // Without roles the Gateway admits exactly the Owner. With roles it may admit
+  // more private accounts, but only behind QQ's Identity & Access gate.
+  function validateGateway(c){
+   const allow=c.access?.c2cAllow,base=c.appId===binding.appId&&c.preset===presetId&&c.access?.c2cMode==='allowlist'&&c.access.groupMode==='disabled';
+   const ok=roles?base&&c.identityAccess?.enabled===true&&Array.isArray(allow)&&allow.includes(binding.ownerId):base&&c.identityAccess?.enabled!==true&&allow?.length===1&&allow[0]===binding.ownerId;
+   if(!ok)throw Error('Owner gateway policy mismatch');
+  }
  function bind(record){
   const preset=ctx.get?.('agentPresets')?.composedPreset(record.agent.ctx)??record.agentPreset??record.agent.session.header?.agentPreset;
-   if(record.scope!=='c2c'||record.peerId!==binding.ownerId||record.senderId!==binding.ownerId||preset!==presetId)throw Error('Untrusted restored QQ record');
+   if(record.scope!=='c2c'||record.peerId!==binding.ownerId||record.senderId!==binding.ownerId||!isOwnerPreset(preset))throw Error('Untrusted restored QQ record');
   if(!runtime?.manager.isCurrentSession(record))throw Error('Superseded QQ Session admission');
   protect(record.agent);
   for(const id of bound)if(id!==record.sessionId){identity.revoke(id);bound.delete(id);inputs.delete(id);}
   const trusted=identity.bind({appId:binding.appId,scope:'c2c',peerId:binding.ownerId,senderId:binding.ownerId,sessionId:record.sessionId});bound.add(record.sessionId);
-  db.prepare('INSERT OR IGNORE INTO qq_bindings VALUES(?,?,?)').run(record.sessionId,trusted.conversationId,presetId);
+  db.prepare('INSERT OR IGNORE INTO qq_bindings VALUES(?,?,?)').run(record.sessionId,trusted.conversationId,preset);
   db.prepare('INSERT INTO routes VALUES(?,?,1) ON CONFLICT(conversation) DO UPDATE SET generation=generation+CASE WHEN session!=excluded.session THEN 1 ELSE 0 END,session=excluded.session').run(trusted.conversationId,record.sessionId);return trusted;
  }
  function restoreBinding(agent){
   if(closed)return;protect(agent);
   // Persisted bindings authorize only the Host reminder bridge. Full identity
   // must be issued by current, live QQ manager admission, never cold restore.
-  if(hasReminderBinding(agent.id)&&ctx.get?.('agentPresets')?.composedPreset(agent.ctx)!==presetId)throw Error('Restored QQ Schedule preset mismatch');
+  if(hasReminderBinding(agent.id)&&!isOwnerPreset(composed(agent)))throw Error('Restored QQ Schedule preset mismatch');
  }
  // Delivery of the Owner Conversation's pending rows through the attached
  // Gateway's Agent I/O notifier (no direct Gateway send). Before every part the
@@ -114,7 +135,9 @@ export function apply(ctx,config) {
  const service=Object.freeze({
   authorize,forSession,validateGateway,
   isCurrentAgent(agent){return !!agent&&ctx.get?.('agents')?.get(agent.id)===agent&&isCurrentId(agent.id)&&!!forSession(agent.id);},
-  canDeliverReminder(agent){return !closed&&!!agent&&ctx.get?.('agents')?.get(agent.id)===agent&&ctx.get?.('agentPresets')?.composedPreset(agent.ctx)===presetId&&hasReminderBinding(agent.id);},
+  canDeliverReminder(agent){return !closed&&!!agent&&ctx.get?.('agents')?.get(agent.id)===agent&&isOwnerPreset(composed(agent))&&hasReminderBinding(agent.id);},
+  // Host composition: the Presets a Gateway may compose (Owner ids, then role ids).
+  allowedPresets:()=>Object.freeze({owner:Object.freeze([...ownerPresets]),roles:Object.freeze([...rolePresets])}),
   auditSchedules:async()=>{const {evidence:_,...report}=await auditSchedules();return report;},
   // Host-only stable scope descriptors are not Memory capabilities.
   conversationScope:()=>conversationScope,
@@ -129,14 +152,24 @@ export function apply(ctx,config) {
    const manager=value.manager;if(!['sessionKey','currentSessionId','isCurrentSession','ownershipState','records'].every(k=>typeof manager[k]==='function'))throw Error('Conversation Manager ownership contract required');
    runtime=value;const epoch=++gatewayEpoch,original=manager.getOrCreate,rebuild=manager.rebuildSession;
    diagnostics?.emit('identity','attach',{status:'active'});
-   const wrap=async function(scope,peerId,senderId,target){
-    if(runtime!==value||gatewayEpoch!==epoch||scope!=='c2c'||peerId!==binding.ownerId||senderId!==binding.ownerId||target?.scope!=='c2c'||target.targetId!==binding.ownerId)throw Error('Owner-only gateway');
-    const record=await original.call(this,scope,peerId,senderId,target);if(runtime!==value||gatewayEpoch!==epoch)throw Error('Gateway detached during restore');bind(record);return record;
+   const wrap=async function(scope,peerId,senderId,target,options){
+    if(runtime!==value||gatewayEpoch!==epoch)throw Error('Owner-only gateway');
+    const args=options===undefined?[scope,peerId,senderId,target]:[scope,peerId,senderId,target,options];
+    if(peerId!==binding.ownerId){
+     // Another admitted account (roles only): its own private Conversation with the role
+     // Presets chosen by the Identity & Access gate; no Owner binding or capability.
+     if(!roles||scope!=='c2c'||senderId!==peerId||target?.scope!=='c2c'||target.targetId!==peerId||!Array.isArray(options?.presets)||!options.presets.length||options.presets.some(id=>!rolePresets.has(id)))throw Error('Owner-only gateway');
+     const record=await original.apply(this,args);if(runtime!==value||gatewayEpoch!==epoch)throw Error('Gateway detached during restore');
+     if(!rolePresets.has(record.agentPreset)||record.peerId!==peerId)throw Error('Role Session Preset mismatch');
+     return record;
+    }
+    if(scope!=='c2c'||senderId!==binding.ownerId||target?.scope!=='c2c'||target.targetId!==binding.ownerId||options?.presets!==undefined&&(!Array.isArray(options.presets)||options.presets.some(id=>!ownerPresets.has(id))))throw Error('Owner-only gateway');
+    const record=await original.apply(this,args);if(runtime!==value||gatewayEpoch!==epoch)throw Error('Gateway detached during restore');bind(record);return record;
    };
    manager.getOrCreate=wrap;
    const wrapRebuild=async function(record,options){if(runtime!==value||gatewayEpoch!==epoch)throw Error('Gateway detached before model switch');const old=record.sessionId;const result=await rebuild.call(this,record,options);if(runtime!==value||gatewayEpoch!==epoch)throw Error('Gateway detached during model switch');identity.revoke(old);bound.delete(old);if(manager.isCurrentSession(record))bind(record);return result;};
    if(rebuild)manager.rebuildSession=wrapRebuild;
-   try{for(const record of manager.records())bind(record);for(const row of db.prepare('SELECT session FROM qq_bindings WHERE conversation=?').all(conversationScope.conversationId)){const agent=ctx.get?.('agents')?.get(row.session);if(agent)restoreBinding(agent);}}catch(e){manager.getOrCreate=original;manager.rebuildSession=rebuild;runtime=undefined;identity.clear();bound.clear();throw e;}
+   try{for(const record of manager.records())if(!roles||record.peerId===binding.ownerId)bind(record);for(const row of db.prepare('SELECT session FROM qq_bindings WHERE conversation=?').all(conversationScope.conversationId)){const agent=ctx.get?.('agents')?.get(row.session);if(agent)restoreBinding(agent);}}catch(e){manager.getOrCreate=original;manager.rebuildSession=rebuild;runtime=undefined;identity.clear();bound.clear();throw e;}
    // Shared trusted ingress for the ordinary pipeline and explicit correction.
    // The early correction adapter must not bypass Owner binding or L1 evidence.
    const previousAdmission=manager.admitInteractionInput,previousInput=manager.admitInput,previousScheduleBridge=manager.preserveScheduledSession;
@@ -151,7 +184,10 @@ export function apply(ctx,config) {
    };
    const capture=(record,input)=>{
     if(runtime!==value||gatewayEpoch!==epoch)throw Error('Gateway detached');
-    if(!input||input.platform!=='qq-official'||input.adapter!=='qq-official-gateway'||input.accountId!==binding.appId||input.conversation?.type!=='direct'||input.conversation.id!==binding.ownerId||input.sender?.id!==binding.ownerId)throw Error('Untrusted Owner input');
+    if(!input||input.platform!=='qq-official'||input.adapter!=='qq-official-gateway'||input.accountId!==binding.appId||input.conversation?.type!=='direct')throw Error('Untrusted Owner input');
+    // A role account's own input is never Owner evidence (no L1/Memory capture).
+    if(roles&&input.conversation.id!==binding.ownerId&&record.peerId===input.conversation.id&&input.sender?.id===input.conversation.id)return;
+    if(input.conversation.id!==binding.ownerId||input.sender?.id!==binding.ownerId)throw Error('Untrusted Owner input');
     if(!manager.isCurrentSession(record))throw Error('Superseded QQ input');
     const trusted=forSession(record.sessionId),msg=input.message;
     if(typeof msg?.text==='string'&&msg.text.trim()&&msg.id){
@@ -166,7 +202,7 @@ export function apply(ctx,config) {
    void reconcile().catch(()=>ctx.logger?.warn('QQ Schedule ownership audit blocked; unproven Sessions remain unauthorized'));outbox.releaseHeld();void pump().catch(()=>ctx.logger?.warn('Character Outbox pump blocked; durable state retained'));return detach;
   },
   async notify(trusted,event){authorize(trusted,'send');enqueue({...event,conversation:trusted.conversationId,source:trusted.sessionId});await pump();return statusOf(event.eventId);},
-  async notifySystem({eventId,kind,text,target}){
+  async notifySystem({eventId,kind,text,target={scope:'c2c',targetId:binding.ownerId}}){
    if(!runtime||target.scope!=='c2c'||target.targetId!==binding.ownerId)throw Error('Owner notification required');
    // Existing QQTK ledger provides stable event text (maintenance job id / task status).
    if(typeof eventId!=='string'||!eventId.startsWith('qqtk:'))throw Error('Stable QQTK event id required');
@@ -184,7 +220,7 @@ export function apply(ctx,config) {
  // followups. Cold Schedule recovery only installs the fail-closed boundary.
  ctx.on?.('agent/created',async({agent,source})=>{
   restoreBinding(agent);
-  if(!closed&&ctx.get?.('agentPresets')?.composedPreset(agent.ctx)===presetId&&!hasReminderBinding(agent.id)){
+  if(!closed&&isOwnerPreset(composed(agent))&&!hasReminderBinding(agent.id)){
    await reconcile().catch(()=>{});
    // Native Schedule awaits resume before inbox/receipt publication. Refusing
    // an unproven cold root preserves the original active task, rather than
@@ -198,7 +234,7 @@ export function apply(ctx,config) {
   for(const message of messages){if(message?.source?.kind!=='schedule')continue;
    void (async()=>{try{
     const id=session.header.id,agent=ctx.get?.('agents')?.get(id);
-    if(!agent||agent.session!==session||ctx.get?.('agentPresets')?.composedPreset(agent.ctx)!==presetId)throw Error('Untrusted reminder root');
+    if(!agent||agent.session!==session||!isOwnerPreset(composed(agent)))throw Error('Untrusted reminder root');
     if(!hasReminderBinding(id))await reconcile();
     if(closed||!hasReminderBinding(id))throw Error('Unproven reminder ownership');
     // The Session the reminder came from is recorded with the row, so the binding is checked again at send time.

@@ -25,11 +25,15 @@ async function main(){
  character.config.plugins.push({id:'character-memory-tools',name:'dsh-character-memory-tools/character.mjs',config:{workerPresets:workerIds,communityWorkerPresets:settings.communityWorkerPresets,characterPresetId:settings.presetId}});
  if(!workerSupported)throw Error('Installed DSH lacks independent native Worker presets');
  configureWorkers(character,settings.specialistWorkers,settings.communityWorkerPresets);
+ // Optional roles: Owner keeps this exact composition (and Persona); contact/guest
+ // are assembled independently from the explicit public Persona.
+ let presets=[character];const roleHost=settings.roles?require('./role-settings.cjs').roleConfig(settings.roles,settings.dataDirectory):undefined;
  if(settings.interaction){const {options}=await import('../packages/interaction-policy/policy.mjs');character.config.plugins.push({id:'interaction-policy',name:'dsh-interaction-policy',isolate:{interactionPolicy:true},config:options({hangOnModelFile:settings.dataDirectory+'/hangon-model.json',...settings.interaction})});}
- const host=[{id:'agent-io',name:'dsh-agent-io',config:{}},{id:'conversation-manager',name:'dsh-conversation-manager',config:{stateFile:settings.dataDirectory+'/conversations.json'}},{id:'character-identity',name:'dsh-character-identity',config:{presetId:settings.presetId,bindingFile:settings.dataDirectory+'/binding.json',stateFile:settings.dataDirectory+'/coordination.sqlite'}},
+ if(settings.roles){const {rolePresets}=await import('../packages/character-definition/role-presets.mjs');presets=rolePresets({owner:character,publicPersona:fs.readFileSync(settings.roles.publicPersonaFile,'utf8').replace(/^\uFEFF/,'').trim(),legacyOwner:settings.roles.legacyOwnerPreset});}
+ const host=[{id:'agent-io',name:'dsh-agent-io',config:{}},{id:'conversation-manager',name:'dsh-conversation-manager',config:{stateFile:settings.dataDirectory+'/conversations.json'}},...(roleHost?[{id:'identity-access',name:'dsh-identity-access',config:roleHost.identityAccess}]:[]),{id:'character-identity',name:'dsh-character-identity',config:{presetId:settings.presetId,bindingFile:settings.dataDirectory+'/binding.json',stateFile:settings.dataDirectory+'/coordination.sqlite',...roleHost?.characterIdentity}},
  {id:'character-memory-core',name:'dsh-character-memory-core',config:{database:settings.dataDirectory+'/memory.sqlite',autoCapture:true}},
  {id:'qq-remote-ops',name:'dsh-remote-ops-local',config:{root:install.replaceAll('\\','/')}},
- {id:'im-qqbot',name:'dsh-character-qq-adapter',config:{preset:settings.presetId,access:{c2cMode:'allowlist',c2cAllow:[],groupMode:'disabled',groupAllow:[]}}},...workerIds.filter(id=>!externalIds.has(id)).map(workerPreset),character];
+ {id:'im-qqbot',name:'dsh-character-qq-adapter',config:{preset:settings.presetId,access:{c2cMode:'allowlist',c2cAllow:[],groupMode:'disabled',groupAllow:[]},...roleHost?.qq}},...workerIds.filter(id=>!externalIds.has(id)).map(workerPreset),...presets];
  write('bundles/character-core/cordis.patch.yml',dump([{insert:host}]));
  // Extras is maintained independently from generated Core. Rebuilding a persona
  // must neither restore former defaults nor erase reviewed optional declarations.
@@ -38,7 +42,7 @@ async function main(){
  else if(!Array.isArray(yaml.load(fs.readFileSync(extrasFile,'utf8'),{schema})))throw Error('Extras patch must be a YAML sequence');
  for(const [folder,name]of [['character-identity','dsh-character-identity'],['character-memory-core','dsh-character-memory-core'],['character-memory-tools','dsh-character-memory-tools'],['character-qq-adapter','dsh-character-qq-adapter']])write('packages/'+folder+'/package.json',JSON.stringify({name,version:release,private:true,type:'module',main:'index.mjs',files:['*.mjs','LICENSE*'],engines:{node:'>=24'}},null,2)+'\n');
  for(const kind of ['core','extras'])write('bundles/character-'+kind+'/package.json',JSON.stringify({name:'dsh-character-'+kind,version:release,private:true,type:'module',dsh:{bundle:{patch:'./cordis.patch.yml'}}},null,2)+'\n');
- write('artifacts/build-manifest.json',JSON.stringify({version,workerSupported,workerPolicyVersion:4,workerPresets:workerIds,settings,buildSourceDigest:require('./build-inputs.cjs')(),characterId:definition.definition.id,definitionRevision:definition.revision,creatorSha256:crypto.createHash('sha256').update(creatorText).digest('hex'),creatorPluginIds:creator.config.plugins.map(p=>p.id),characterPluginIds:character.config.plugins.map(p=>p.id)},null,2));
+ write('artifacts/build-manifest.json',JSON.stringify({version,workerSupported,workerPolicyVersion:4,workerPresets:workerIds,settings,buildSourceDigest:require('./build-inputs.cjs')(),characterId:definition.definition.id,definitionRevision:definition.revision,creatorSha256:crypto.createHash('sha256').update(creatorText).digest('hex'),creatorPluginIds:creator.config.plugins.map(p=>p.id),characterPluginIds:character.config.plugins.map(p=>p.id),rolePresets:presets.map(p=>p.config.id)},null,2));
  console.log(JSON.stringify({built:true,version,workerSupported,creatorPlugins:creator.config.plugins.length,characterPlugins:character.config.plugins.length}));
 }
 main().catch(e=>{console.error(e);process.exitCode=1});

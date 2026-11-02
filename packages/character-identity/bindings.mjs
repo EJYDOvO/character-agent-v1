@@ -1,7 +1,8 @@
 // Host-only ownership audit. Never infer trust from a prompt, title, cwd or Preset alone.
 // readHeader must use native persistence stat/open(read), not activate an Agent.
-export async function auditBindings({schedules,bindings,roots,readHeader,presetId,maxDepth=128}) {
- const known=new Set(bindings),verified=new Set(),issues=[],headers=new Map();
+// presetId: the Owner Preset; presetIds: every Owner Preset id (current plus reviewed legacy ids).
+export async function auditBindings({schedules,bindings,roots,readHeader,presetId,presetIds=[presetId],maxDepth=128}) {
+ const owners=new Set(presetIds),known=new Set(bindings),verified=new Set(),issues=[],headers=new Map();
  const header=id=>{if(!headers.has(id))headers.set(id,Promise.resolve().then(()=>readHeader(id)));return headers.get(id);};
  for(const root of new Set([...known,...roots].filter(Boolean))){
   let id=root;const seen=new Set();
@@ -10,7 +11,7 @@ export async function auditBindings({schedules,bindings,roots,readHeader,presetI
    seen.add(id);let h;
    try{h=await header(id);}catch{issues.push({sessionId:id,code:'header_unreadable'});break;}
    if(!h){issues.push({sessionId:id,code:'header_missing'});break;}
-   if(h.id!==id||h.agentPreset!==presetId||h.origin?.kind==='subagent'||h.delegationDepth>0){issues.push({sessionId:id,code:'header_scope_mismatch'});break;}
+   if(h.id!==id||!owners.has(h.agentPreset)||h.origin?.kind==='subagent'||h.delegationDepth>0){issues.push({sessionId:id,code:'header_scope_mismatch'});break;}
    verified.add(id);id=h.parentSession;
   }
  }
