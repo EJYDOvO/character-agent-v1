@@ -2,7 +2,7 @@
 
 基于官方 Creator 构建的完整主 Agent，提供可信身份、分层长期记忆、QQ 组合适配及原生独立 Worker。QQ 接入与通用 I/O/Conversation Manager 位于独立的 [QQTK](https://github.com/EJYDOvO/harness-qq-toolkit-public) 仓库。两个仓库都不分发 DSH 本体、真实 Persona、凭据或用户数据。
 
-当前源码：Character **0.1.0-test.28**，Interaction **0.1.0-test.9**；目标宿主 **DSH 0.2.1-rc.3 / Node 24**。源码、隔离验证与实例部署分别记录在 [STATUS](docs/STATUS.md)。
+当前源码：Character **0.1.0-test.29**，Interaction **0.1.0-test.9**；目标宿主 **DSH 0.2.1-rc.3 / Node 24**。源码、隔离验证与实例部署分别记录在 [STATUS](docs/STATUS.md)。
 
 ## 内容
 
@@ -32,8 +32,8 @@
 - [记忆](docs/MEMORY-LAYERS.md)、[Inspector](docs/MEMORY-INSPECTOR.md)、[Interaction](docs/INTERACTION-POLICY.md)、[Worker](docs/WORKERS.md)、[Long Tasks](packages/long-tasks/README.md)。
 - [管理](docs/MANAGEMENT.md)、[来源与许可](docs/PROVENANCE.md)、[第三方声明](THIRD_PARTY_NOTICES.md)。
 
-单 Owner QQ 私聊；人格化默认 Off。记忆与 Worker 结果不能修改 Persona、ACL 或审批。第三方 Preset 必须先审查安装，再加入真实 ID 白名单。Self Model 长期质量、真实模型任务表现、手机投递和跨系统数据迁移仍需专门验收。
+默认单 Owner QQ 私聊；人格化默认 Off。记忆与 Worker 结果不能修改 Persona、ACL 或审批。第三方 Preset 必须先审查安装，再加入真实 ID 白名单。Self Model 长期质量、真实模型任务表现、手机投递和跨系统数据迁移仍需专门验收。
 
 修改操作方式时同步维护对应文档。临时报告、日志、测试库和性能输出仅保留本地；公开库保留可复现的安全与功能回归。
 
-实验性 I1/I2 基础模块见 [Identity & Access](docs/IDENTITY-ACCESS.md)。尚未接入 Gateway/Core，当前仍是单 Owner；不能据此开放多用户。
+可选角色模式（`roles.enabled`，默认关闭）：白名单准入的其他私聊默认为 guest，Owner 用 `/role` 授予 contact；两者使用独立的 `character-contact`/`character-guest` Preset，只有公开 Persona 与基础聊天，无 Memory、Worker、Schedule 或工具。Owner 保持原有能力，旧 `qq-character` Session 兼容。见 [Identity & Access](docs/IDENTITY-ACCESS.md)；未部署，未经真实 QQ/手机验收。

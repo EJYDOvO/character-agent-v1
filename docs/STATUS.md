@@ -2,7 +2,7 @@
 
 | 范围 | 状态 |
 |---|---|
-| 当前源码 | Character 0.1.0-test.28，Interaction 0.1.0-test.9 |
+| 当前源码 | Character 0.1.0-test.29（含可选角色模式），Interaction 0.1.0-test.9 |
 | 配套 QQTK | I/O test.8、Manager test.3、Remote Ops 1.1.1-test.3、QQ0.5.2 / SDK1.0.5 |
 | 官方宿主基线 | DSH0.2.1-rc.3 / Node24 / Windows |
 | 本次清理 | 专用分支；不部署、不重启、不访问生产数据 |
@@ -20,4 +20,4 @@
 
 本轮迁移门禁：全新 Git 工作树执行 Character 单元 262/262、安全 35/35；QQTK 单元/边界 223/223、SDK 36/36，均无跳过；两份补丁重建并精确应用上游快照。三套新 Profile（普通 QQ、Core-only、完整可选组合）完成固定版本安装、哈希校验和真实 rc.3 启动装配，QQ 连接禁用。原生 Worker 冷恢复、Inspector/Memory/Compaction、通用模块、通信、Interaction/HITL/Media、双进程生命周期与 Schedule 重启回归使用合成数据。首次 Schedule 探针仍使用旧 Sender 的失败已保留在本地，夹具对齐当前通知接口后通过；运行时发送路径没有改变。
 
-I1/I2 实验分支：独立身份策略服务及最小 Preset 构建/原生隔离验证已加入；QQ/Manager/HITL/出站的联合接线与历史 Owner 迁移尚未完成，未部署、未启用。详见 [IDENTITY-ACCESS](IDENTITY-ACCESS.md)。
+I1/I2（分支 `feat/identity-access-i1-i2`，未部署、默认关闭）：Identity & Access 已接入 QQ 入站、命令、HITL、Conversation Manager 的 Session 选择、工具守卫与出站；三个角色 Preset 进入构建与 portable 安装，旧 `qq-character` 作为 Owner 别名兼容。验证：Character 单元 268/268、安全 35/35；QQTK 单元 235/235、SDK 36/36；真实 rc.3 隔离 Host 两阶段角色探针（含 HMR 与进程重启）及合成配置的干净安装与装配通过。真实 QQ/手机、真实模型与生产迁移未验证。详见 [IDENTITY-ACCESS](IDENTITY-ACCESS.md)。

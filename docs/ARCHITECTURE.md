@@ -106,6 +106,8 @@ Core 提供 `dshMemory`，保留 `characterMemory` 服务别名。SQLite 原有 
 
 存量审计只读原生 `schedule.catalog()` 与 `sessionPersistence.stat()`；仅从固定作用域的 `routes/qq_bindings`、QQ prefs 当前/previousSessionId 出发，沿原生持久 `parentSession` 向祖先查证，并核对 Preset 与非委派根。Preset/cwd/消息正文相同都不能单独证明归属。启动/冷恢复可事务补齐已核实的**提醒绑定**，不修改主路由、Schedule 或 Memory；并发证据变化拒绝补写。归属不明的冷恢复在原生投递确认前拒绝，保留任务；已存活的未绑定根在原生 `followup` 接入前拒绝 Schedule，避免消费 occurrence，工具及模型也被拒绝。重载扫描已有 Character 根，实际 Agent 上的门禁动态查询新 Provider；不增加 inbox、调度器或权限存储。此处不替代有权加载任意 Host 插件的可信计算基。
 
+可选角色模式（I1/I2）：QQTK Identity & Access 是 Agent I/O 与 Conversation Manager 之间的第二道闸门，决定 Principal、角色与可撤销授权；Character Identity 只对 Owner 绑定身份、Memory、提醒与 Outbox，对其他角色仅放行其角色 Preset Session。细节见 [Identity & Access](IDENTITY-ACCESS.md)。
+
 ## 生命周期与单例
 
 - QQ 接入、问答与审批只由基础 Gateway 建立。Core 的 Adapter 调用该 Gateway；Extras 不包含 QQ 条目。Preset 不创建连接。

@@ -13,6 +13,8 @@ node scripts/portable.cjs verify --qqtk <ABSOLUTE_QQTK_CLONE> --home <NEW_HOME>
 
 私有配置基于 examples/portable.config.example.json。DSH rc.3、Node 24；构建只读官方 Creator，不复制发行文件进入 Git。Persona 路径、Preset、Home、数据目录、模型、唯一 Owner 与凭据变量显式配置。input:[text,image] 只在实际模型支持图片时声明。
 
+开启 roles 时 prepare 另外装配 QQTK `dsh-identity-access`、写入私有 `identity-owner.json`，并生成 `character`/`character-contact`/`character-guest`（可选 `qq-character` Owner 别名）。已有单 Owner 实例迁移前先停机一致备份；旧 Session、提醒绑定与 Memory 命名空间按 [Identity & Access](IDENTITY-ACCESS.md) 的兼容规则保留，不改 Memory Schema。
+
 Core 必需四运行包及 QQTK I/O/Manager；Remote Ops 声明可关闭，不要求维护后端。Inspector、Interaction、Long Tasks 与 Extras 根据明确配置选择，无需安装全部可选组件；关闭后不补旧发送路径。Inspector 默认只读，Long Tasks 默认无执行工具。社区 Worker 必须自行审查安装，工具不自动授予。
 
 源码与用户数据分开；binding、Memory、coordination、路由、原生 Sessions/Schedule/storageDomain 和通知账本只保存在用户 Home 及本地私有备份。旧安装的非标准绝对路径需额外离线盘点，不自动迁移生产数据。
