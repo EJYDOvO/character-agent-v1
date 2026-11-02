@@ -112,9 +112,24 @@ export class LayeredMemory extends MemoryStore {
     let text='';try{if(!/^confirm:/u.test(e.text??''))text=validateStatement(e.text,8000);}catch{}
     const followup=/^(?:为什么|怎么说|什么意思|然后呢|继续|详细说|为什么呢)[？?。！!]*$/u.test(text);
     const query=followup&&previous&&at-previous.at<300000?previous.query.slice(0,160)+' '+text:text.slice(0,200);
-    this.#topics.set(key,{query,at,source:sourceKey(e)});
+    const evidence=text?{sessionId:e.sessionId,eventSeq:e.eventSeq,messageId:e.messageId,origin:'direct_user',text}:undefined;
+    this.#topics.set(key,{query,at,source:sourceKey(e),evidence});
     for(const [k,v] of this.#topics)if(at-v.at>1800000)this.#topics.delete(k);
     if(this.#topics.size>256)this.#topics.delete(this.#topics.keys().next().value);
+  }
+  // Tool arguments never supply identity or provenance. Retain the current
+  // trusted input's lineage while the proposed fact remains model inference.
+  toolSource(ctx,eventSeq){
+    const p=this.policy(ctx,'write'),fallback={sessionId:ctx.sessionId,eventSeq,origin:'inference'};
+    this.evidence(ctx,fallback);
+    const latest=this.#topics.get(hash([p.key,p.agentId,ctx.sessionId]));
+    // No current Host ingress means no trustworthy lineage. Never guess an old
+    // L1 from a text match, another Session or model-supplied source fields.
+    if(!latest)throw Error('Current trusted input source unavailable');
+    if(!latest.evidence||latest.evidence.eventSeq>eventSeq)throw Error('Current trusted input source unavailable');
+    const e=latest.evidence,id=this.admit(ctx,e);
+    if(this.db.prepare('SELECT status FROM experiences WHERE id=?').get(id).status!=='active')throw Error('Current input evidence retired');
+    return {...fallback,eventSeq:e.eventSeq,messageId:e.messageId,inputOrigin:e.origin,toolEventSeq:eventSeq};
   }
   admit(ctx,e){
     const p=this.policy(ctx,'write');this.evidence(ctx,e);
@@ -131,8 +146,24 @@ export class LayeredMemory extends MemoryStore {
     const p=this.policy(ctx),e=this.db.prepare("SELECT id FROM experiences WHERE scope=? AND source_key=? AND status='active'").get(p.key,sourceKey(source));
     if(e)this.db.prepare('INSERT OR IGNORE INTO memory_evidence VALUES(?,?)').run(row.id,e.id);
   }
+  #legacyReviews(ctx){
+    const p=this.policy(ctx),root=JSON.parse(p.key),src="json_extract(r.snapshot,'$.source')";
+    // An old manual inference had only a tool-time sequence, not an input ID.
+    // Its exact L1 cannot safely be reconstructed. Hold the earlier span of that
+    // same Session for review, without guessing links or retiring other facts.
+    const rows=this.db.prepare(`SELECT coalesce(json_extract(${src},'$.originalSessionId'),json_extract(${src},'$.sessionId')) session,max(json_extract(${src},'$.eventSeq')) seq
+      FROM revisions r JOIN memories m ON m.id=r.id JOIN blocked b ON b.principal=? AND b.character=? AND b.project=? AND b.fingerprint=json_extract(r.snapshot,'$.fingerprint')
+      WHERE m.principal=? AND m.project=? AND (m.character=? OR EXISTS(SELECT 1 FROM memory_lanes l WHERE l.memory_id=m.id AND l.scope=?))
+      AND json_extract(${src},'$.origin')='inference' AND json_extract(${src},'$.messageId') IS NULL AND json_extract(${src},'$.extractor') IS NULL AND json_extract(${src},'$.toolEventSeq') IS NULL GROUP BY session`).all(...root,root[0],root[2],root[1],p.key);
+    return new Map(rows.map(r=>[r.session,r.seq]));
+  }
+  assertReusableEvidence(ctx,source){
+    const until=this.#legacyReviews(ctx).get(source.originalSessionId??source.sessionId);
+    if(until!==undefined&&source.eventSeq<=until)throw Object.assign(Error('Legacy memory source requires review'),{code:'MEMORY_SOURCE_REVIEW'});
+  }
   remember(ctx,candidate,source){return this.transaction(()=>{
     this.policy(ctx,'write');
+    this.assertReusableEvidence(ctx,source);
     if(['direct_user','verified_tool'].includes(source?.origin)&&!source.originalSessionId)this.admit(ctx,{...source,text:source.text??source.quote??candidate.statement});
     const p=this.policy(ctx),e=this.db.prepare('SELECT status FROM experiences WHERE scope=? AND source_key=?').get(p.key,sourceKey(source));if(e&&e.status!=='active')throw Error('Retired evidence cannot regenerate memory');
     if(this.blocked(JSON.parse(p.key),validateStatement(candidate.statement),source))throw Error('Retired root-scope memory cannot be resurrected');
@@ -270,7 +301,7 @@ export class LayeredMemory extends MemoryStore {
     this.db.prepare('INSERT INTO memory_checkpoints VALUES(?,?,?,?)').run(p.key,ctx.sessionId,eventKey,now());return {recovered};
   });}
   consolidationInput(ctx){
-    this.expire(ctx);const p=this.policy(ctx),events=this.db.prepare("SELECT * FROM experiences WHERE scope=? AND status='active' ORDER BY at DESC,id LIMIT 40").all(p.key).reverse();
+    this.expire(ctx);const p=this.policy(ctx),reviews=this.#legacyReviews(ctx),events=this.db.prepare("SELECT * FROM experiences WHERE scope=? AND status='active' ORDER BY at DESC,id LIMIT 40").all(p.key).reverse().filter(e=>!reviews.has(e.session)||e.seq>reviews.get(e.session));
     const existing=this.recall(ctx,'',16000).map(r=>({id:r.id,revision:r.revision,statement:r.statement,purpose:r.purpose}));
     const fingerprint=hash({policy:p.mode,agent:p.agentId,events:events.map(e=>[e.id,e.body_hash]),existing});
     return {fingerprint,mode:p.mode,agentId:p.agentId,policy:policyPrompt(p.mode),events:events.map(e=>({id:e.id,agentId:e.agent_key,origin:e.origin,kind:e.kind,text:e.body,at:e.at})),existing};

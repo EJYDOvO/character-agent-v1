@@ -60,6 +60,12 @@ export function apply(ctx,config){
   await manager.admitInteractionInput({message:{kind:'c2c',senderId:'mock-owner',messageId:inputId,content:inputText}});
   manager.admitInput(manager.record,{platform:'qq-official',adapter:'qq-official-gateway',accountId:'mock-app',conversation:{type:'direct',id:'mock-owner'},sender:{id:'mock-owner'},message:{id:inputId,text:inputText}});
   const extractUntil=Date.now()+12000;let extracted;while(Date.now()<extractUntil){extracted=memory.recall(trusted,'近期变更',16000).find(r=>JSON.parse(r.source).messageId===inputId);if(extracted)break;await sleep(100);}assert(extracted,'Current trusted ingress was not extracted');assert.equal(JSON.parse(extracted.source).inputOrigin,'direct_user');
+  parent.followup(createUserMessage({content:[{type:'text',text:inputText}],source:{kind:'user'}}));await parent.whenIdle();
+  const manual=JSON.parse(await ctx.tools.get('character_remember',parent).execute({kind:'procedural',statement:'排查时先收集日志，随后核对近期变更。'},exec));
+  assert.equal(JSON.parse(manual.source).messageId,inputId);assert.equal(manual.status,'uncertain');assert.equal(memory.trace(trusted,manual.id).evidence.length,1);
+  await ctx.tools.get('character_forget',parent).execute({id:manual.id,revision:manual.revision},exec);
+  assert.equal(memory.trace(trusted,manual.id).evidence[0].status,'retired');assert(!memory.recall(trusted,'近期变更',16000).some(r=>r.id===extracted.id));
+  report.checks.push('Native Character Memory tools retain trusted input lineage; forget retires L1 and invalidates its automatic sibling without confirming model inference');
   const l1Before=memory.browse(trusted,{layer:'l1'}).total;
   await parent.whenIdle();for(let i=0;i<5;i++)parent.session.append('user/message',createUserMessage({content:[{type:'text',text:('隔离压缩材料第 '+i+' 次整理日志。').repeat(180)}],source:{kind:'inspector-test-fixture'}}),{surfaceOp:'append'});
   await verifyCompaction(report,()=>ctx.commands.execute(parent,'/compact',[],AbortSignal.timeout(15000)),()=>{assert(memory.db.prepare('SELECT 1 FROM memory_checkpoints WHERE session=?').get(parent.id),'Native compaction did not checkpoint');assert.equal(memory.browse(trusted,{layer:'l1'}).total,l1Before);});

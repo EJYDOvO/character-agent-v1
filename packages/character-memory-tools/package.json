@@ -1,6 +1,6 @@
 {
   "name": "dsh-character-memory-tools",
-  "version": "0.1.0-test.27",
+  "version": "0.1.0-test.28",
   "private": true,
   "type": "module",
   "main": "index.mjs",

@@ -2,6 +2,7 @@
 import fs from 'node:fs';import assert from 'node:assert/strict';import {randomUUID} from 'node:crypto';
 import {pathToFileURL} from 'node:url';import path from 'node:path';
 import {registerHooks} from 'node:module';
+import {deflateSync} from 'node:zlib';
 const sdk=(process.env.DSH_CHARACTER_HOST_ROOT||process.env.DSH_INSTALL_ROOT)+'/resources/app.asar/dsh/node_modules/@deepseek-ai/';
 const {LlmAdapter,createUserMessage}=await import(pathToFileURL(sdk+'dsh-llm/lib/index.js').href);
 const {defineTool}=await import(pathToFileURL(sdk+'dsh-tools/lib/index.js').href);
@@ -38,7 +39,7 @@ export function apply(ctx,config){
  async function run(){const handles=[],report={ok:false,runId:config.runId,host:config.version,provider:'deterministic-fixture',qqNetwork:false,checks:[]};let resolver,releaseOutbound,releaseInteractionAdapter,conversation;
   try{
    assert(!ctx.get('qqGateway'));assert(!ctx.get('characterMemory'));
-   const create=async preset=>{const h=await ctx.agents.create({sessionId:randomUUID(),agentOptions:{provider:'interaction-fixture',model:'fixture'},meta:{cwd:config.cwd,agentPreset:preset},setup:async c=>{await ctx.agentPresets.mount(c,preset);}});handles.push(h);return h.agent;};
+   const create=async(preset,route={provider:'interaction-fixture',model:'fixture'})=>{const h=await ctx.agents.create({sessionId:randomUUID(),agentOptions:route,meta:{cwd:config.cwd,agentPreset:preset},setup:async c=>{await ctx.agentPresets.mount(c,preset);}});handles.push(h);return h.agent;};
    const a=await create('interaction-test'),b=await create('interaction-off');
    const service=ctx.agentPresets.serviceFor(a,'interactionPolicy');assert(service,'Scoped service accessible through native preset registry');
    const p=service.get(a);assert.throws(()=>service.get(b),'Cross-preset Agent must be rejected');
@@ -52,6 +53,16 @@ export function apply(ctx,config){
    assert(!ctx.agentPresets.serviceFor(base,'interactionPolicy'));
    const fullService=ctx.agentPresets.serviceFor(full,'interactionPolicy');assert(fullService);assert.throws(()=>fullService.get(a));assert.throws(()=>service.get(full));
    report.checks.push('Actual Creator tool parity and two enabled Preset services remain isolated');
+   const vision=await create('interaction-control',{provider:'qq-qa-native-fixture',model:'vision'}),textOnly=await create('interaction-control',{provider:'qq-qa-native-fixture',model:'text-only'});
+   assert((await ctx.llm.resolveModelInfo('qq-qa-native-fixture','vision')).inputModalities.includes('image'));
+   assert(!(await ctx.llm.resolveModelInfo('qq-qa-native-fixture','text-only')).inputModalities.includes('image'));
+   const chunk=(type,data)=>{const body=Buffer.concat([Buffer.from(type),data]),size=Buffer.alloc(4),crc=Buffer.alloc(4);size.writeUInt32BE(data.length);let value=0xffffffff;for(const byte of body){value^=byte;for(let i=0;i<8;i++)value=(value>>>1)^((value&1)?0xedb88320:0);}crc.writeUInt32BE((value^0xffffffff)>>>0);return Buffer.concat([size,body,crc]);};
+   const header=Buffer.alloc(13);header.writeUInt32BE(1);header.writeUInt32BE(1,4);header[8]=8;header[9]=6;
+   const imagePath=path.join(config.cwd,'synthetic-vision.png');fs.writeFileSync(imagePath,Buffer.concat([Buffer.from([137,80,78,71,13,10,26,10]),chunk('IHDR',header),chunk('IDAT',deflateSync(Buffer.from([0,0,0,0,255]))),chunk('IEND',Buffer.alloc(0))]));
+   await assert.rejects(ctx.tools.get('read_image',textOnly).execute({file_path:imagePath},{agent:textOnly,signal:AbortSignal.timeout(5000)}),/does not declare image input/);
+   const image=await ctx.tools.get('read_image',vision).execute({file_path:imagePath},{agent:vision,signal:AbortSignal.timeout(5000)});
+   assert(image.image.attachmentId);assert.equal(image.image.mediaType,'image/png');
+   report.checks.push('Native pi-ai per-model metadata and real read_image: image route reads a synthetic PNG; text-only route rejects; no model HTTP request');
    // Resolve only the copied QQ fixture against read-only installed dependencies.
    // No official file or installed node_modules is changed by these local hooks.
    const fixtureUrl=pathToFileURL(config.qqFixture+'/').href,official=pathToFileURL((process.env.DSH_CHARACTER_HOST_ROOT||process.env.DSH_INSTALL_ROOT)+'/resources/app.asar/dsh/package.json').href,installed=pathToFileURL(process.env.DSH_INSTALL_ROOT+'/data/profiles/desktop/package.json').href;
@@ -278,7 +289,10 @@ export function apply(ctx,config){
         assert.equal(press(keyboardOf(plainSent.at(-1))[1]),'accepted');assert.equal(await denied,'rejected');
         // userQuestions.ask() on the live root Agent: a button, then a typed answer claimed in the inbound scope.
         before=plainSent.length;
-        const answered=questions.ask({agent:base,questions:[{id:'pick',question:'选哪个',options:[{label:'甲'},{label:'乙'}]},{id:'note',question:'备注'}]});await sleep(100);
+        const questionTool=ctx.tools.get('ask_user_question',base);assert(questionTool);
+        await assert.rejects(questionTool.execute({id:'invalid',question:'缺少 questions 数组'},{agent:base,signal:AbortSignal.timeout(5000)}),e=>e?.code==='INVALID_ARGS');
+        assert.equal(plainSent.length,before,'invalid native arguments must not pretend that a question was shown');
+        const answered=questionTool.execute({questions:[{id:'pick',question:'选哪个',options:[{label:'甲'},{label:'乙'}]},{id:'note',question:'需要详细日志吗'}]},{agent:base,signal:AbortSignal.timeout(5000)});await sleep(100);
         assert.equal(press(keyboardOf(plainSent[before])[1]),'accepted');await sleep(100);
         assert.equal(plainSent[before+1].keyboard,undefined,'a free-text question has no buttons');
         const typed={conversation:{type:'direct',id:'synthetic-owner'},sender:{id:'synthetic-owner'},message:{id:'synthetic-hitl-answer',text:'下午'}};

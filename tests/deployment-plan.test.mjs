@@ -48,7 +48,7 @@ function fixture(){
  const names={'packages/character-identity':'dsh-character-identity','packages/character-memory-core':'dsh-character-memory-core','packages/character-memory-tools':'dsh-character-memory-tools','packages/character-qq-adapter':'dsh-character-qq-adapter','bundles/character-core':'dsh-character-core'};
  for(const folder of packages.requiredFolders){const name=names[folder];write(join(project,folder,'package.json'),{name,version:'candidate'});write(join(project,'artifacts/packages',name+'-candidate.tgz'),'synthetic own package');}
  write(join(project,'artifacts/package-source.json'),{sourceDigest:'fixture',artifacts:packages.inventory(project,packages.requiredFolders)});
- for(const name of ['prepare-deploy','prepare-host-upgrade','installation','deployment-plan','package-plan','inspector-declaration','worker-upgrade'])cpSync(fileURLToPath(new URL('../scripts/'+name+'.cjs',import.meta.url)),join(project,'scripts',name+'.cjs'),{recursive:true});
+ for(const name of ['prepare-deploy','prepare-host-upgrade','installation','deployment-plan','package-plan','inspector-declaration','worker-upgrade','model-inputs'])cpSync(fileURLToPath(new URL('../scripts/'+name+'.cjs',import.meta.url)),join(project,'scripts',name+'.cjs'),{recursive:true});
  write(join(project,'scripts/ensure-build.cjs'),'// build validation independently covered by native probes\n');write(join(project,'scripts/source-digest.cjs'),"module.exports=()=> 'fixture';");
  write(join(project,'scripts/host-archive.cjs'),"module.exports={runtimeRoot:process.env.DSH_INSTALL_ROOT,openArchive:()=>({read:f=>f==='dsh/package.json'?'{\"version\":\"fixture\"}':'@deepseek-ai/dsh-tool-schedule',close(){}})};");
  mkdirSync(join(root,'plugin-packages'));return {root,live,project,remote,binding};
@@ -70,6 +70,17 @@ test('Core selection does not require absent optional artifacts; active nested d
  assert(!plan.select({profile:[],core:[],extras:tasks}).includes('packages/long-tasks'));
  assert(plan.select({profile:[],core:[],extras:tasks,extrasEnabled:true}).includes('packages/long-tasks'));
  assert(!plan.select({profile:[{id:'long-tasks',disabled:true}],core:[],extras:tasks,extrasEnabled:true}).includes('packages/long-tasks'));
+});
+test('both actual preparation CLIs apply only an explicit reviewed native model declaration to the candidate',()=>{
+ const f=fixture(),rows=JSON.parse(readFileSync(join(f.live,'cordis.patch.yml')));
+ rows.push({id:'llm-pi-ai',config:{providers:{synthetic:{models:[{id:'vision'},{id:'text-only'}],apiKeyEnv:'SYNTHETIC_UNUSED'}}}});write(join(f.live,'cordis.patch.yml'),rows);
+ const before=plan.hash(join(f.live,'cordis.patch.yml')),reviewed=join(f.root,'reviewed-model-inputs.json');write(reviewed,[{provider:'synthetic',model:'vision',input:['text','image']}]);
+ for(const [script,args,candidate]of [['prepare-deploy',[],'character-candidate'],['prepare-host-upgrade',['upgrade-model-fixture'],'upgrade-model-fixture']]){
+  execFileSync(process.execPath,[join(f.project,'scripts',script+'.cjs'),...args,'--model-inputs='+reviewed],{env:{...process.env,DSH_INSTALL_ROOT:f.root,DSH_QQTK_PROJECT:f.root},stdio:'pipe'});
+  const provider=JSON.parse(readFileSync(join(f.root,'data/profiles',candidate,'cordis.patch.yml'))).find(r=>r.id==='llm-pi-ai').config.providers.synthetic;
+  assert.deepEqual(provider.models,[{id:'vision',input:['text','image']},{id:'text-only'}]);assert.equal(provider.apiKeyEnv,'SYNTHETIC_UNUSED');assert.equal(provider.modelOverrides,undefined);
+  assert.equal(plan.hash(join(f.live,'cordis.patch.yml')),before);
+ }
 });
 test('Remote Ops requires matching installed version, pinned artifact hash and tar metadata',()=>{
  const f=fixture();assert.equal(plan.verifiedRemote(f.live).version,'1.1.1-test.1');

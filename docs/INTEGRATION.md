@@ -2,6 +2,14 @@
 
 版本与部署状态统一见 [STATUS](STATUS.md)。本仓库不包含 DSH 本体，不是通用一键安装器；现有运维入口仍面向 desktop Profile、单 Owner 私聊及 QQTK 维护目录。普通 Agent 复用模块见 [REUSE](REUSE.md)。
 
+## 单模型图片能力声明
+
+rc.3 的原生 `read_image` 检查当前实际 provider/model 的 `inputModalities`。服务能够看图但配置没有声明 image 时，工具会在读取前拒绝；不能移除这个门禁，也不能只在 QQ 附件侧标为图片。
+
+test.28 候选准备支持显式 `--model-inputs=<本地审核过的 JSON 文件>`，可传给 `prepare-deploy.cjs` 或 `prepare-host-upgrade.cjs <候选目录名>`。文件格式为 `[{"provider":"provider-id","model":"model-id","input":["text","image"]}]`。仅允许修改已配置的原生 pi-ai `providers[provider].models[].input`；保留凭据引用、其他模型和配置，未知/重复目标、冲突的 modelOverrides 或读取失败会拒绝准备。rc.3 自定义 models 列表不能同时使用 modelOverrides。未提供参数则不改变能力声明，不能按模型名字自动推断支持图片。
+
+这只准备候选，部署仍需独立授权。无凭据隔离 Host 的原生元数据/read_image 正负对照通过；随后使用当前模型，在独立 Session 中实际读取随机合成 PNG，并正确识别颜色和数字。QQ 图片下载/展示及手机收件仍须实机验收，现有部署的能力声明未因此改变。
+
 ## Iteration 08 门禁与后续实例切换
 
 本机 2026-11-02 已授权部署；后续实例仍需独立通过以下门禁。成套版本为 Character test.27、Agent I/O test.8、Conversation Manager test.3、Remote Ops `1.1.1-test.3` 与本轮 QQ 0.5.2 补丁；SDK 1.0.5 补丁保持兼容。Interaction test.9、Inspector test.3、Long Tasks test.1 不变。Character QQ Adapter 启动前检查 `gatewayLifecycleContractVersion:1`，QQ 入口要求 I/O 的 scoped reply；缺失即拒绝，不回退 Creator 或旧 Sender。

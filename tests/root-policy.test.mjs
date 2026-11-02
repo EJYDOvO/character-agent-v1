@@ -14,3 +14,9 @@ test('The Character Root section uses the shared policy; Worker prompts do not c
  assert.match(source,/name:'character:execution',order:100,text:rootExecutionPolicy\}/);
  for(const id of Object.keys(workerRoles))assert(!workerPreset(id).config.plugins[0].config.prefix.includes('先用可用的搜索工具查证'),id);
 });
+test('native questions stay an array and exact paragraph formats include the Persona prefix inside the first paragraph',()=>{
+ assert(rootExecutionPolicy.includes('不得把 id、question、options 直接放在顶层'));
+ const example=JSON.parse(rootExecutionPolicy.match(/例如 (\{"questions":.*?\})。不得把/u)[1]);
+ assert.equal(example.questions.length,2);assert.equal(example.questions[0].options.length,2);
+ for(const text of ['参数错误不代表已经提问','不另加独立开场段或结语','必要的角色开头放在首段内'])assert(rootExecutionPolicy.includes(text));
+});

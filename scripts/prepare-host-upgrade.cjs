@@ -14,6 +14,7 @@ require('node:child_process').execFileSync(process.execPath,[path.join(__dirname
 const release=JSON.parse(fs.readFileSync(project+'/package.json')).version;
 const manifest=JSON.parse(fs.readFileSync(live+'/package.json'));
 let rows=yaml.load(fs.readFileSync(live+'/cordis.patch.yml','utf8'));
+rows=require('./model-inputs.cjs').fromArgs(rows,process.argv);
 const plan=require('./deployment-plan.cjs'),sourceDigest=require('./source-digest.cjs')();
 const core=yaml.load(fs.readFileSync(project+'/bundles/character-core/cordis.patch.yml','utf8')),extras=yaml.load(fs.readFileSync(project+'/bundles/character-extras/cordis.patch.yml','utf8'))||[];
 const workerUpgrade=require('./worker-upgrade.cjs'),oldCore=yaml.load(fs.readFileSync(live+'/node_modules/dsh-character-core/cordis.patch.yml','utf8'));

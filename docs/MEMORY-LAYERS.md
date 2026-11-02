@@ -1,8 +1,16 @@
-# 分层记忆：test.9
+# 分层记忆
 
 本文件描述当前源码实现及默认配置；实际部署与验证范围见 [交付记录](RELEASE-test8.md) 和 [当前状态](STATUS.md)。仍是原来的四个运行时插件，不增加人格化插件或第二个数据库。某个实例是否启用人格化，应读取该实例 Host 配置和状态工具，而不是根据默认值判断。
 
-当前源码和本机 test.9 已包含 [审计修复](AUDIT-FIXES.md)。本次真实模型、宿主压缩和重启验证见 [test.9](RELEASE-test9.md)；原 test.8 的历史验证范围仍单独保留。
+test.9 阶段包含 [审计修复](AUDIT-FIXES.md)，当时的真实模型、宿主压缩和重启验证见 [test.9](RELEASE-test9.md)；原 test.8 的历史验证范围仍单独保留。
+
+以上 test.8/test.9 为历史实现记录；当前源码、部署和实机验收以 [STATUS](STATUS.md) 为准。
+
+## 手动来源与遗忘（test.28 候选，未部署）
+
+Memory Tools 的 remember/correct 经 Core `toolSource(issuedHandle, eventSeq)` 获取当前可信用户输入的原始 message/event 引用；模型参数不能指定权限或来源。短输入可在显式保存时进入 L1，仍保持 inference/uncertain，不因关联用户输入就自动确认模型归纳。没有当前可信输入、来源已退休或序号不符时拒绝；基础 MemoryStore 的旧接口不变。`autoCapture:false` 不做自动入库/提取，但保留有界的当前输入索引供显式工具使用。
+
+遗忘/纠错沿现有证据关联退休 L1、阻断兄弟记忆与旧提取结果，并使 L3 失效。Schema 仍为 3，无数据迁移。对旧手动 inference 只有工具时序、没有输入 ID 的已撤销记录，不能伪造精确 L1 关联：同作用域、同原始 Session 中不晚于该序号的旧证据暂缓自动提取及巩固；提取任务标记 `source_review_required`，不反复调用模型。原始 L1 不自动删除、归属不自动补齐；恢复整理需要可靠 Host 证据的人工核对，不能通过简单重试解除。较新输入、其他项目/Session 不受该范围限制。存量实例本轮未修改。
 
 ## 层次与数据流
 

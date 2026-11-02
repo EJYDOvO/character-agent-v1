@@ -11,6 +11,7 @@ const yaml=plan.entryYaml(require(require.resolve('js-yaml',{paths:[live]})));co
 assert(!fs.existsSync(candidate),'Candidate exists; inspect before replacing');
 const manifest=JSON.parse(fs.readFileSync(live+'/package.json','utf8'));
 let rows=yaml.load(fs.readFileSync(live+'/cordis.patch.yml','utf8'));
+rows=require('./model-inputs.cjs').fromArgs(rows,process.argv);
 const core=yaml.load(fs.readFileSync(project+'/bundles/character-core/cordis.patch.yml','utf8')),extras=yaml.load(fs.readFileSync(project+'/bundles/character-extras/cordis.patch.yml','utf8'))||[];
 const workerUpgrade=require('./worker-upgrade.cjs');
 const oldCore=yaml.load(fs.readFileSync(live+'/node_modules/dsh-character-core/cordis.patch.yml','utf8'));

@@ -16,8 +16,9 @@ export function apply(ctx,config){
  let closed=false,busy=false,lastActivity=Date.now();const abort=new AbortController();
  ctx.provide('characterMemory',store);ctx.provide('dshMemory',store);
  const removeIngress=identity.onEvidence((trusted,evidence)=>{
-  if(config.autoCapture===false)return;lastActivity=Date.now();
+  lastActivity=Date.now();
   try{store.noteInput(trusted,evidence);}catch{ctx.logger?.warn('Memory topic rejected');}
+  if(config.autoCapture===false)return;
   try{if(evidence.text?.trim().length>=8&&!/^confirm:/u.test(evidence.text))store.enqueue(trusted,evidence);}catch{ctx.logger?.warn('Memory evidence rejected');}
  });
  ctx.on('session/event',(session,event)=>{
@@ -44,7 +45,7 @@ export function apply(ctx,config){
     store.db.prepare("UPDATE extraction_jobs SET status='running',attempts=attempts+1 WHERE id=?").run(job.id);
     try{const result=await processJob(store,identity,job,input=>generate(trusted,input,EXTRACTION_PROMPT,'memory-extraction'));
      if(!closed)store.db.prepare("UPDATE extraction_jobs SET status='done',error=?,evidence='{}' WHERE id=? AND status='running'").run(JSON.stringify(result),job.id);
-    }catch{if(!closed)store.db.prepare("UPDATE extraction_jobs SET status=CASE WHEN attempts>=3 THEN 'failed' ELSE 'pending' END,error='extraction_failed' WHERE id=? AND status='running'").run(job.id);}
+    }catch(error){if(!closed)store.db.prepare("UPDATE extraction_jobs SET status=CASE WHEN ? OR attempts>=3 THEN 'failed' ELSE 'pending' END,error=? WHERE id=? AND status='running'").run(error?.code==='MEMORY_SOURCE_REVIEW'?1:0,error?.code==='MEMORY_SOURCE_REVIEW'?'source_review_required':'extraction_failed',job.id);}
    }
    if(!closed&&config.consolidation!==false)for(const trusted of store.activeContexts()){
     if(closed)break;

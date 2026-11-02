@@ -4,6 +4,7 @@ import { confirmationEvidence } from './confirmation.mjs';
 import { auditBindings } from './bindings.mjs';
 import { protectSession } from './boundary.mjs';
 import { createOutbox } from './outbox.mjs';
+import { successSampler } from './diagnostics.mjs';
 import { DatabaseSync } from 'node:sqlite';
 import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync } from 'node:fs';
@@ -31,6 +32,7 @@ export function apply(ctx,config) {
  const diagnosticContext={platform:'qq-official',adapter:'qq-official-gateway',accountId:binding.appId,conversation:{type:'direct',id:binding.ownerId}};
  const diagnostics={emit(component,event,fields){try{const view=runtime?.diagnostics??ctx.get?.('agentIO')?.diagnostics?.scope(diagnosticContext);view?.emit(component,event,{conversation:diagnosticContext.conversation,...fields});}catch{}}};
  const outbox=createOutbox({db,key:resolve(config.stateFile),logger:ctx.logger,diagnostics});
+ const successfulAuthorization=successSampler();
  let runtime,detach,closed=false,auditing,gatewayEpoch=0;const listeners=new Set(),bound=new Set(),inputs=new Map();
  function isCurrentId(id){
   if(closed||!runtime||!gatewayValid(runtime))return false;
@@ -42,7 +44,7 @@ export function apply(ctx,config) {
  function authorize(c,a){
   let trusted;try{trusted=identity.authorize(c,a);if(!isCurrentId(trusted.sessionId))throw Error('Historical QQ Session is not authorized');}
   catch(error){diagnostics?.emit('identity','authorize',{status:'rejected',reason:'unauthorized'});throw error;}
-  diagnostics?.emit('identity','authorize',{sessionId:trusted.sessionId,status:'accepted'});return trusted;
+  if(successfulAuthorization.take(trusted.sessionId))diagnostics?.emit('identity','authorize',{sessionId:trusted.sessionId,status:'accepted'});return trusted;
  }
  function forSession(id){const trusted=identity.forSession(id);authorize(trusted,'read');return trusted;}
  function hasReminderBinding(id){return !!db.prepare('SELECT 1 FROM qq_bindings WHERE session=? AND conversation=? AND preset=?').get(id,conversationScope.conversationId,presetId);}
@@ -160,7 +162,7 @@ export function apply(ctx,config) {
    };
    manager.admitInteractionInput=admit;
    manager.admitInput=capture;
-   detach=()=>{if(runtime!==value||gatewayEpoch!==epoch)return;runtime=undefined;gatewayEpoch++;if(manager.admitInput===capture){if(previousInput===undefined)delete manager.admitInput;else manager.admitInput=previousInput;}if(manager.admitInteractionInput===admit){if(previousAdmission===undefined)delete manager.admitInteractionInput;else manager.admitInteractionInput=previousAdmission;}if(manager.preserveScheduledSession===preserve){if(previousScheduleBridge===undefined)delete manager.preserveScheduledSession;else manager.preserveScheduledSession=previousScheduleBridge;}if(manager.getOrCreate===wrap)manager.getOrCreate=original;if(manager.rebuildSession===wrapRebuild)manager.rebuildSession=rebuild;identity.clear();bound.clear();inputs.clear();};
+   detach=()=>{if(runtime!==value||gatewayEpoch!==epoch)return;runtime=undefined;gatewayEpoch++;if(manager.admitInput===capture){if(previousInput===undefined)delete manager.admitInput;else manager.admitInput=previousInput;}if(manager.admitInteractionInput===admit){if(previousAdmission===undefined)delete manager.admitInteractionInput;else manager.admitInteractionInput=previousAdmission;}if(manager.preserveScheduledSession===preserve){if(previousScheduleBridge===undefined)delete manager.preserveScheduledSession;else manager.preserveScheduledSession=previousScheduleBridge;}if(manager.getOrCreate===wrap)manager.getOrCreate=original;if(manager.rebuildSession===wrapRebuild)manager.rebuildSession=rebuild;identity.clear();bound.clear();inputs.clear();successfulAuthorization.clear();};
    void reconcile().catch(()=>ctx.logger?.warn('QQ Schedule ownership audit blocked; unproven Sessions remain unauthorized'));outbox.releaseHeld();void pump().catch(()=>ctx.logger?.warn('Character Outbox pump blocked; durable state retained'));return detach;
   },
   async notify(trusted,event){authorize(trusted,'send');enqueue({...event,conversation:trusted.conversationId,source:trusted.sessionId});await pump();return statusOf(event.eventId);},

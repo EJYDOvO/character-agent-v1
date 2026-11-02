@@ -11,6 +11,7 @@ export async function processJob(store,identity,job,generate){
  if(JSON.stringify(scope)!==job.scope)throw Error('Job identity scope mismatch');
  const evidence=JSON.parse(job.evidence);
  if(!['direct_user','verified_tool'].includes(evidence.origin))throw Error('Automatic memory requires admitted Host evidence');
+ store.assertReusableEvidence?.(trusted,evidence);
  if(typeof store.admit==='function')store.admit(trusted,{...evidence,originalSessionId:evidence.originalSessionId??evidence.sessionId,sessionId:trusted.sessionId});
  const existing=store.recall(trusted,evidence.text.slice(0,200),8000);
  const result=parseExtraction(await generate({origin:evidence.origin,evidence: evidence.text,existing:existing.map(r=>({id:r.id,revision:r.revision,statement:r.statement,status:r.status}))}));
