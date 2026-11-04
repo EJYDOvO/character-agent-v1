@@ -8,7 +8,8 @@
 | profileName / dataDirectory | 新 Home 中的独立 Profile 与 Character 数据目录 |
 | definition / characterPresetId / projectId | Persona YAML、真实 Preset 与固定项目作用域 |
 | model | provider/id/API/URL/input 与凭据变量名 |
-| qq | 唯一账号、Owner、凭据变量名与是否启用连接 |
+| qq | 唯一账号、Owner、凭据变量名与是否启用连接；`allow` 为额外准入的私聊账号，仅在 roles 开启时允许 |
+| roles | 可选角色模式（默认关闭）：`publicPersona` 审阅过的公开 Persona 文件、`legacyOwnerPreset` 旧 Owner Preset id；见 [Identity & Access](IDENTITY-ACCESS.md) |
 | memoryMode | off / assistant / character；由可信 Host 决定 |
 | interaction / inspector | 可选交互策略、管理页；Inspector 默认 writable:false |
 | extras / longTasks | 可选自有声明；长期任务默认无工具执行能力 |

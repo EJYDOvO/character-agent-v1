@@ -13,10 +13,12 @@
     "apiKeyEnv": "MODEL_API_KEY",
     "input": ["text"]
   },
+  "roles": {"enabled": false, "publicPersona": "<REVIEWED_PUBLIC_PERSONA_FILE>", "legacyOwnerPreset": "qq-character"},
   "qq": {
     "enabled": true,
     "appId": "<QQ_APP_ID>",
     "ownerId": "<OWNER_OPENID>",
+    "allow": [],
     "appSecretEnv": "QQ_APP_SECRET"
   },
   "interaction": {"enabled": true},
