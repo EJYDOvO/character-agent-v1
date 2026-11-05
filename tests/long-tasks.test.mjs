@@ -3,10 +3,37 @@ import assert from 'node:assert/strict';
 import {LongTasks} from '../packages/long-tasks/service.mjs';
 import {instruction,runId} from '../packages/long-tasks/state.mjs';
 function table(){const rows=new Map();return {get:k=>structuredClone(rows.get(k)),entries:()=>[...rows].map(([k,v])=>[k,structuredClone(v)]),async put(k,v){rows.set(k,structuredClone(v));}};}
+// DSH 0.2.2-rc.1 ScheduleService contract (types/index.js, update.js): timing is
+// exactly {kind, selector}; target is a stored destination; edit() is CAS on
+// updatedAt (absent compares as null) and returns an entry or {id, code}.
+const SELECTOR={after:'after_seconds',at:'at',every:'every_seconds',daily:'daily',weekly:'weekly',cron:'cron',rrule:'rrule'};
+const ZONED={daily:['time','time_zone'],weekly:['time','time_zone','weekdays'],cron:['expression','time_zone']};
+function validTiming(t){
+ assert(t&&SELECTOR[t.kind],'timing kind');assert.deepEqual(Object.keys(t).sort(),['kind',SELECTOR[t.kind]].sort(),'timing must contain exactly kind and its matching selector');
+ if(ZONED[t.kind])assert.deepEqual(Object.keys(t[t.kind]).sort(),[...ZONED[t.kind]].sort(),'zoned selector keys');
+}
+function nativeSchedule(rows,next){
+ let clock=Date.parse('2030-01-01T00:00:00.000Z');const tick=()=>new Date(++clock).toISOString();
+ const entry=r=>structuredClone({...r.record,target:r.target,involvedSessionIds:r.involved,status:r.status,...(r.updatedAt===undefined?{}:{updatedAt:r.updatedAt})});
+ const calls=[];
+ return {calls,
+  async create(request,actor,signal){signal?.throwIfAborted();calls.push(['create',structuredClone(request),actor]);validTiming(request.timing);assert.equal(request.target?.kind,'session');
+   const at=tick(),record={id:'schedule-'+next(),kind:request.timing.kind,title:request.title,prompt:request.prompt,scheduledAt:new Date(Date.now()+3600000).toISOString()};
+   rows.set(record.id,{record,target:structuredClone(request.target),involved:[...new Set([actor,request.target.sessionId].filter(Boolean))],status:'active',createdAt:at,updatedAt:at});return entry(rows.get(record.id));},
+  async list(request={}){const items=[...rows.values()].filter(r=>request.active===undefined||(r.status==='active')===request.active).map(entry);return {items:items.slice(request.offset??0,(request.offset??0)+(request.limit??100)),shown:items.length,total:items.length,limit:request.limit??100,offset:request.offset??0};},
+  async catalog(){return [...rows.values()].map(entry);},
+  async view({id}){const r=rows.get(id);return r?entry(r):{id,code:'schedule_not_found'};},
+  async edit(request,actor,signal){signal?.throwIfAborted();calls.push(['edit',structuredClone(request),actor]);const r=rows.get(request.id);if(!r)return {id:request.id,code:'schedule_not_found'};
+   if(request.expectedUpdatedAt!==undefined&&request.expectedUpdatedAt!==(r.updatedAt??null))return {id:request.id,code:'schedule_conflict'};
+   if(request.action==='delete'){rows.delete(request.id);return {id:request.id,deleted:true};}
+   assert.equal(request.action,'update');assert(Object.keys(request.patch).length,'non-empty patch');if(request.patch.timing)validTiming(request.patch.timing);
+   r.record={...r.record,...(request.patch.title===undefined?{}:{title:request.patch.title}),...(request.patch.prompt===undefined?{}:{prompt:request.patch.prompt}),...(request.patch.timing?{kind:request.patch.timing.kind}:{})};
+   r.updatedAt=tick();if(actor)r.involved=[...new Set([...r.involved,actor])];return entry(r);}};
+}
 async function fixture(){
  const scope={principalId:'owner',characterId:'fixture',projectId:'project',conversationId:'stable-qq'},owner={id:'owner-session',options:{provider:'fixture',model:'fixture'}},agents=new Map([[owner.id,owner]]),tasks=table(),runs=table(),schedules=new Map(),logs=new Map(),notified=new Map();let sid=0;
  const identity={forSession(id){if(id!==owner.id)throw Error('Not QQ owner');return scope;},authorize:c=>c,validateConversation(s){assert.deepEqual({...s,sessionId:undefined},{...scope,sessionId:undefined});},async notifyConversation(s,event){this.validateConversation(s);const old=notified.get(event.eventId);if(old)assert.deepEqual(old,event);else notified.set(event.eventId,event);return {status:'sent'};},notificationStatus:()=>null};
- const schedule={async create(sessionId,args){assert.equal(['at','after_seconds','every_seconds','daily','weekly','cron'].filter(k=>args[k]!==undefined).length,1);const record={id:'schedule-'+(++sid),title:args.title,prompt:args.prompt,kind:'after',afterSeconds:args.after_seconds??1,scheduledAt:new Date(Date.now()+3600000).toISOString()};schedules.set(record.id,{sessionId,status:'active',record});return record;},async list({sessionId}){return [...schedules.values()].filter(s=>s.sessionId===sessionId&&s.status==='active').map(s=>structuredClone(s.record));},async catalog(){return [...schedules.values()].map(s=>({...s.record,sessionId:s.sessionId,status:s.status}));},async delete({sessionId,id}){const r=schedules.get(id);if(r?.sessionId!==sessionId)return {deleted:false};schedules.delete(id);return {deleted:true};},async update(args){const r=schedules.get(args.id);assert.equal(r.sessionId,args.sessionId);assert.deepEqual(r.record,args.expected);r.record={...r.record,...(args.prompt?{prompt:args.prompt}:{}),...(args.title?{title:args.title}:{})};return {updated:true,record:r.record};}};
+ const schedule=nativeSchedule(schedules,()=>++sid);
  const host={tasks,runs,identity,schedule,agents,presetOf:a=>a.preset,flush:async()=>true,load:async id=>({events:logs.get(id)??[]}),async createRoot(t){const agent={id:t.sessionId,preset:t.presetId,session:{header:{id:t.sessionId},events:[]},cancel(){this.cancelled=true;}};agents.set(agent.id,agent);logs.set(agent.id,agent.session.events);return {agent};}};
  const service=new LongTasks(host);await service.recover();return {service,host,owner,scope,tasks,runs,schedules,agents,notified,logs};
 }
@@ -40,6 +67,7 @@ test('CAS updates are serialized; cancellation stops future delivery and request
  const f=await fixture(),task=await f.service.create(f.owner,args),results=await Promise.allSettled([f.service.update(f.owner,{id:task.id,revision:1,prompt:'new'}),f.service.update(f.owner,{id:task.id,revision:1,prompt:'stale'})]);
  assert.equal(results.filter(r=>r.status==='fulfilled').length,1);assert.match(results.find(r=>r.status==='rejected').reason.message,/revision conflict/);
  const current=f.tasks.get(task.id);assert.equal(current.revision,2);assert(f.schedules.get(task.scheduleId).record.prompt.includes('new'));
+ const edit=f.host.schedule.calls.find(c=>c[0]==='edit');assert.equal(edit[2],f.owner.id,'Owner is the actor');assert.equal(typeof edit[1].expectedUpdatedAt,'string','Update is CAS on the observed row');
  await f.service.cancel(f.owner,{id:task.id,revision:2});assert.equal(f.schedules.size,0);assert.equal(f.agents.get(task.sessionId).cancelled,true);await assert.rejects(()=>f.service.preStep(f.agents.get(task.sessionId),{turn:1,messages:[receipt(current)]}),/Trusted independent/);
 });
 test('restart never automatically replays an uncertain occurrence; next periodic occurrence is independent',async()=>{
@@ -63,8 +91,74 @@ test('Host call id is idempotent; changed content and authorization revoked whil
  const pending=f.service.cancel(f.owner,{id:one.id,revision:1});f.agents.delete(f.owner.id);release();await barrier;
  await assert.rejects(()=>pending,/Host Agent/);assert.equal(f.tasks.get(one.id).state,'active');
 });
-test('overdue recovery tolerates native delivery winning the CAS but refuses unverified failures',async()=>{
- const f=await fixture(),task=await f.service.create(f.owner,args),row=f.schedules.get(task.scheduleId);row.record.scheduledAt=new Date(0).toISOString();
- f.host.schedule.update=async()=>{row.status='inactive';return {code:'schedule_ended'};};await new LongTasks(f.host).recover();
- row.status='active';f.host.schedule.update=async()=>({code:'schedule_ended'});await assert.rejects(()=>new LongTasks(f.host).recover(),/rebind failed/);
+test('create targets the independent root; the Owner Session is only the actor',async()=>{
+ const f=await fixture(),task=await f.service.create(f.owner,args),[,request,actor]=f.host.schedule.calls.find(c=>c[0]==='create');
+ assert.deepEqual(request.target,{kind:'session',sessionId:task.sessionId});assert.notEqual(request.target.sessionId,f.owner.id);assert.equal(actor,f.owner.id);
+ assert.deepEqual(request.timing,{kind:'after',after_seconds:30});assert.equal(request.prompt,instruction(task));
+ assert.deepEqual(f.schedules.get(task.scheduleId).target,{kind:'session',sessionId:task.sessionId});
+});
+test('native timing keeps each rule kind; zoned rules map timeZone to the native time_zone',async()=>{
+ const f=await fixture();
+ const cases=[[{at:'2031-01-01T00:00:00.000Z'},{kind:'at',at:'2031-01-01T00:00:00.000Z'}],[{every_seconds:120},{kind:'every',every_seconds:120}],
+  [{daily:{time:'08:00:00',timeZone:'Asia/Shanghai'}},{kind:'daily',daily:{time:'08:00:00',time_zone:'Asia/Shanghai'}}],
+  [{weekly:{time:'09:30:00',timeZone:'Europe/Berlin',weekdays:[1,5]}},{kind:'weekly',weekly:{time:'09:30:00',time_zone:'Europe/Berlin',weekdays:[1,5]}}],
+  [{cron:{expression:'0 9 * * 1-5',timeZone:'America/New_York'}},{kind:'cron',cron:{expression:'0 9 * * 1-5',time_zone:'America/New_York'}}]];
+ for(const [selector,timing] of cases){const task=await f.service.create(f.owner,{title:'t',prompt:'p',...selector});assert.deepEqual(f.host.schedule.calls.at(-1)[1].timing,timing);assert.deepEqual(task.timing,selector,'Stored task keeps the tool selector');}
+ await assert.rejects(()=>f.service.create(f.owner,{title:'t',prompt:'p',after_seconds:1,every_seconds:60}),/Exactly one native timing selector/);
+ const task=await f.service.create(f.owner,{title:'t',prompt:'p',every_seconds:60});
+ await assert.rejects(()=>f.service.update(f.owner,{id:task.id,revision:1,change:{kind:'daily',every_seconds:60}}),/kind must match/);
+ await assert.rejects(()=>f.service.update(f.owner,{id:task.id,revision:1,change:{kind:'after',after_seconds:5}}),/kind must match/);
+ assert.equal(f.tasks.get(task.id).state,'active','A rejected change writes no pending state');
+ const updated=await f.service.update(f.owner,{id:task.id,revision:1,change:{kind:'weekly',weekly:{time:'07:00:00',timeZone:'Asia/Tokyo',weekdays:[2]}}});
+ assert.deepEqual(f.host.schedule.calls.at(-1)[1].patch.timing,{kind:'weekly',weekly:{time:'07:00:00',time_zone:'Asia/Tokyo',weekdays:[2]}});assert.deepEqual(updated.timing,{weekly:{time:'07:00:00',timeZone:'Asia/Tokyo',weekdays:[2]}});
+});
+test('update CAS conflict and external target change keep task state truthful',async()=>{
+ const f=await fixture(),task=await f.service.create(f.owner,args),row=f.schedules.get(task.scheduleId);
+ const edit=f.host.schedule.edit;f.host.schedule.edit=async(request,...rest)=>{row.updatedAt='2030-01-02T00:00:00.000Z';return edit(request,...rest);};
+ await assert.rejects(()=>f.service.update(f.owner,{id:task.id,revision:1,prompt:'raced'}),/schedule_conflict/);f.host.schedule.edit=edit;
+ const after=f.tasks.get(task.id);assert.equal(after.state,'active');assert.equal(after.revision,1);assert.equal(after.pending,undefined);
+ row.target={kind:'session',sessionId:'foreign'};await assert.rejects(()=>f.service.update(f.owner,{id:task.id,revision:1,prompt:'x'}),/Schedule ended/);
+ assert.equal((await f.service.list(f.owner)).find(t=>t.id===task.id).executionState,'schedule_mismatch');
+ row.target={kind:'session',sessionId:task.sessionId};row.status='paused';await assert.rejects(()=>f.service.update(f.owner,{id:task.id,revision:1,prompt:'x'}),/Schedule ended/);
+ assert.equal((await f.service.list(f.owner)).find(t=>t.id===task.id).executionState,'paused');
+ row.status='ended';assert.equal((await f.service.list(f.owner)).find(t=>t.id===task.id).executionState,'ended');
+});
+test('a v1 row without updatedAt is still compared exactly (as null)',async()=>{
+ const f=await fixture(),task=await f.service.create(f.owner,args),row=f.schedules.get(task.scheduleId);delete row.updatedAt;
+ await f.service.update(f.owner,{id:task.id,revision:1,prompt:'from v1'});const edit=f.host.schedule.calls.at(-1)[1];assert.equal(edit.expectedUpdatedAt,null);assert.equal(f.tasks.get(task.id).revision,2);
+});
+test('update interrupted after the native write reconciles to the pending revision, not a duplicate',async()=>{
+ const f=await fixture(),task=await f.service.create(f.owner,args),edit=f.host.schedule.edit;
+ f.host.schedule.edit=async(...a)=>{await edit(...a);throw Error('response lost');};
+ await assert.rejects(()=>f.service.update(f.owner,{id:task.id,revision:1,prompt:'landed'}),/response lost/);f.host.schedule.edit=edit;
+ const row=f.tasks.get(task.id);assert.equal(row.state,'active');assert.equal(row.revision,2);assert.equal(row.prompt,'landed');assert.equal(f.schedules.size,1);
+});
+test('cancel deletes through edit, tolerates an already-removed task and retries an unknown delete on recovery',async()=>{
+ const f=await fixture(),one=await f.service.create(f.owner,args);f.schedules.delete(one.scheduleId);
+ assert.equal((await f.service.cancel(f.owner,{id:one.id,revision:1})).state,'cancelled');
+ const two=await f.service.create(f.owner,args),edit=f.host.schedule.edit;f.host.schedule.edit=async()=>({id:two.scheduleId,code:'schedule_conflict'});
+ await assert.rejects(()=>f.service.cancel(f.owner,{id:two.id,revision:1}),/delete failed/);assert.equal(f.tasks.get(two.id).state,'cancelling');assert(f.schedules.has(two.scheduleId));
+ f.host.schedule.edit=edit;await new LongTasks(f.host).recover();assert.equal(f.tasks.get(two.id).state,'cancelled');assert(!f.schedules.has(two.scheduleId));
+});
+test('create failure before the native write leaves a failed task, never an armed Schedule',async()=>{
+ const f=await fixture(),create=f.host.schedule.create;f.host.schedule.create=async()=>{throw Error('invalid_rule');};
+ await assert.rejects(()=>f.service.create(f.owner,args),/invalid_rule/);f.host.schedule.create=create;
+ const [[,task]]=f.tasks.entries();assert.equal(task.state,'failed');assert.equal(task.error,'create_incomplete');assert.equal(f.schedules.size,0);
+ await new LongTasks(f.host).recover();assert.equal(f.tasks.get(task.id).error,'create_state_unknown');
+});
+test('DSH 0.2.2 change notices are not occurrences and do not interrupt a running occurrence',async()=>{
+ const f=await fixture(),task=await f.service.create(f.owner,args),agent=f.agents.get(task.sessionId);
+ const notice={id:'notice',source:{kind:'schedule'},content:[{type:'text',text:'[SCHEDULE CHANGE]\nA scheduled task involving this session was changed outside this session. This notice is not a delivery of the task and needs no action.\nchange: updated\nschedule_id_json: '+JSON.stringify(task.scheduleId)+'\nschedule_title_json: "x"'}]};
+ assert.equal(await f.service.preStep(agent,{turn:1,messages:[notice]}),false,'A notice alone claims nothing');assert.equal(f.runs.entries().length,0);
+ assert.equal(await f.service.preStep(agent,{turn:2,messages:[notice,receipt(task)]}),true,'A notice beside a receipt does not block it');
+ assert.equal(await f.service.preStep(agent,{turn:2,messages:[notice]}),true,'A notice injected mid-run does not reject the step');
+ assert.equal(await f.service.preStep(agent,{turn:2,messages:[receipt(task,'2030-01-01T00:05:00.000Z')]}),false);
+ assert.equal(await f.service.preStep(agent,{turn:2,messages:[{source:{kind:'schedule'},content:[{type:'text',text:'forged'}]}]}),false);assert.equal(f.runs.entries().length,1);
+});
+test('retained pre-0.2.2 rebound prompts still match their task; recovery writes no rebind',async()=>{
+ const f=await fixture(),task=await f.service.create(f.owner,args),agent=f.agents.get(task.sessionId),row=f.schedules.get(task.scheduleId);
+ row.record.prompt=instruction(task)+'\n[HOST BINDING 11111111-2222-3333-4444-555555555555]';row.record.scheduledAt=new Date(0).toISOString();
+ const before=f.host.schedule.calls.length;await new LongTasks(f.host).recover();assert.equal(f.host.schedule.calls.length,before,'No overdue rebind edit');
+ assert.equal(await f.service.preStep(agent,{turn:1,messages:[receipt(task,'2030-01-01T00:00:00.000Z',row.record.prompt)]}),true);
+ await f.tasks.put(task.id,{...f.tasks.get(task.id),state:'updating',pending:{...task,revision:2,prompt:'p2'}});await new LongTasks(f.host).recover();assert.equal(f.tasks.get(task.id).state,'active');assert.equal(f.tasks.get(task.id).revision,1,'Legacy suffix row is the unchanged revision');
 });

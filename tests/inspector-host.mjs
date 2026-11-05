@@ -2,6 +2,7 @@ import fs from 'node:fs';import assert from 'node:assert/strict';import {randomU
 import {verifyCompaction} from './probe-verification.mjs';
 import {managerFixture} from './qq-manager-fixture.mjs';
 import {notifierFixture} from './notifier-fixture.mjs';
+import {onceAfter} from './rrule-fixture.mjs';
 const sdk=(process.env.DSH_CHARACTER_HOST_ROOT||process.env.DSH_INSTALL_ROOT)+'/resources/app.asar/dsh/node_modules/@deepseek-ai/';
 const {LlmAdapter,createUserMessage}=await import(pathToFileURL(sdk+'dsh-llm/lib/index.js').href);
 const {defineTool}=await import(pathToFileURL(sdk+'dsh-tools/lib/index.js').href);
@@ -41,7 +42,7 @@ export function apply(ctx,config){
   if(!config.extras)await assert.rejects(()=>spawn.execute({description:'disabled specialist',prompt:'test',agent_preset:'worker-review'},exec),/agent_preset/);
   const spawned=await spawn.execute({description:'native independent worker',prompt:'Analyze supplied material only.'},exec);
   let worker=ctx.agents.get(spawned.subagentId);assert(worker);assert.notEqual(worker.id,parent.id);assert.equal(ctx.agentPresets.composedPreset(worker.ctx),'worker-general');
-  assert(!ctx.tools.get('inspector_fixture_danger',worker));assert(!ctx.tools.get('character_recall',worker));assert.equal(ctx.tools.guardReason({agent:worker}),undefined);assert.equal(ctx.tools.guardReason({agent:parent}),undefined);
+  assert(!ctx.tools.get('inspector_fixture_danger',worker));assert(!ctx.tools.get('character_recall',worker));assert.equal(ctx.tools.checkGuards({agent:worker}),undefined);assert.equal(ctx.tools.checkGuards({agent:parent}),undefined);
   assert.throws(()=>ctx.memoryIdentity.forSession(worker.id));assert.throws(()=>memory.recall({...trusted,sessionId:worker.id},''));
   await worker.whenIdle();assert.equal(executed,0);report.checks.push('Actual native Spawn: independent preset/session, inherited tool denied, Memory ACL denies forged capability');
   const removeScoped=worker.ctx.tools.register(defineTool({name:'worker_scoped_danger',description:'Late scoped side effect fixture',parameters:{},output:{schema:{type:'string'},render:(_a,v)=>[{type:'text',text:v}]},execute(){executed++;return 'configured scoped tool ran';}}));
@@ -49,11 +50,11 @@ export function apply(ctx,config){
   assert(Array.from({length:worker.session.seq},(_,i)=>worker.session.eventAt(i)).some(e=>JSON.stringify(e).includes('guard-fixture-call')),'No actual attack tool call');
   await assert.rejects(()=>ctx.subagents.sendMessage(second,worker.id,[{type:'text',text:'unauthorized'}],{signal:AbortSignal.timeout(5000)}));
   const workerId=worker.id;await ctx.subagents.drainChildren(parent,[workerId]);assert.equal(ctx.agents.get(workerId),undefined);
-  await ctx.subagents.sendMessage(parent,workerId,[{type:'text',text:'Resume the analysis without executing.'}],{signal:AbortSignal.timeout(10000)});worker=ctx.agents.get(workerId);assert(worker);assert.equal(ctx.agentPresets.composedPreset(worker.ctx),'worker-general');assert.equal(ctx.tools.guardReason({agent:worker}),undefined);assert.throws(()=>ctx.memoryIdentity.forSession(workerId));await worker.whenIdle();
+  await ctx.subagents.sendMessage(parent,workerId,[{type:'text',text:'Resume the analysis without executing.'}],{signal:AbortSignal.timeout(10000)});worker=ctx.agents.get(workerId);assert(worker);assert.equal(ctx.agentPresets.composedPreset(worker.ctx),'worker-general');assert.equal(ctx.tools.checkGuards({agent:worker}),undefined);assert.throws(()=>ctx.memoryIdentity.forSession(workerId));await worker.whenIdle();
   report.checks.push('Native configured scoped tool executes; unrelated parent denied; cold resume preserves Worker preset and ACL');
   if(config.extras){const review=await spawn.execute({description:'specialist',prompt:'Review only supplied evidence.',agent_preset:'worker-review'},exec);const a=ctx.agents.get(review.subagentId);assert.equal(ctx.agentPresets.composedPreset(a.ctx),'worker-review');await a.whenIdle();report.checks.push('Optional specialist native Spawn');}
   await identity.notify(trusted,{eventId:'fixture-dedup',kind:'task_completed',text:'synthetic completion'});await identity.notify(trusted,{eventId:'fixture-dedup',kind:'task_completed',text:'synthetic completion'});assert.equal(deliveries.length,1);
-  const schedule=await ctx.tools.get('schedule_create',parent).execute({title:'Isolated schedule',prompt:'fixture reminder',after_seconds:1},exec);
+  const schedule=await ctx.tools.get('schedule_create',parent).execute({title:'Isolated schedule',prompt:'fixture reminder',rrule:onceAfter(1),target:'this_session'},exec);assert.deepEqual(schedule.target,{kind:'session',sessionId:parent.session.id});
   const until=Date.now()+12000;while(deliveries.length<2&&Date.now()<until)await sleep(100);assert.equal(deliveries.length,2);assert(deliveries[1].startsWith('[提醒到期]'));report.checks.push('Native Schedule due → existing outbox, notification dedup');
   assert.equal(identity.route(trusted).automaticRotation,false);assert.equal(identity.route(trusted).session,parent.id);
   await bind(parent);const inputId='extract:'+randomUUID(),inputText='每次排查故障时我都会先整理日志，再检查近期变更。';

@@ -98,13 +98,13 @@ test('an old rebuild completing after detach cannot grant authority in the new e
 });
 
 test('evidenced binding repair is atomic, read-only audit changes nothing, and failed repair can be retried after restart',async()=>{
- const host={schedule:{catalog:async()=>[{id:'legacy',sessionId:'old-root',status:'active'}]},sessionPersistence:{stat:async id=>({header:{id,agentPreset:'qq-character',parentSession:id==='session'?'middle':id==='middle'?'old-root':undefined}})}};
+ const host={schedule:{catalog:async()=>[{id:'legacy',target:{kind:'session',sessionId:'old-root'},status:'active'}]},sessionPersistence:{stat:async id=>({header:{id,agentPreset:'qq-character',parentSession:id==='session'?'middle':id==='middle'?'old-root':undefined}})}};
  let f=fixture(undefined,{},host);const directory=f.directory,db=new DatabaseSync(join(directory,'state.sqlite'));
  db.exec("CREATE TRIGGER fail_repair BEFORE INSERT ON qq_bindings WHEN NEW.session='old-root' BEGIN SELECT RAISE(ABORT,'fixture disk failure');END;");
  f.service.attach(f.runtime);await new Promise(r=>setImmediate(r));await new Promise(r=>setImmediate(r));
  assert.deepEqual(db.prepare('SELECT session FROM qq_bindings').all().map(r=>r.session),['session'],'Failed insert must roll back earlier inserts');
  const before=db.prepare('SELECT * FROM qq_bindings').all();const report=await f.service.auditSchedules();assert.equal(report.rows[0].binding,'verified_missing');assert.deepEqual(db.prepare('SELECT * FROM qq_bindings').all(),before);
  db.exec('DROP TRIGGER fail_repair');db.close();f.dispose();f=fixture(directory,{},host);
- try{f.service.attach(f.runtime);const old=f.makeAgent('old-root');await f.events.get('agent/created')({agent:old,source:'resume'});assert.equal(f.runtime.manager.preserveScheduledSession(old.id),true);assert.throws(()=>f.service.forSession(old.id));assert.equal((await f.service.auditSchedules()).rows[0].binding,'bound');assert.deepEqual(f.host.schedule.catalog&&await f.host.schedule.catalog(),[{id:'legacy',sessionId:'old-root',status:'active'}]);}
+ try{f.service.attach(f.runtime);const old=f.makeAgent('old-root');await f.events.get('agent/created')({agent:old,source:'resume'});assert.equal(f.runtime.manager.preserveScheduledSession(old.id),true);assert.throws(()=>f.service.forSession(old.id));assert.equal((await f.service.auditSchedules()).rows[0].binding,'bound');assert.deepEqual(f.host.schedule.catalog&&await f.host.schedule.catalog(),[{id:'legacy',target:{kind:'session',sessionId:'old-root'},status:'active'}]);}
  finally{f.dispose();}
 });

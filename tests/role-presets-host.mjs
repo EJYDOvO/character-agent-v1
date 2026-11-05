@@ -10,7 +10,7 @@ export function apply(ctx,config){let calls=0;const attempted=new Set();
   const ids=new Set();for(const preset of ['character','character-contact','character-guest']){
    const h=await ctx.agents.create({sessionId:randomUUID(),meta:{agentPreset:preset,cwd:config.home},agentOptions:{provider:'role-fixture',model:'fixture'},setup:async c=>{await ctx.agentPresets.mount(c,preset);}});handles.push(h);ids.add(h.agent.id);
    if(preset==='character'){assert(ctx.tools.get('role_global_probe',h.agent));continue;}
-   assert.equal(ctx.tools.schemas(h.agent).length,0);assert.equal(ctx.tools.guardReason({agent:h.agent}),undefined,'Chat itself must remain available');
+   assert.equal(ctx.tools.schemas(h.agent).length,0);assert.equal(ctx.tools.checkGuards({agent:h.agent}),undefined,'Chat itself must remain available');
    const remove=ctx.tools.register(tool('late_role_probe'));assert(!ctx.tools.get('late_role_probe',h.agent));
    h.agent.followup(createUserMessage({content:[{type:'text',text:'Attempt inherited tool then reply normally.'}],source:{kind:'fixture'}}));await h.agent.whenIdle();assert(attempted.has(h.agent.id));assert.equal(calls,0);remove();
    await ctx.sessions.flush(h.agent.session);report.checks.push(preset+': native chat completes; inherited/late tools hidden and submitted tool does not execute');

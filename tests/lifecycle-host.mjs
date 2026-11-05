@@ -6,6 +6,7 @@ import {DatabaseSync} from 'node:sqlite';
 import {defineTool} from '@deepseek-ai/dsh-tools';
 import {notifierFixture} from './notifier-fixture.mjs';
 import {verifySubagentLifecycle} from './subagent-lifecycle-host.mjs';
+import {callTool,denied} from './tool-call-fixture.mjs';
 export const name='isolated-lifecycle-probe';
 export const inject=['agents','agentPresets','tools','skills','sessions','schedule','characterIdentity','memoryIdentity','dshMemory','longTasks','lifecycleFixture'];
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
@@ -52,9 +53,10 @@ export function apply(ctx,config){
    if(!restart){
     record.agent.followup(createUserMessage({source:{kind:'user'},content:[{type:'text',text:'OLD_QQ_HISTORY_FIXTURE'}]}));await record.agent.whenIdle();
     const trusted=ctx.characterIdentity.forSession(record.sessionId),fact=ctx.dshMemory.remember(trusted,{kind:'semantic',statement:'SAFE_MEMORY_CONTINUES'},{sessionId:record.sessionId,eventSeq:1,messageId:'safe-memory',origin:'direct_user',quote:'SAFE_MEMORY_CONTINUES'});
-    const oldReminder=await ctx.schedule.create(record.sessionId,{title:'Legacy root reminder',prompt:'Legacy reminder still reaches owner.',after_seconds:40});
+    const oldReminder=await ctx.schedule.create({title:'Legacy root reminder',prompt:'Legacy reminder still reaches owner.',timing:{kind:'after',after_seconds:40},target:{kind:'session',sessionId:record.sessionId}},record.sessionId);
+    assert.deepEqual(oldReminder.target,{kind:'session',sessionId:record.sessionId});
     const unproven=await ctx.agents.create({sessionId:crypto.randomUUID(),agentOptions:{provider:'task-fixture',model:'fixture'},meta:{cwd:config.cwd,agentPreset:'qq-character'},setup:async c=>{await ctx.agentPresets.mount(c,'qq-character');}});
-    const unknownReminder=await ctx.schedule.create(unproven.agent.id,{title:'Unproven ownership fixture',prompt:'Must never execute or notify.',after_seconds:25});await unproven.dispose();
+    const unknownReminder=await ctx.schedule.create({title:'Unproven ownership fixture',prompt:'Must never execute or notify.',timing:{kind:'after',after_seconds:25},target:{kind:'session',sessionId:unproven.agent.id}});await unproven.dispose();
     const reminderSession=record.sessionId,retiredCapability=trusted;
     await manager.setModelOverride('c2c','fixture-owner',{provider:'task-fixture',model:'fixture'});
     assert.notEqual(record.sessionId,reminderSession);assert.equal(record.agent.session.header.parentSession,reminderSession);
@@ -68,6 +70,12 @@ export function apply(ctx,config){
     assert.throws(()=>ctx.characterIdentity.forSession(taskAgent.id));assert.throws(()=>ctx.memoryIdentity.forSession(taskAgent.id));
     await assert.rejects(async()=>ctx.longTasks.create(taskAgent,{title:'forged',prompt:'x',after_seconds:1}));
     const ownerTools=ctx.tools.view(record.agent).visible;assert(ownerTools.has('long_task_create'));assert(ownerTools.has('schedule_create'));
+    // DSH 0.2.2 Schedule tools are Host-wide; the Owner root must not reach a task root's Schedule through them.
+    const catalog=await ctx.schedule.catalog(),onceRow=catalog.find(r=>r.id===once.scheduleId);assert.deepEqual(onceRow.target,{kind:'session',sessionId:once.sessionId});assert(onceRow.involvedSessionIds.includes(record.sessionId),'Owner Session is the recorded actor');
+    for(const [name,args] of [['schedule_edit',{id:once.scheduleId,action:'delete'}],['schedule_edit',{id:periodic.scheduleId,action:'update',target:'this_session'}],['schedule_view',{id:once.scheduleId}]]){
+     const result=await callTool(ctx,record.agent,name,args,{signal:AbortSignal.timeout(5000)});assert(denied(result),name+' on a task root Schedule must be denied');}
+    assert.deepEqual((await ctx.schedule.view({id:periodic.scheduleId})).target,{kind:'session',sessionId:periodic.sessionId});assert((await ctx.schedule.view({id:once.scheduleId})).target);
+    report.checks.push('Owner root cannot view, delete or retarget independent task Schedules through native tools');
     assert.deepEqual([...ctx.tools.view(taskAgent).visible.keys()],['task_fixture_read']);
     assert((await ctx.skills.list({scope:record.agent,cwd:config.cwd})).some(s=>s.name==='long-tasks'));
     await ctx.sessions.flush(record.agent.session);
@@ -75,11 +83,11 @@ export function apply(ctx,config){
     // persisted native fork header is the only evidence for its ownership.
     const db=new DatabaseSync(config.cwd+'/coordination.sqlite');db.prepare('DELETE FROM qq_bindings WHERE session=?').run(reminderSession);db.close();
     const audit=await ctx.characterIdentity.auditSchedules();assert.equal(audit.rows.find(r=>r.id===oldReminder.id).binding,'verified_missing');
-    fs.writeFileSync(checkpoint,JSON.stringify({session:record.sessionId,reminderSession,unknownReminder:unknownReminder.id,unknownSession:unknownReminder.sessionId,unknownAt:unknownReminder.scheduledAt,lastUserAt:manager.modelResolver.prefs.getLifecycle(record.sessionKey).lastUserAt,fact:fact.id,oldReminder:oldReminder.id,once:once.id,error:error.id,periodic:periodic.id,cancelled:cancelled.id}));
+    fs.writeFileSync(checkpoint,JSON.stringify({session:record.sessionId,reminderSession,unknownReminder:unknownReminder.id,unknownSession:unknownReminder.target.sessionId,unknownAt:unknownReminder.scheduledAt,lastUserAt:manager.modelResolver.prefs.getLifecycle(record.sessionKey).lastUserAt,fact:fact.id,oldReminder:oldReminder.id,once:once.id,error:error.id,periodic:periodic.id,cancelled:cancelled.id}));
     report.checks.push('Actual native Schedule create/update/cancel; independent roots, tool allowlist, Memory/Owner ACL and Skill');
    }else{
     const liveUnknown=await ctx.agents.create({sessionId:crypto.randomUUID(),agentOptions:{provider:'task-fixture',model:'fixture'},meta:{cwd:config.cwd,agentPreset:'qq-character'},setup:async c=>{await ctx.agentPresets.mount(c,'qq-character');}});
-    const liveUnknownReminder=await ctx.schedule.create(liveUnknown.agent.id,{title:'Unproven live fixture',prompt:'Must not consume a live unproven target.',after_seconds:1});
+    const liveUnknownReminder=await ctx.schedule.create({title:'Unproven live fixture',prompt:'Must not consume a live unproven target.',timing:{kind:'after',after_seconds:1},target:{kind:'session',sessionId:liveUnknown.agent.id}});
     assert.notEqual(record.sessionId,state.session);assert(!JSON.stringify(record.agent.session.snapshotEvents()).includes('OLD_QQ_HISTORY_FIXTURE'));assert(!record.agent.session.header.parentSession);
     assert(ctx.dshMemory.recall(ctx.characterIdentity.forSession(record.sessionId),'SAFE_MEMORY_CONTINUES').some(m=>m.id===state.fact));report.checks.push('Real Host restart creates blank QQ Session; Identity, Memory, Preset and model retained');
     const first=record.sessionId,key=record.sessionKey,prefs=manager.modelResolver.prefs;
@@ -96,21 +104,27 @@ export function apply(ctx,config){
     const old=ctx.agents.get(state.reminderSession);assert(old,'Official Schedule cold-resumed its original Session');assert.equal(ctx.characterIdentity.route(ctx.characterIdentity.forSession(record.sessionId)).session,record.sessionId);
     assert.throws(()=>ctx.characterIdentity.forSession(old.id));assert.throws(()=>ctx.memoryIdentity.forSession(old.id));await assert.rejects(()=>ctx.longTasks.create(old,{title:'bypass',prompt:'no',after_seconds:1}));
     const audit=await ctx.characterIdentity.auditSchedules();assert.equal(audit.rows.find(r=>r.id===state.oldReminder).binding,'bound');
-    assert.equal(audit.rows.find(r=>r.id===state.unknownReminder).binding,'unproven');const unknown=(await ctx.schedule.catalog()).find(r=>r.id===state.unknownReminder);assert.equal(unknown.status,'active');assert.equal(unknown.lastDelivery,undefined);assert.equal(unknown.scheduledAt,state.unknownAt);assert(!ctx.agents.get(unknown.sessionId));
-    const unknownLive=(await ctx.schedule.catalog()).find(r=>r.id===liveUnknownReminder.id);assert.equal(unknownLive.status,'active');assert.equal(unknownLive.lastDelivery,undefined);assert.equal(liveUnknown.agent.inbox.hasPending,false);await liveUnknown.dispose();
+    assert.equal(audit.rows.find(r=>r.id===state.unknownReminder).binding,'unproven');const unknown=(await ctx.schedule.catalog()).find(r=>r.id===state.unknownReminder);assert.equal(unknown.status,'active');assert.equal(unknown.lastDelivery,undefined);assert.equal(unknown.scheduledAt,state.unknownAt);assert.equal(unknown.target.sessionId,state.unknownSession);assert(!ctx.agents.get(unknown.target.sessionId));
+    const unknownLive=(await ctx.schedule.catalog()).find(r=>r.id===liveUnknownReminder.id);assert.equal(unknownLive.status,'active');assert.equal(unknownLive.lastDelivery,undefined);
+    // DSH 0.2.2 injects a "[SCHEDULE CHANGE] change: created" notice into involved live Sessions; it carries no
+    // authority. The reminder itself must never reach the unproven inbox, and the root must not run.
+    const pendingTexts=[...liveUnknown.agent.inbox.nextTurn,...liveUnknown.agent.inbox.nextStep].map(m=>m.content?.filter(b=>b.type==='text').map(b=>b.text).join('\n')??'');
+    assert(pendingTexts.every(t=>t.startsWith('[SCHEDULE CHANGE]\n')),'Only native change notices may be pending: '+JSON.stringify(pendingTexts.map(t=>t.split('\n')[0])));
+    assert(!pendingTexts.some(t=>t.includes('Must not consume a live unproven target')),'Unproven reminder must not be in the inbox');
+    assert.equal(liveUnknown.agent.status,'idle');await liveUnknown.dispose();
     const once=tasks.find(t=>t.id===state.once),agent=ctx.agents.get(once.sessionId),before=once.runs.length,delivery=agent.session.snapshotEvents().find(e=>e.type==='user/message'&&(e.data?.message??e.data)?.source?.kind==='schedule'),duplicate=delivery?.data?.message??delivery?.data;
     assert(duplicate);agent.followup(duplicate);await agent.whenIdle();await sleep(100);assert.equal((await ctx.longTasks.list(record.agent)).find(t=>t.id===state.once).runs.length,before);assert.equal(deliveries.length,4);
     await ctx.longTasks.cancel(record.agent,{id:state.periodic,revision:tasks.find(t=>t.id===state.periodic).revision});
     const llmCalls=globalThis[Symbol.for('fixture.tasks.llm.calls')],oldReads=globalThis[Symbol.for('fixture.tasks.read.calls')];
     old.followup(createUserMessage({source:{kind:'user'},content:[{type:'text',text:'read-tool-fixture'}]}));await old.whenIdle();await sleep(100);
     assert.equal(globalThis[Symbol.for('fixture.tasks.llm.calls')],llmCalls,'Retired root must not call the model');
-    const denied=await ctx.tools.execute({agent:old,name:'task_fixture_read',arguments:{},callId:'retired-tool',signal:AbortSignal.timeout(5000)});assert(denied.error,'Native tool invoker must deny retired Session');assert.equal(globalThis[Symbol.for('fixture.tasks.read.calls')],oldReads);
+    const refused=await callTool(ctx,old,'task_fixture_read',{},{id:'retired-tool',signal:AbortSignal.timeout(5000)});assert(denied(refused),'Native tool invoker must deny retired Session');assert.equal(globalThis[Symbol.for('fixture.tasks.read.calls')],oldReads);
     let lateExecuted=false;old.ctx.get('tools').register(defineTool({name:'retired_late_tool',description:'Synthetic late scoped tool',parameters:{},output:{schema:{type:'string'},render:(_a,v)=>[{type:'text',text:v}]},execute(){lateExecuted=true;return 'not allowed';}}));
-    const late=await ctx.tools.execute({agent:old,name:'retired_late_tool',arguments:{},callId:'retired-late',signal:AbortSignal.timeout(5000)});assert(late.error);assert.equal(lateExecuted,false);
+    const late=await callTool(ctx,old,'retired_late_tool',{},{id:'retired-late',signal:AbortSignal.timeout(5000)});assert(denied(late));assert.equal(lateExecuted,false);
     assert.equal(deliveries.length,4);report.checks.push('Retired native root denies model, native tool dispatch, Memory and long-task creation; evidenced pre-upgrade fork reminder still notifies');
     const reads=globalThis[Symbol.for('fixture.tasks.read.calls')];
     agent.followup(createUserMessage({source:{kind:'user'},content:[{type:'text',text:'read-tool-fixture'}]}));await agent.whenIdle();assert.equal(globalThis[Symbol.for('fixture.tasks.read.calls')],reads);
-    const tools=ctx.tools;assert(tools.guardReason({agent,name:'late_scoped_tool'}),'Late scoped tools cannot bypass the allowlist');
+    const tools=ctx.tools;assert(tools.checkGuards({agent,name:'late_scoped_tool'}),'Late scoped tools cannot bypass the allowlist');
     report.checks.push('Cold task Sessions, native periodic execution, result-vs-delivery ledger, tool-error review, stable outbox and replay rejection');
     report.checks.push('Old Session Schedule survives main rotation and cold restore without hijacking current QQ route');
     report.checks.push('Actual plugin disposal removes service and keeps retained root execution gates fail-closed');
@@ -122,7 +136,7 @@ export function apply(ctx,config){
     detach=ctx.characterIdentity.attach({manager,config:{appId:'fixture-app',preset:'qq-character',access:{c2cMode:'allowlist',c2cAllow:['fixture-owner'],groupMode:'disabled'}},sender:{sendMarkdown:async()=>{throw Error('no direct Gateway send');}},notifications:notifierFixture(async(target,text)=>{deliveries.push({target,text});})});
     record=await manager.getOrCreate('c2c','fixture-owner','fixture-owner',{scope:'c2c',targetId:'fixture-owner'});assert.equal(record.sessionId,oldId);assert(ctx.characterIdentity.forSession(oldId));assert.equal(deliveries.length,4);
     report.checks.push('Native Manager unload/remount revokes old leases, releases Typing, restores one authoritative route and rebinds Identity without outbox replay');
-    await control.disable();assert(!ctx.get('longTasks'));assert(tools.guardReason({agent,name:'task_fixture_read'}),'Unloaded service must deny retained task tools');
+    await control.disable();assert(!ctx.get('longTasks'));assert(tools.checkGuards({agent,name:'task_fixture_read'}),'Unloaded service must deny retained task tools');
     agent.followup(duplicate);await agent.whenIdle();assert.equal(globalThis[Symbol.for('fixture.tasks.read.calls')],reads);assert.equal(deliveries.length,4);
    }
    report.phase='complete';report.ok=true;

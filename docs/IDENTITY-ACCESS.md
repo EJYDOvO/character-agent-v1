@@ -53,7 +53,7 @@ contact/guest 从空组合独立装配，不从 Owner Preset 继承后靠 Prompt
 |---|---|---|
 | Node 单元（Character） | `npm test` | Preset 组成、Owner Persona 保留、别名限制、Identity 角色放行与 Owner 能力隔离、旧 Preset 迁移 |
 | Node 单元（QQTK） | `npm test` | 服务、/role、并发冲突、过期、持久化失败、HMR 单写入者、工具守卫；真实 Agent I/O + Conversation Manager 上的入站/命令/HITL/出站/通知/撤销/重启/伪造身份 |
-| 真实 rc.3 Host | `scripts/run-roles.ps1`（隔离 Home、合成 QQ 传输与 LLM） | 旧 Owner Session 恢复、Guest/Contact 独立 Preset 与 Session、工具不可见且不可执行、/role、运行中撤销、封禁、Identity & Access HMR 与卸载、进程重启后恢复 |
+| 真实 Host（rc.3；0.2.2-rc.1 兼容分支复测通过） | `scripts/run-roles.ps1`（隔离 Home、合成 QQ 传输与 LLM） | 旧 Owner Session 恢复、Guest/Contact 独立 Preset 与 Session、工具不可见且不可执行、/role、运行中撤销、封禁、Identity & Access HMR 与卸载、进程重启后恢复 |
 | 干净安装 | `portable prepare/install/verify`（合成配置） | 包与锁、角色 Preset 在已安装包上解析和挂载 |
 
 未验证：真实 QQ 与手机收发、真实模型、多进程共享状态、生产迁移。群聊、跨平台账号关联与细粒度 Capability Grants 未实现。原生 Web/Desktop 窗口属本机 Owner，不经角色闸门。

@@ -29,14 +29,18 @@ export function apply(ctx,config){
  async function run(){
   const handles=[],registrations=[],report={ok:false,runId:config.runId,host:config.version,provenance:config.provenance,restart:fs.existsSync(config.cwd+'/worker-state.json'),qqNetwork:false,model:'deterministic fixture',checks:[]};let release;
   try{
-   assert.match(config.version,/^0\.2\.1-rc\.[23]$/);
+   assert.equal(config.version,'0.2.2-rc.1');
    const create=async(preset,sessionId=randomUUID(),resume=false)=>{
     const options={agentOptions:{provider:'worker-v2-fixture',model:'fixture'},setup:async c=>{await ctx.agentPresets.mount(c,preset);}};
     const h=await (resume?ctx.agents.resume({...options,resumeSessionId:sessionId}):ctx.agents.create({...options,sessionId,meta:{cwd:config.cwd,agentPreset:preset}}));handles.push(h);return h.agent;
    };
    const register=async(id,plugins)=>{const fork=await ctx.plugin(AgentPreset,{id,name:id,plugins});registrations.push(fork);return fork;};
    const parentFor=async(id,target)=>{await register(id,[{id:'spawn',name:'@deepseek-ai/dsh-tool-subagent',config:{provider:'spawn',agentPreset:'worker-general',allowedAgentPresets:['worker-general',target],maxDepth:1}}]);return create(id);};
-   await assert.rejects(()=>parentFor('fixture-missing-parent','missing-community-preset'),/Unknown agent preset/);
+   // DSH 0.2.2 resolves a delegation target when it is spawned, not when the parent mounts: the parent
+   // may exist, but spawning the missing preset must still be refused without creating a child.
+   const missingParent=await parentFor('fixture-missing-parent','missing-community-preset'),liveBefore=ctx.agents.list().length;
+   await assert.rejects(()=>ctx.tools.get('subagent',missingParent).execute({description:'Reject missing target',prompt:'fixture',agent_preset:'missing-community-preset'},{agent:missingParent,signal:AbortSignal.timeout(5000)}),/Unknown agent preset|not-found/);
+   assert.equal(ctx.agents.list().length,liveBefore,'A missing delegation target creates no child Agent');
    // This SDK eagerly validates a registered preset and caches a failed mount.
    const beforeBroken=brokenMountAttempts;
    const broken=await register('unmountable-community-preset',[{id:'broken',name:import.meta.url,config:{brokenFixture:true}}]);
@@ -52,7 +56,7 @@ export function apply(ctx,config){
    assert.equal(ctx.agents.get(child.subagentId),undefined);
    await register('restore-community-worker',targetPlugins);
    await ctx.subagents.sendMessage(recoveryParent,child.subagentId,[{type:'text',text:'Restore original real ID only'}],{signal:AbortSignal.timeout(10000)});
-   const restored=ctx.agents.get(child.subagentId);assert.equal(ctx.agentPresets.composedPreset(restored.ctx),'restore-community-worker');assert.equal(ctx.tools.guardReason({agent:restored}),undefined);await restored.whenIdle();
+   const restored=ctx.agents.get(child.subagentId);assert.equal(ctx.agentPresets.composedPreset(restored.ctx),'restore-community-worker');assert.equal(ctx.tools.checkGuards({agent:restored}),undefined);await restored.whenIdle();
    report.checks.push('Native missing declaration, broken mount and removed cold target reject without Creator fallback; original ID can be restored');
    const saved=report.restart?JSON.parse(fs.readFileSync(config.cwd+'/worker-state.json')):null;
    if(config.managerProbe){
@@ -75,7 +79,7 @@ export function apply(ctx,config){
    report.checks.push('Character preserves every native Creator tool, delegation and optional Long Tasks');
    const manager=managerFixture();release=ctx.characterIdentity.attach({manager,config:{appId:'mock-app',preset:'qq-character',access:{c2cMode:'allowlist',c2cAllow:['mock-owner'],groupMode:'disabled'}},sender:{async sendMarkdown(){throw Error('No notification expected');}}});
    manager.commit({sessionId:root.id,agent:root,agentPreset:'qq-character',scope:'c2c',peerId:'mock-owner',senderId:'mock-owner'});await manager.getOrCreate('c2c','mock-owner','mock-owner',{scope:'c2c',targetId:'mock-owner'});
-   assert.equal(ctx.tools.guardReason({agent:root}),undefined);
+   assert.equal(ctx.tools.checkGuards({agent:root}),undefined);
    root.followup(createUserMessage({content:[{type:'text',text:'Root policy fixture'}],source:{kind:'fixture'}}));await root.whenIdle();assert(bySession.get(root.id)?.system.includes('Worker V2：你是唯一'));
    const trusted=ctx.memoryIdentity.forSession(root.id),spawn=ctx.tools.get('subagent',root),exec={agent:root,signal:AbortSignal.timeout(35000)};
    for(const preset of ['cordis','worker-unlisted','long-task','external-planner','root-admin'])await assert.rejects(()=>spawn.execute({description:'Reject untrusted preset or alias',prompt:'analyze',agent_preset:preset},exec),/agent_preset/);
@@ -94,7 +98,7 @@ export function apply(ctx,config){
     for(const masked of ['long_task_create','global_write_fixture','working_directory','web_fetch','qqbot_send_file','mcp__browser__browser_run_code_unsafe'])assert.equal(ctx.tools.get(masked,worker),undefined,masked+' must be masked for '+id);
     assert(!ctx.tools.schemas(worker).some(s=>s.name==='global_write_fixture'||s.name==='long_task_create'));
     for(const name of workerGlobalTools)if(ctx.tools.get(name,creator))assert(ctx.tools.get(name,worker),name+' read-only search must stay available');
-    assert.equal(ctx.tools.guardReason({agent:worker}),undefined);
+    assert.equal(ctx.tools.checkGuards({agent:worker}),undefined);
     const lateGlobal=ctx.tools.get('late_global_fixture')?undefined:ctx.tools.register(globalTool('late_global_fixture'));
     const beforeGlobal=globalEffects,allowGlobal=worker.ctx.on('tools/pre-execute',()=>({kind:'allow'}));
     for(const prompt of ['attack-global-tool','attack-late-global','attack-long-task']){worker.followup(createUserMessage({content:[{type:'text',text:prompt}],source:{kind:'fixture'}}));await worker.whenIdle();}
@@ -126,7 +130,7 @@ export function apply(ctx,config){
      const note=settled();assert(note,'Worker result must reach the Root as a native settlement for '+id);
      assert(JSON.stringify((note.data?.message??note.data).content).includes(`\\"worker\\":\\"${id}\\"`),'Settlement must carry the WorkerResult');
     }
-    if(!saved){await ctx.subagents.drainChildren(root,[worker.id]);assert.equal(ctx.agents.get(worker.id),undefined);await ctx.subagents.sendMessage(root,worker.id,[{type:'text',text:'Cold resume analysis only.'}],{signal:AbortSignal.timeout(10000)});const cold=ctx.agents.get(worker.id);await cold.whenIdle();assert.equal(ctx.agentPresets.composedPreset(cold.ctx),id);assert.equal(ctx.tools.guardReason({agent:cold}),undefined);assert(ctx.tools.get('worker_fixture_tool',cold));const beforeCold=nativeToolExecutions.get(cold.id)??0;cold.followup(createUserMessage({content:[{type:'text',text:'invoke-configured-tool after cold recovery'}],source:{kind:'fixture'}}));await cold.whenIdle();assert.equal(nativeToolExecutions.get(cold.id),beforeCold+1);await ctx.sessions.flush(cold.session);}
+    if(!saved){await ctx.subagents.drainChildren(root,[worker.id]);assert.equal(ctx.agents.get(worker.id),undefined);await ctx.subagents.sendMessage(root,worker.id,[{type:'text',text:'Cold resume analysis only.'}],{signal:AbortSignal.timeout(10000)});const cold=ctx.agents.get(worker.id);await cold.whenIdle();assert.equal(ctx.agentPresets.composedPreset(cold.ctx),id);assert.equal(ctx.tools.checkGuards({agent:cold}),undefined);assert(ctx.tools.get('worker_fixture_tool',cold));const beforeCold=nativeToolExecutions.get(cold.id)??0;cold.followup(createUserMessage({content:[{type:'text',text:'invoke-configured-tool after cold recovery'}],source:{kind:'fixture'}}));await cold.whenIdle();assert.equal(nativeToolExecutions.get(cold.id),beforeCold+1);await ctx.sessions.flush(cold.session);}
    }
    report.checks.push(`${ids.length} actual native independent Presets: configured tools execute, no parent history/Persona or inherited QQ/Memory/Long Tasks authority`);
    report.checks.push('Every WorkerResult reaches the Root as a native subagent-settled message');

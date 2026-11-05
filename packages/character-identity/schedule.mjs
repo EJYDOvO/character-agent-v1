@@ -4,6 +4,10 @@ export function scheduledEvents(message){
  if(message?.source?.kind!=='schedule')return [];
  const text=message.content?.filter(b=>b.type==='text').map(b=>b.text).join('\n')??'';
  const field=name=>text.split('\n').find(l=>l.startsWith(name+': '))?.slice(name.length+2);
+ // DSH 0.2.2 injects a management notice with the same source kind when a task
+ // involving this Session changes elsewhere. It is not a due reminder: never
+ // forward it to QQ, never treat it as a receipt.
+ if(text.startsWith('[SCHEDULE CHANGE]\n'))return [];
  let rows;if(text.startsWith('[SCHEDULE REMINDER BATCH]\n'))rows=JSON.parse(field('reminders_json'));
  else if(text.startsWith('[SCHEDULE REMINDER]\n'))rows=[{schedule_id:JSON.parse(field('schedule_id_json')),occurrence_at:field('occurrence_at'),reminder_prompt:JSON.parse(field('reminder_prompt_json'))}];else throw Error('Unknown official schedule framing');
  if(!Array.isArray(rows)||rows.length>100)throw Error('Invalid schedule batch');

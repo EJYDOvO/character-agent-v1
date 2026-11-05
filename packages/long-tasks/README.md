@@ -1,6 +1,6 @@
 # 独立长期任务（可选）
 
-`dsh-character-long-tasks` 是 Character Extras 的可选 Host 插件。使用 DSH **0.2.1-rc.2** 原生 Schedule、AgentPreset、根 Session、storageDomain，以及 Character Identity 的既有 QQ Outbox。不新增调度器、Agent Loop 或数据库。普通 DSH 项目的通用 QQ、Memory 不依赖它。
+`dsh-character-long-tasks` 是 Character Extras 的可选 Host 插件。使用 DSH **0.2.2-rc.1** 原生 Schedule（`create/edit/view/catalog`）、AgentPreset、根 Session、storageDomain，以及 Character Identity 的既有 QQ Outbox。不再兼容 0.2.1 的旧 Schedule API。不新增调度器、Agent Loop 或数据库。普通 DSH 项目的通用 QQ、Memory 不依赖它。
 
 ## 安装与配置
 
@@ -30,9 +30,9 @@
 | `long_task_update` | id + revision；修改 title/prompt 或原生 change 规则（kind: at/every/daily/weekly/cron） |
 | `long_task_cancel` | id + revision；删除未来触发并请求原生 cancel，不撤销已经发生的副作用 |
 
-日历规则必须显式时区；原生时间规则和最低频率限制由 Schedule 校验。每个任务保留独立根 Session，周期轮次会沿用这个任务自身历史，不携带主聊天历史。工具权限和身份在实际 Host 对象上校验，不能由工具参数填写。创建以 Host tool call ID 幂等；独立的新调用仍是新请求，不应盲目重试创建。
+日历规则必须显式时区（工具参数 `timeZone`，内部映射为原生 `time_zone`）；原生时间规则和最低频率限制由 Schedule 校验。每种规则保留原生类型（after/at/every/daily/weekly/cron），不改写为 RRULE。计划固定投递到任务自己的根 Session（`target: {kind:'session'}`）；发起的 Owner Session 只作为原生 `actorSessionId` 记录，不是投递目标，也不把主 Session 的身份、Memory 或工具权限带给任务。每个任务保留独立根 Session，周期轮次会沿用这个任务自身历史，不携带主聊天历史。工具权限和身份在实际 Host 对象上校验，不能由工具参数填写。创建以 Host tool call ID 幂等；独立的新调用仍是新请求，不应盲目重试创建。
 
-“提醒我做 X”继续用 `schedule_create`；“到时替我执行 X”才创建独立任务。一次性任务结束后不能改成重新执行，需明确新建。list 的 `executionState: ended` 表示原生单次触发已结束；查看 runs 判断实际执行结论。
+“提醒我做 X”继续用 `schedule_create`；“到时替我执行 X”才创建独立任务。一次性任务结束后不能改成重新执行，需明确新建。list 的 `executionState: ended` 表示原生单次触发已结束，`paused` 表示计划被外部暂停，`schedule_mismatch` 表示计划已不再投递到本任务根 Session（修改会被拒绝）；查看 runs 判断实际执行结论。修改使用原生 `expectedUpdatedAt` CAS，冲突时不写入新版本。
 
 ## 持久化、通知与恢复
 
@@ -42,13 +42,13 @@ Schedule `lastDelivery` 只证明指令写入任务收件箱。插件在原生 p
 
 通知绑定稳定 Conversation，复用现有 Outbox 和稳定事件 ID。sent 代表发送 API 接受，不证明手机收件；unknown 不盲目重发。重启后不自动重放已认领但结果不明的工具操作，标记 interrupted/needs_review 并通知。账本保留用于防重，不自动清除；大量任务长期运行的账本增长需要后续留存策略。
 
-rc.2 不保证自动重试失败的冷恢复。启动后，插件只对自己的逾期计划使用原生 CAS 指令更新触发重新绑定，不改变到期时间；与原生已投递竞态通过 catalog 确认处理，不添加轮询调度器。极端情况下多个 occurrence 合并到同一轮会拒绝执行，需人工检查，不能静默合并多个目标。
+逾期恢复使用 DSH 0.2.2 原生语义：停机跨越多个周期时只投递最近一期（latest-only），不逐期补跑；投递已写入收件箱但尚未执行的消息由原生从恢复的收件箱重新唤醒，不生成第二次投递。插件不再通过修改指令（旧 `[HOST BINDING]` 后缀）触发重新绑定，也不添加轮询或补跑队列；历史计划中残留的该后缀仍被识别为同一版本。0.2.2 在任务被其他 Session 修改时注入的 `[SCHEDULE CHANGE]` 通知不是 occurrence，不认领执行，也不打断进行中的一轮。极端情况下多个 occurrence 合并到同一轮会拒绝执行，需人工检查，不能静默合并多个目标。
 
 ## 停用、备份与回滚
 
 停用插件会撤销工具和 Preset；残留任务工具守卫拒绝新执行。**停用不自动删除原生计划或账本**。应先通过工具取消不再执行的任务，等待运行结束并保留完整 DSH_HOME 和 Character 数据备份，再移除依赖。保留中的计划在停用期间无法执行；重新启用会检查逾期计划，不能据此承诺补跑每一个错过的周期。
 
-回滚代码前先停用本可选条目，保留原生 storageDomain、Schedule、Session 和协调库的一致快照。协调库新增表是追加式，Memory Schema 未改变；不要用旧备份覆盖新增记忆或删除账本来重试任务。未在生产执行回滚或实机 QQ 验收。
+回滚代码前先停用本可选条目，保留原生 storageDomain、Schedule、Session 和协调库的一致快照。DSH 0.2.2 第一次写入 Schedule（修改或到期投递）后，存储升级为 v2，旧 0.2.1 Host 的 Schedule 服务无法加载 v2（隔离演练已证实），因此本版本不能单独回滚到旧 Host。协调库新增表是追加式，Memory Schema 未改变；不要用旧备份覆盖新增记忆或删除账本来重试任务。未在生产执行回滚或实机 QQ 验收。
 
 ## 隔离验证
 
