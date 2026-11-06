@@ -26,6 +26,17 @@ try{
   $reports+=$report;$report|ConvertTo-Json -Depth 8
   $p.Refresh();if(!$p.HasExited){Stop-Process -Id $p.Id};if(!$p.WaitForExit(5000)){throw 'Test Host did not stop'};$p=$null
   if($phase -lt 3 -and (!$report.ok -or $report.runId -ne $runId -or $report.phase -ne $phase)){throw "Migration drill failed in phase $phase"}
+  # Rollback gate on the stopped Host: snapshot after the previous Host, then judge each later state.
+  $gate=Join-Path $project 'scripts/rollback-gate.mjs';$manifest=Join-Path $home2 'rollback-manifest.json';$node=$env:DSH_NODE_EXE;if(!$node){$node=(Get-Command node -ErrorAction Stop).Source}
+  if($phase -eq 0){
+   & $node $gate record --home $home2 --out $manifest|Out-Null;if($LASTEXITCODE -ne 0){throw 'Rollback gate record failed'}
+   $out=& $node $gate check --home $home2 --manifest $manifest;$code=$LASTEXITCODE;Write-Output "ROLLBACK_GATE phase=0 exit=$code";$out
+   if($code -ne 0){throw 'Unchanged snapshot must allow Host rollback'}
+  }elseif($phase -le 2){
+   $out=& $node $gate check --home $home2 --manifest $manifest;$code=$LASTEXITCODE;Write-Output "ROLLBACK_GATE phase=$phase exit=$code";$out
+   if($code -ne 3 -or !(($out -join "`n") -match 'schedule version 1 -> 2')){throw 'Rollback gate must refuse Host rollback after the v2 write'}
+  }
+  $global:LASTEXITCODE=0
  }
  Write-Output ("MIGRATION_HOME=$home2")
 }finally{

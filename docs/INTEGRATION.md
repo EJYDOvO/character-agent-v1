@@ -32,10 +32,21 @@ Character 0.1.0-test.30 与 QQTK Conversation Manager 0.1.0-test.5 只使用 0.2
 **升级前检查清单（另行授权的停机窗口内）：**
 
 1. 记录当前宿主、Character、QQTK、Preset Manager 版本与包哈希；在隔离 Home 用目标宿主跑完单元、安全、原生宿主、冷恢复与 `scripts/run-schedule-migration.ps1`。
-2. 确认空闲：没有运行中的 Agent、未完成的 Long Task occurrence 或待发送 Outbox；记录将在切换窗口内到期的提醒与任务。
-3. 维护锁下停止宿主，做一致快照：Profile、Sessions、storages（含 Schedule 与 `character_long_tasks`）、coordination.sqlite、Memory（含 WAL）、QQ prefs 与通知账本；记录 Schedule 任务清单（id、target/session、状态、下次时间）及文件 SHA-256。
-4. 离线只读审计：`scripts/audit-qq-schedules.mjs` 对快照报告 bound / verified_missing / unproven / untrusted_target，未证明的提醒按原规则保持不执行。
-5. 切换：一次性替换宿主与匹配的 Character/QQTK 包；Profile 实例自己的 `plugin-policy.json` 只更新 `testedRuntime` 与本次固定的包版本/哈希，不用仓库模板覆盖。
-6. 启动后验收：单一 QQ Gateway 就绪、Preset 无 broken、Owner 提醒归属审计无新增异常、Schedule 清单与快照一致、Memory quick_check 与 Schema 不变；在 QQ 中实际收发与审批另行验收（mock 通过不等于手机送达）。
+2. 版本锁定（只读）：QQTK `maintenance/pin-check.mjs --runtime <目标宿主> --profile <实例 Profile> --updater <更新缓存>` 必须 `ok`：宿主 DSH 版本等于 QQTK `versions.json`，`dsh-qqbot`/`qqbot-nodejs` 精确版本（不是范围）、pnpm `patchedDependencies` 键与补丁文件、已安装的补丁后文件全部与仓库一致。切换窗口内不确认任何 Desktop 更新，也不在插件管理页更新这两个包（新版本会让按版本绑定的补丁失效）。
+3. 确认空闲：没有运行中的 Agent、未完成的 Long Task occurrence 或待发送 Outbox；记录将在切换窗口内到期的提醒与任务。
+4. 维护锁下停止宿主，做一致快照：Profile、Sessions、storages（含 Schedule 与 `character_long_tasks`）、coordination.sqlite、Memory（含 `-wal`/`-shm`，同一时刻复制）、QQ prefs 与通知账本；记录 Schedule 任务清单（id、target/session、状态、下次时间）。在快照上运行 `node scripts/rollback-gate.mjs record --home <DSH_HOME> --sqlite <coordination.sqlite> --sqlite <memory.sqlite> [--file <QQ prefs/会话状态>] --out <manifest>`，清单随快照保存。
+5. 离线只读审计：`scripts/audit-qq-schedules.mjs` 对快照报告 bound / verified_missing / unproven / untrusted_target，未证明的提醒按原规则保持不执行。
+6. 切换：一次性替换宿主与匹配的 Character/QQTK 包；Profile 实例自己的 `plugin-policy.json` 只更新 `testedRuntime` 与本次固定的包版本/哈希，不用仓库模板覆盖。
+7. 启动后验收：单一 QQ Gateway 就绪、Preset 无 broken、Owner 提醒归属审计无新增异常、Schedule 清单与快照一致、Memory quick_check 与 Schema 不变；在 QQ 中实际收发与审批另行验收（mock 通过不等于手机送达）。
 
-**回滚边界：** Schedule 尚未被新宿主写入（文件哈希仍等于快照）时，可停止新宿主、换回旧宿主与旧包，数据保持原样。已写入 v2 后，回滚只能整体恢复切换前快照，会丢失窗口内的新提醒、投递回执、任务账本、Session 与通知；这与“不覆盖新数据”的规则冲突，须由维护者明确决定，默认优先修复前进而不是回滚。
+**回滚门禁（`scripts/rollback-gate.mjs check`，宿主停止后只读运行）：** 只比较 Schedule 文件哈希不够。门禁把当前数据与快照清单对比，逐项检查：每个 storage 单元的版本与内容（Schedule v1→v2 等）、per-record 域（`character_long_tasks`）的记录版本与运行中的 occurrence、Session 日志的格式版本与新增/改动、每个 SQLite 的 Schema/`user_version` 与经只读连接读出的逻辑内容（已提交的 WAL 帧计入）、Outbox `sending` 行，以及指定的状态文件。结论：
+
+| 结论 | 退出码 | 含义 |
+|---|---|---|
+| `host_rollback_allowed` | 0 | 自快照后无任何改动：可停止新宿主，换回旧宿主与旧包，数据原地保留 |
+| `host_rollback_needs_replay` | 2 | 格式与 Schema 未变，但新宿主写入了 Session/行/记录：先把当前数据复制到隔离 Home，用旧宿主加载验证后才可换回 |
+| `host_rollback_refused` | 3 | 有存储单元、Session 格式或 Schema 前进（如 Schedule 已是 v2），或存在进行中的 Outbox/Long Task：不能只换宿主 |
+
+被拒绝时只剩整体恢复快照：门禁列出的所有改动（新提醒、投递回执、任务账本、Session、Memory、通知）都会丢失，这与“不覆盖新数据”的规则冲突，须由维护者明确决定；默认修复前进。门禁不复制、不恢复也不写入任何数据。四进程演练中，rc.3 写入后为 `allowed`，rc.1 首次写入后为 `refused`（`schedule version 1 -> 2`），rc.3 随后确实无法加载 v2。
+
+**已知残余：** 0.2.1 写入、此后从未修改过的 Schedule 行没有 `updatedAt`，原生工具参数无法携带 null CAS，Owner 对这类行的第一次修改不能钉住修订号；执行时的新鲜视图仍会先确认归属，窗口只剩该次视图与原生写入之间。

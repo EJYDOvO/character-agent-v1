@@ -3,7 +3,7 @@ import { scheduledEvents } from './schedule.mjs';
 import { confirmationEvidence } from './confirmation.mjs';
 import { auditBindings } from './bindings.mjs';
 import { protectSession } from './boundary.mjs';
-import { scheduleIndex, scheduleToolDenial, UNAVAILABLE } from './schedule-scope.mjs';
+import { scheduleToolDenial, verifyScheduleCall, UNAVAILABLE } from './schedule-scope.mjs';
 import { createOutbox } from './outbox.mjs';
 import { successSampler } from './diagnostics.mjs';
 import { DatabaseSync } from 'node:sqlite';
@@ -49,10 +49,6 @@ export function apply(ctx,config) {
  const outbox=createOutbox({db,key:resolve(config.stateFile),logger:ctx.logger,diagnostics});
  const successfulAuthorization=successSampler();
  let runtime,detach,closed=false,auditing,gatewayEpoch=0;const listeners=new Set(),bound=new Set(),inputs=new Map();
- // DSH 0.2.2 Schedule tools are Host-wide. Owner roots keep acting only on tasks
- // that deliver to their own Session; the index is read-only over the catalog.
- const schedules=scheduleIndex(async()=>{const native=ctx.get?.('schedule');if(!native)throw Error('Native Schedule unavailable');return native.catalog();});
- const refreshSchedules=()=>{if(!closed)void schedules.refresh().catch(()=>ctx.logger?.warn('Schedule ownership index refresh failed; Owner schedule edits stay denied'));};
  function isCurrentId(id){
   if(closed||!runtime||!gatewayValid(runtime))return false;
   const manager=runtime.manager,record=[...manager.records()].find(r=>r.scope==='c2c'&&r.peerId===binding.ownerId&&r.sessionId===id);
@@ -141,11 +137,17 @@ export function apply(ctx,config) {
   authorize,forSession,validateGateway,
   isCurrentAgent(agent){return !!agent&&ctx.get?.('agents')?.get(agent.id)===agent&&isCurrentId(agent.id)&&!!forSession(agent.id);},
   canDeliverReminder(agent){return !closed&&!!agent&&ctx.get?.('agents')?.get(agent.id)===agent&&isOwnerPreset(composed(agent))&&hasReminderBinding(agent.id);},
-  // Native tool guard input; undefined allows. Denies fail closed while the index is stale.
-  scheduleToolDenial(exec){
-   if(closed)return UNAVAILABLE;
-   const caller=exec?.agent,reason=scheduleToolDenial(exec,{sessionId:caller?.session?.id??caller?.id,ownerOf:schedules.ownerOf,ready:schedules.ready});
-   if(reason===UNAVAILABLE)refreshSchedules();return reason;
+  // Native tool guard input (argument rules); undefined allows.
+  scheduleToolDenial(exec){return closed?UNAVAILABLE:scheduleToolDenial(exec);},
+  // Execution-time ownership: a fresh native view, accepted for the caller's own
+  // Session or an Owner Session holding a persisted reminder binding (the same
+  // evidence canDeliverReminder uses); task roots, role/foreign and unproven
+  // Sessions are refused.
+  async verifyScheduleCall(exec){
+   if(closed)return {denied:UNAVAILABLE};
+   const caller=exec?.agent,native=ctx.get?.('schedule');
+   return verifyScheduleCall(exec,{sessionId:caller?.session?.id??caller?.id,trusted:id=>!closed&&hasReminderBinding(id),
+    view:async id=>{if(!native)throw Error('Native Schedule unavailable');return native.view({id});}});
   },
   // Host composition: the Presets a Gateway may compose (Owner ids, then role ids).
   allowedPresets:()=>Object.freeze({owner:Object.freeze([...ownerPresets]),roles:Object.freeze([...rolePresets])}),
@@ -240,7 +242,6 @@ export function apply(ctx,config) {
   }
  });
  ctx.on?.('agent/disposed',({agent})=>{identity.revoke(agent.id);bound.delete(agent.id);inputs.delete(agent.id);});
- ctx.on?.('schedule/changed',refreshSchedules);refreshSchedules();
  ctx.on?.('session/event',(session,event)=>{
   const messages=event.type==='user/message'?[event.data?.message??event.data]:event.type==='agent/inbox/spliced'?event.data?.inserted??[]:[];
   for(const message of messages){if(message?.source?.kind!=='schedule')continue;

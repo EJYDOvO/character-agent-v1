@@ -1,0 +1,41 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import fs from 'node:fs';import path from 'node:path';import os from 'node:os';import {DatabaseSync} from 'node:sqlite';
+import {observe,decide} from '../scripts/rollback-gate.mjs';
+function fixture(t){
+ const home=fs.mkdtempSync(path.join(os.tmpdir(),'rollback-gate-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
+ const write=(rel,v)=>{const p=path.join(home,rel);fs.mkdirSync(path.dirname(p),{recursive:true});fs.writeFileSync(p,typeof v==='string'?v:JSON.stringify(v));};
+ write('storages/schedule.json',{unit:{name:'schedule',version:1},global:null,tables:{tasks:{a:{record:{id:'a'},sessionId:'s1'}}}});
+ write('storages/workspace.json',{unit:{name:'workspace',version:2},global:{},tables:{}});
+ write('storages/character_long_tasks/runs/r1.json',{version:1,record:{id:'r1',status:'completed'}});
+ write('sessions/w/s1/session.v4.jsonl.zstd','log-1');
+ const state=path.join(home,'coordination.sqlite'),db=new DatabaseSync(state);
+ db.exec("PRAGMA journal_mode=WAL;CREATE TABLE outbox(id TEXT PRIMARY KEY,status TEXT NOT NULL);CREATE TABLE qq_bindings(session TEXT PRIMARY KEY);INSERT INTO outbox VALUES('e1','sent');INSERT INTO qq_bindings VALUES('s1');");
+ const input={home,sqlites:[state],files:[]};return {home,write,state,db,input,before:observe(input)};
+}
+test('identical data allows swapping only the Host back',t=>{
+ const f=fixture(t);f.db.close();const r=decide(f.before,observe(f.input));assert.equal(r.decision,'host_rollback_allowed');assert.deepEqual(r.blockers,[]);assert.equal(r.readOnly,true);
+});
+test('Schedule v2 written by the new Host refuses Host rollback even when other data is unchanged',t=>{
+ const f=fixture(t);f.db.close();f.write('storages/schedule.json',{unit:{name:'schedule',version:2},global:null,tables:{tasks:{}}});
+ const r=decide(f.before,observe(f.input));assert.equal(r.decision,'host_rollback_refused');assert(r.blockers.some(b=>/schedule version 1 -> 2/.test(b)));assert.match(r.restore,/explicit maintainer decision/);
+});
+test('an unchanged Schedule hash is not enough: committed WAL rows, Sessions and ledger records need an old-Host replay',t=>{
+ const f=fixture(t);f.db.exec("INSERT INTO outbox VALUES('e2','pending');INSERT INTO qq_bindings VALUES('s2')");// still in WAL: connection open, no checkpoint
+ f.write('sessions/w/s2/session.v4.jsonl.zstd','log-2');f.write('storages/character_long_tasks/runs/r2.json',{version:1,record:{id:'r2',status:'completed'}});
+ const now=observe(f.input);assert.equal(now.storages.units.schedule.sha256,f.before.storages.units.schedule.sha256,'Schedule file unchanged');assert(now.sqlite[path.resolve(f.state)].walBytes>0);
+ const r=decide(f.before,now);f.db.close();
+ assert.equal(r.decision,'host_rollback_needs_replay');assert.deepEqual(r.blockers,[]);
+ for(const re of [/coordination\.sqlite\.outbox: 1 -> 2/,/qq_bindings: 1 -> 2/,/1 Session logs/,/character_long_tasks: 1 records/,/WAL bytes/])assert(r.changes.some(c=>re.test(c)),String(re));
+});
+test('in-flight Outbox or Long Task work, schema changes, new unit or Session formats refuse Host rollback',t=>{
+ const f=fixture(t);
+ f.db.exec("UPDATE outbox SET status='sending' WHERE id='e1';CREATE TABLE extra(x)");f.db.close();
+ f.write('storages/character_long_tasks/runs/r3.json',{version:1,record:{id:'r3',status:'running'}});
+ f.write('storages/new_unit.json',{unit:{name:'new_unit',version:1},tables:{}});f.write('sessions/w/s3/session.v5.jsonl.zstd','log-3');
+ const r=decide(f.before,observe(f.input));assert.equal(r.decision,'host_rollback_refused');
+ for(const re of [/rows sending/,/schema\/user_version changed/,/1 records in flight/,/new_unit created/,/format 5 not present/])assert(r.blockers.some(b=>re.test(b)),String(re));
+});
+test('missing or unreadable SQLite state refuses instead of guessing',t=>{
+ const f=fixture(t);f.db.close();fs.rmSync(f.state);
+ const r=decide(f.before,observe(f.input));assert.equal(r.decision,'host_rollback_refused');assert(r.blockers.some(b=>/missing/.test(b)));
+});

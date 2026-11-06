@@ -14,7 +14,7 @@ try{
   if(Test-Path -LiteralPath $run.result){Move-Item -LiteralPath $run.result -Destination (Join-Path $run.home 'phase0.json')}
   $resolver=([Uri](Join-Path $project 'tests/lifecycle-sdk-resolver.mjs')).AbsoluteUri
   $p=Start-Process -FilePath (Join-Path $runtime 'DeepSeek Harness.exe') -ArgumentList @('--expose-internals','--import',$resolver,('"{0}"' -f (Join-Path $runtime 'resources/app.asar/dsh/node_modules/@deepseek-ai/dsh-desktop-host/lib/cli.js')),'--profile','lifecycle','--no-open','--port','0') -WorkingDirectory $run.home -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $run.home "phase-$phase.stdout.log") -RedirectStandardError (Join-Path $run.home "phase-$phase.stderr.log")
-  $deadline=(Get-Date).AddSeconds(95)
+  $deadline=(Get-Date).AddSeconds(180) # phase 1 waits for the daily/weekly/cron occurrence
   while(!(Test-Path -LiteralPath $run.result) -and (Get-Date) -lt $deadline -and !$p.HasExited){Start-Sleep -Milliseconds 250;$p.Refresh();$diagnostic=Get-Content -LiteralPath (Join-Path $run.home "phase-$phase.stderr.log") -Raw -ErrorAction SilentlyContinue;if($diagnostic -match 'dsh: warning: \d+ entr'){throw 'Isolated Host contains inactive entries; inspect private logs'}}
   if(!(Test-Path -LiteralPath $run.result)){throw 'Lifecycle Host failed to report; inspect isolated logs'}
   $r=Get-Content -LiteralPath $run.result -Raw|ConvertFrom-Json;$r|ConvertTo-Json -Depth 10
