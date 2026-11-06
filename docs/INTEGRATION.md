@@ -75,3 +75,5 @@ node <QQTK>/maintenance/pin-check.mjs --phase post-switch --runtime <TARGET_HOST
 allowed（退出 0）只表示监控状态完全未变；needs_replay（2）须复制当前数据到隔离旧 Host 验证；refused（3）不得只换宿主。任何可能丢失新增数据的整体快照恢复均须维护者单独明确决定，默认向前修复。
 
 旧 TaskMemoryStore 的 task-memory/*.json 为自定义 vault（taskId/title/updatedAt/entries），不按原生 per-record 解码；门禁完整记录原始哈希，仅完全未变允许，新增、修改、删除或损坏均拒绝，不自动迁移或排除这些文件。
+
+SQLite WAL 允许保留前一轮 checkpoint 的物理尾部。门禁按官方 WAL-index 格式校验双份 SHM 头、校验和、salt、页尺寸、mxFrame 和全部已提交帧；只有已证明属于旧 salt 的剩余空间可作为复用容量。整个 WAL 仍计算哈希，缺失/损坏/不一致或未提交尾部均拒绝，不执行 checkpoint、截断或修复。参考：https://sqlite.org/walformat.html 与 https://sqlite.org/fileformat2.html#walreset 。

@@ -15,7 +15,7 @@
 //                                      the listed changes and needs an explicit maintainer decision
 // A Schedule file hash alone is not the gate: other units, Session formats,
 // SQLite content (including WAL frames), Outbox and the Long Task ledger count.
-import fs from 'node:fs';import path from 'node:path';import {createHash} from 'node:crypto';import {DatabaseSync} from 'node:sqlite';import {zstdDecompressSync} from 'node:zlib';import {pathToFileURL} from 'node:url';
+import fs from 'node:fs';import path from 'node:path';import {createHash} from 'node:crypto';import {DatabaseSync} from 'node:sqlite';import {endianness} from 'node:os';import {zstdDecompressSync} from 'node:zlib';import {pathToFileURL} from 'node:url';
 const sha=b=>createHash('sha256').update(b).digest('hex');
 const walk=(dir,base=dir,out=[])=>{if(!fs.existsSync(dir))throw Error('Missing monitored directory: '+dir);for(const e of fs.readdirSync(dir,{withFileTypes:true})){const p=path.join(dir,e.name);if(e.isSymbolicLink())throw Error('Monitored symlink: '+p);if(e.isDirectory())walk(p,base,out);else out.push(path.relative(base,p).split(path.sep).join('/'));}return out;};
 const json=file=>JSON.parse(fs.readFileSync(file,'utf8').replace(/^\uFEFF/,''));
@@ -48,20 +48,27 @@ function validateSession(raw,format){
 }
 // Session logs: the file name carries the format version (session.v4.jsonl.zstd).
 function sessions(home){const out={};for(const rel of walk(path.join(home,'sessions'))){const m=/\.v(\d+)\./.exec(path.basename(rel));const raw=fs.readFileSync(path.join(home,'sessions',rel));if(!m||!rel.endsWith('.jsonl.zstd'))throw Error('Unknown Session format '+rel);validateSession(raw,Number(m[1]));out[rel]={format:Number(m[1]),sha256:sha(raw)};}return out;}
-function validateWal(raw){
+function validateWal(raw,index){
  if(raw.length<32)throw Error('Truncated WAL');const magic=raw.readUInt32BE(0);if(![0x377f0682,0x377f0683].includes(magic)||raw.readUInt32BE(4)!==3007000)throw Error('Invalid WAL header');
  const size=raw.readUInt32BE(8);if(size<512||size>65536||(size&(size-1))||((raw.length-32)%(24+size)))throw Error('Invalid WAL size');
  let a=0,b=0;const word=(buf,i)=>magic===0x377f0682?buf.readUInt32LE(i):buf.readUInt32BE(i),sum=buf=>{for(let i=0;i<buf.length;i+=8){a=(a+word(buf,i)+b)>>>0;b=(b+word(buf,i+4)+a)>>>0;}};
  sum(raw.subarray(0,24));if(a!==raw.readUInt32BE(24)||b!==raw.readUInt32BE(28))throw Error('WAL header checksum');
- for(let i=32;i<raw.length;i+=24+size){if(!raw.readUInt32BE(i)||!raw.subarray(i+8,i+16).equals(raw.subarray(16,24)))throw Error('WAL frame salt/page');sum(raw.subarray(i,i+8));sum(raw.subarray(i+24,i+24+size));if(a!==raw.readUInt32BE(i+16)||b!==raw.readUInt32BE(i+20))throw Error('WAL frame checksum');}
- if(raw.length>32&&!raw.readUInt32BE(raw.length-size-20))throw Error('Uncommitted WAL tail');
+ // https://sqlite.org/walformat.html: mxFrame is the last committed frame.
+ const little=endianness()==='LE',u32=i=>little?index.readUInt32LE(i):index.readUInt32BE(i),u16=i=>little?index.readUInt16LE(i):index.readUInt16BE(i);
+ if(index.length<32768||index.length%32768||!index.subarray(0,48).equals(index.subarray(48,96))||u32(0)!==3007000||u32(4)!==0||index[12]!==1||index[13]!==magic%2||(u16(14)===1?65536:u16(14))!==size||!index.subarray(32,40).equals(raw.subarray(16,24)))throw Error('Invalid/unstable WAL index');
+ let x=0,y=0;for(let i=0;i<40;i+=8){x=(x+u32(i)+y)>>>0;y=(y+u32(i+4)+x)>>>0;}if(x!==u32(40)||y!==u32(44))throw Error('WAL index checksum');
+ const frames=u32(16),end=32+frames*(24+size);if(end>raw.length||u32(96)>frames||u32(128)>frames)throw Error('WAL index frame bounds');
+ // Only a different-salt previous generation may occupy the unused capacity.
+ if(end<raw.length&&raw.subarray(end+8,end+16).equals(raw.subarray(16,24)))throw Error('WAL has an uncertain/uncommitted tail');
+ for(let i=32;i<end;i+=24+size){if(!raw.readUInt32BE(i)||!raw.subarray(i+8,i+16).equals(raw.subarray(16,24)))throw Error('WAL frame salt/page');sum(raw.subarray(i,i+8));sum(raw.subarray(i+24,i+24+size));if(a!==raw.readUInt32BE(i+16)||b!==raw.readUInt32BE(i+20))throw Error('WAL frame checksum');}
+ if(frames===0&&raw.length>32||frames>0&&(!raw.readUInt32BE(end-size-20)||raw.readUInt32BE(end-size-20)!==u32(20)||a!==u32(24)||b!==u32(28)))throw Error('Uncommitted/mismatched WAL boundary');
 }
 // Logical SQLite content through a read-only connection, so committed WAL frames count.
 function sqlite(file){
  const wal=file+'-wal',shm=file+'-shm',walBytes=fs.existsSync(wal)?fs.statSync(wal).size:0;
  if(!fs.existsSync(file))return {missing:true};
  if(walBytes>0&&!fs.existsSync(shm))return {walBytes,unreadable:'WAL without shared-memory file'};
- if(walBytes)validateWal(fs.readFileSync(wal));
+ if(walBytes)validateWal(fs.readFileSync(wal),fs.readFileSync(shm));
  const db=new DatabaseSync(file,{readOnly:true});
  try{
   if(db.prepare('PRAGMA quick_check').get().quick_check!=='ok')throw Error('SQLite quick_check failed');
