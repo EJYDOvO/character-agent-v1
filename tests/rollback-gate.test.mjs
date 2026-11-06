@@ -1,9 +1,10 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import fs from 'node:fs';import path from 'node:path';import os from 'node:os';import {DatabaseSync} from 'node:sqlite';
+import {zstdCompressSync} from 'node:zlib';
 import {observe,decide} from '../scripts/rollback-gate.mjs';
 function fixture(t){
  const home=fs.mkdtempSync(path.join(os.tmpdir(),'rollback-gate-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
- const write=(rel,v)=>{const p=path.join(home,rel);fs.mkdirSync(path.dirname(p),{recursive:true});fs.writeFileSync(p,typeof v==='string'?v:JSON.stringify(v));};
+ const write=(rel,v)=>{const p=path.join(home,rel);fs.mkdirSync(path.dirname(p),{recursive:true});fs.writeFileSync(p,rel.endsWith('.zstd')?zstdCompressSync(JSON.stringify({type:'session',version:Number(/\.v(\d+)\./.exec(rel)[1])})+'\n'):typeof v==='string'?v:JSON.stringify(v));};
  write('storages/schedule.json',{unit:{name:'schedule',version:1},global:null,tables:{tasks:{a:{record:{id:'a'},sessionId:'s1'}}}});
  write('storages/workspace.json',{unit:{name:'workspace',version:2},global:{},tables:{}});
  write('storages/character_long_tasks/runs/r1.json',{version:1,record:{id:'r1',status:'completed'}});
@@ -13,7 +14,7 @@ function fixture(t){
  const input={home,sqlites:[state],files:[]};return {home,write,state,db,input,before:observe(input)};
 }
 test('identical data allows swapping only the Host back',t=>{
- const f=fixture(t);f.db.close();const r=decide(f.before,observe(f.input));assert.equal(r.decision,'host_rollback_allowed');assert.deepEqual(r.blockers,[]);assert.equal(r.readOnly,true);
+ const f=fixture(t);f.db.close();f.before=observe(f.input);const r=decide(f.before,observe(f.input));assert.equal(r.decision,'host_rollback_allowed');assert.deepEqual(r.blockers,[]);assert.equal(r.readOnly,true);
 });
 test('Schedule v2 written by the new Host refuses Host rollback even when other data is unchanged',t=>{
  const f=fixture(t);f.db.close();f.write('storages/schedule.json',{unit:{name:'schedule',version:2},global:null,tables:{tasks:{}}});
@@ -39,3 +40,27 @@ test('missing or unreadable SQLite state refuses instead of guessing',t=>{
  const f=fixture(t);f.db.close();fs.rmSync(f.state);
  const r=decide(f.before,observe(f.input));assert.equal(r.decision,'host_rollback_refused');assert(r.blockers.some(b=>/missing/.test(b)));
 });
+
+for(const [name,mutate,expected] of [
+ ['Session deletion',f=>fs.rmSync(path.join(f.home,'sessions/w/s1/session.v4.jsonl.zstd')),'needs_replay'],
+ ['record deletion',f=>fs.rmSync(path.join(f.home,'storages/character_long_tasks/runs/r1.json')),'needs_replay'],
+ ['domain deletion',f=>fs.rmSync(path.join(f.home,'storages/character_long_tasks'),{recursive:true}),'needs_replay'],
+ ['Schedule deletion',f=>fs.rmSync(path.join(f.home,'storages/schedule.json')),'refused'],
+ ['corrupt unit',f=>f.write('storages/schedule.json','{bad'),'refused'],
+ ['corrupt record',f=>f.write('storages/character_long_tasks/runs/r1.json','{bad'),'refused'],
+ ['corrupt Session',f=>fs.writeFileSync(path.join(f.home,'sessions/w/s1/session.v4.jsonl.zstd'),'bad'),'refused'],
+ ['corrupt SQLite',f=>fs.writeFileSync(f.state,'bad'),'refused'],
+ ['missing Session root',f=>fs.rmSync(path.join(f.home,'sessions'),{recursive:true}),'refused'],
+ ['missing storage root',f=>fs.rmSync(path.join(f.home,'storages'),{recursive:true}),'refused'],
+ ['omitted SQLite argument',f=>f.input.sqlites=[],'refused'],
+ ['wrong Home',f=>f.input.home=path.dirname(f.home),'refused'],
+])test(name,t=>{const f=fixture(t);f.db.close();f.before=observe(f.input);mutate(f);assert.equal(decide(f.before,observe(f.input)).decision,'host_rollback_'+expected);});
+for(const action of ['omit','delete','corrupt','modify','add'])test('state files: '+action,t=>{const f=fixture(t);f.db.close();f.write('prefs.json',{a:1});f.input.files=[path.join(f.home,'prefs.json')];f.before=observe(f.input);
+ if(action==='omit')f.input.files=[];if(action==='delete')fs.rmSync(f.input.files[0]);if(action==='corrupt')f.write('prefs.json','bad');if(action==='modify')f.write('prefs.json',{a:2});if(action==='add'){f.write('extra.json',{});f.input.files.push(path.join(f.home,'extra.json'));}
+ assert.equal(decide(f.before,observe(f.input)).decision,'host_rollback_'+(action==='modify'?'needs_replay':'refused'));
+});
+test('WAL without SHM refuses',t=>{const f=fixture(t);f.db.close();f.before=observe(f.input);fs.writeFileSync(f.state+'-wal','invalid');assert.equal(decide(f.before,observe(f.input)).decision,'host_rollback_refused');});
+test('invalid snapshot fails closed',()=>{assert.equal(decide({},{}).decision,'host_rollback_refused');});
+
+test('damaged WAL frame/checksum refuses even with SHM present',t=>{const f=fixture(t);try{const wal=fs.readFileSync(f.state+'-wal');wal[wal.length-1]^=1;fs.writeFileSync(f.state+'-wal',wal);assert.equal(decide(f.before,observe(f.input)).decision,'host_rollback_refused');}finally{f.db.close();}});
+test('corrupt historical Session frame tail refuses',t=>{const f=fixture(t);f.db.close();fs.appendFileSync(path.join(f.home,'sessions/w/s1/session.v4.jsonl.zstd'),'tail');assert.equal(decide(f.before,observe(f.input)).decision,'host_rollback_refused');});
