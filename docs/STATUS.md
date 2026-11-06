@@ -2,13 +2,15 @@
 
 | 范围 | 状态 |
 |---|---|
-| 当前源码 | Character 0.1.0-test.30（含可选角色模式，Long Tasks 0.1.0-test.2），Interaction 0.1.0-test.9 |
+| 当前源码 | Character 0.1.0-test.32（含可选角色模式，Long Tasks 0.1.0-test.2），Interaction 0.1.0-test.9 |
 | 配套 QQTK | I/O test.9、Manager test.5、Remote Ops 1.1.1-test.3、QQ0.5.2 / SDK1.0.5 |
 | 官方宿主目标 | DSH0.2.2-rc.1 / Node24 / Windows（仅隔离验证；源码不再支持 0.2.1 Schedule API） |
 | 本次清理 | 专用分支；不部署、不重启、不访问生产数据 |
-| 原实例 | 之前记录为 test.28；本轮没有实时核验，不把源码 HEAD 当部署 SHA |
+| 原实例 | 本轮不访问生产配置、数据或运行状态，不把源码 HEAD 当部署 SHA |
 
 源码已实现：四核心插件、Creator 构建派生、通用 Memory L1–L3/FTS5/CAS/遗忘屏障、可信 Identity、原生独立 Worker、可选 Interaction、原生内嵌 Inspector 与 Long Tasks。QQTK 独立维护唯一 I/O/Manager/QQ Gateway，通知为 at-most-once handoff。
+
+test.32：普通工具在派发时复核当前 Character 身份；配套 QQTK Identity & Access test.3 保留撤销后的 Session 主体归属并在派发时检查租约。增加注入对抗与可重复中英文检索评测，只修正排序归一化和 FTS 候选 SQL 物化，不变更 Schema、ACL 或遗忘规则。范围、收益与剩余限制见 [安全与召回回归](HARDENING-RECALL.md)。下文各版本验收数字保留为历史记录，不代表本轮生产部署。
 
 清理保留单元、安全、权限、通知、生命周期、重启和补丁一致性测试。原生隔离测试使用合成账号/模型和新 Profile；不能据此宣称手机送达、真实 QQ 审批、真实模型 Worker 质量或 Desktop 视觉验收通过。各次临时输出只留仓库外本地私有目录。
 
