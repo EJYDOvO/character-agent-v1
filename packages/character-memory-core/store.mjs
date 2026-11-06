@@ -3,9 +3,11 @@ import { createHash, randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { tokenizeText } from './tokenize.mjs';
-const terms=text=>[...new Set(tokenizeText(text.normalize('NFKC').toLowerCase()))];
+const normalize=text=>text.normalize('NFKC').toLowerCase();
+const terms=text=>[...new Set(tokenizeText(normalize(text)))];
+export function recallTerms(query){if(typeof query!=='string'||query.length>200)throw Error('Invalid query');return terms(query).slice(0,64);}
 export const similarity=(a,b)=>{const x=new Set(terms(a)),y=new Set(terms(b));return [...x].filter(t=>y.has(t)).length/Math.max(1,new Set([...x,...y]).size);};
-export const relevance=(row,query)=>(query&&row.statement.includes(query)?2:0)+similarity(query,row.statement)+(row.confidence??0.5)*0.1-(row.rank??0);
+export const relevance=(row,query)=>(query&&normalize(row.statement).includes(normalize(query))?2:0)+similarity(query,row.statement)+(row.confidence??0.5)*0.1-(row.rank??0);
 const hash = text => createHash('sha256').update(text.normalize('NFKC').trim()).digest('hex');
 export function validateStatement(text, maxLength=2000) {
   if (typeof text !== 'string' || !text.trim() || text.length > maxLength) throw Error('Invalid memory size');
@@ -100,8 +102,7 @@ export class MemoryStore {
       this.db.prepare("UPDATE memories SET status='forgotten',statement='',revision=revision+1,updated_at=? WHERE id=?").run(new Date().toISOString(),id);this.snapshot(id);return {id,status:'forgotten',revision:revision+1};});
   }
   *candidates(ctx,query='') {
-    const scope=this.scope(ctx,'read');if(typeof query!=='string'||query.length>200)throw Error('Invalid query');
-    const tokens=terms(query).slice(0,64),now=new Date().toISOString();
+    const scope=this.scope(ctx,'read'),tokens=recallTerms(query),now=new Date().toISOString();
     // Consumers must filter evidence/policy before imposing candidate or output limits.
     const rows=tokens.length?this.db.prepare("SELECT m.*,bm25(memory_fts) AS rank FROM memory_fts JOIN memories m ON m.id=memory_fts.id WHERE memory_fts MATCH ? AND principal=? AND character=? AND project=? AND status IN ('active','uncertain') AND (expires_at IS NULL OR expires_at>?) ORDER BY rank").iterate(tokens.map(t=>'"'+t.replaceAll('"','""')+'"').join(' OR '),...scope,now):this.db.prepare("SELECT * FROM memories WHERE principal=? AND character=? AND project=? AND status IN ('active','uncertain') AND (expires_at IS NULL OR expires_at>?) ORDER BY updated_at DESC").iterate(...scope,now);
     yield* rows;

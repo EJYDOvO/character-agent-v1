@@ -1,4 +1,4 @@
-import {MemoryStore,validateStatement,similarity,relevance} from './store.mjs';
+import {MemoryStore,validateStatement,similarity,relevance,recallTerms} from './store.mjs';
 import {createHash} from 'node:crypto';
 import {memoryPolicy,purposes,policyPrompt,assistantCompatible} from './personality.mjs';
 import {estimateTokens as defaultEstimator} from './token-budget.mjs';
@@ -81,11 +81,13 @@ export class LayeredMemory extends MemoryStore {
   }
   #rows(ctx,query=''){
     const q=this.#selection(ctx);
-    // Preserve the existing FTS candidate semantics; validity is evaluated in SQL.
-    // Each lane's native FTS search retains ranks without a per-row validity query.
-    const ranked=query?new Map(this.#lanes(ctx).flatMap(purpose=>[...super.candidates(this.#cap(ctx,purpose),query)].map(r=>[r.id,r.rank]))):null;
-    const rows=this.db.prepare('SELECT m.*, (SELECT count(*) FROM memory_evidence l WHERE l.memory_id=m.id) _support FROM memories m WHERE '+q.where+" AND m.status IN ('active','uncertain') AND (m.expires_at IS NULL OR m.expires_at>?) AND NOT "+q.retired+' AND NOT '+q.blocked).all(...q.args,now(),...q.root);
-    return rows.filter(r=>!ranked||ranked.has(r.id)).map(r=>({...r,purpose:q.lanes.find(l=>l.scope[1]===r.character).purpose,...(ranked?{rank:ranked.get(r.id)}:{})}));
+    // Apply the existing FTS candidate set before crossing the SQLite/JS
+    // boundary. Scope, evidence, policy and root forget barriers stay in the
+    // same SQL predicate; no pre-filter LIMIT may hide a valid older result.
+    const tokens=recallTerms(query),fts=tokens.length>0;
+    const match=tokens.map(t=>'"'+t.replaceAll('"','""')+'"').join(' OR ');
+    const rows=this.db.prepare('SELECT m.*, (SELECT count(*) FROM memory_evidence l WHERE l.memory_id=m.id) _support'+(fts?',bm25(memory_fts) rank':'')+' FROM memories m'+(fts?' JOIN memory_fts ON memory_fts.id=m.id':'')+' WHERE '+(fts?'memory_fts MATCH ? AND ':'')+q.where+" AND m.status IN ('active','uncertain') AND (m.expires_at IS NULL OR m.expires_at>?) AND NOT "+q.retired+' AND NOT '+q.blocked).all(...(fts?[match]:[]),...q.args,now(),...q.root);
+    return rows.map(r=>({...r,purpose:q.lanes.find(l=>l.scope[1]===r.character).purpose}));
   }
   #resolutionScope(ctx){const p=this.policy(ctx);return hash([p.key,p.agentId,p.mode]);}
   #conflicts(ctx,rows,visible){
