@@ -73,3 +73,5 @@ node <QQTK>/maintenance/pin-check.mjs --phase post-switch --runtime <TARGET_HOST
 回滚门禁使用格式版本 2 清单。停机维护锁下 record，check 使用完全相同的绝对 Home、全部 --sqlite 与 --file 参数；不得省略或替换监控路径。新增、修改、删除 Session/记录域/记录/状态文件均计入，Schedule 版本及 SQLite Schema 前进、损坏、缺失或无法确定状态均拒绝。指定 --file 是 JSON 状态文件。旧清单须重新从一致快照生成，不能编辑为通过。SQLite 主文件和 WAL 按一致快照保管；WAL 内容变化也需回放验证。
 
 allowed（退出 0）只表示监控状态完全未变；needs_replay（2）须复制当前数据到隔离旧 Host 验证；refused（3）不得只换宿主。任何可能丢失新增数据的整体快照恢复均须维护者单独明确决定，默认向前修复。
+
+旧 TaskMemoryStore 的 task-memory/*.json 为自定义 vault（taskId/title/updatedAt/entries），不按原生 per-record 解码；门禁完整记录原始哈希，仅完全未变允许，新增、修改、删除或损坏均拒绝，不自动迁移或排除这些文件。
