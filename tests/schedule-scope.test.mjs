@@ -62,7 +62,8 @@ test('tools/execute boundary re-checks the caller, pins the CAS, restores argume
  provider={isCurrentAgent:()=>current,verifyScheduleCall:async()=>{throw Error('boom');}};assert.equal((await around(exec,()=>assert.fail())).error.message,UNAVAILABLE);
  provider={isCurrentAgent:()=>current};assert.equal((await around(exec,()=>assert.fail())).error.message,UNAVAILABLE,'Missing verifier fails closed');
  current=false;provider={isCurrentAgent:()=>current,verifyScheduleCall:async()=>({})};assert.match((await around(exec,()=>assert.fail())).error.message,/Historical or unbound/,'Rotated out between admission and execution');
- assert.equal(await around({agent,name:'other_tool',arguments:{}},async()=>'untouched'),'untouched');
+ assert.equal((await around({agent,name:'other_tool',arguments:{}},()=>assert.fail())).isError,true,'Retired roots cannot execute ordinary tools either');
+ current=true;assert.equal(await around({agent,name:'other_tool',arguments:{}},async()=>'untouched'),'untouched');
 });
 test('Character reminders ignore DSH 0.2.2 change notices; reminder framing is unchanged',()=>{
  const notice={source:{kind:'schedule'},content:[{type:'text',text:'[SCHEDULE CHANGE]\nA scheduled task involving this session was changed outside this session. This notice is not a delivery of the task and needs no action.\nchange: deleted\nschedule_id_json: "s"\nschedule_title_json: "t"'}]};

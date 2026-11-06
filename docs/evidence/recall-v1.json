@@ -1,0 +1,797 @@
+{
+  "synthetic": true,
+  "productionRead": false,
+  "targetHost": "0.2.2-rc.1",
+  "node": "v24.13.0",
+  "platform": "win32",
+  "baselineCharacter": "e816daf899118e4b8ffab94fe409867c3ab6431e",
+  "baselineQQTK": "fad50e262b0ea78802c832ac4c39b71e5d3585ab",
+  "small": {
+    "before": {
+      "synthetic": true,
+      "productionRead": false,
+      "corpusVersion": 1,
+      "records": 19,
+      "noise": 0,
+      "queryCount": 14,
+      "rounds": 10,
+      "metrics": {
+        "recallAt1": 0.6428571428571429,
+        "recallAt5": 0.8571428571428571,
+        "mrr": 0.75,
+        "ndcgAt5": 0.8135801959265372,
+        "p50Ms": 0.4836999999999989,
+        "p95Ms": 1.1584000000000003,
+        "cpuMs": 62,
+        "materializedRowsPerQuery": 18.785714285714285,
+        "heapDeltaBytes": 986008,
+        "rssDeltaBytes": 4370432,
+        "databaseBytes": 4096,
+        "walBytes": 1985872
+      },
+      "safety": {
+        "expiredAbsent": true,
+        "forgottenAbsent": true,
+        "crossSessionTrace": true,
+        "foreignScopeEmpty": true,
+        "conflictsExcludedFromL3": true
+      },
+      "results": [
+        {
+          "id": "english-case",
+          "language": "en",
+          "top5": [
+            "release-decoy",
+            "release"
+          ],
+          "recall1": 0,
+          "recall": 1,
+          "mrr": 0.5,
+          "ndcg": 0.7967075809905066
+        },
+        {
+          "id": "english-control",
+          "language": "en",
+          "top5": [
+            "release",
+            "release-decoy"
+          ],
+          "recall1": 1,
+          "recall": 1,
+          "mrr": 1,
+          "ndcg": 1
+        },
+        {
+          "id": "mixed-case",
+          "language": "mixed",
+          "top5": [
+            "blueprint-decoy",
+            "blueprint"
+          ],
+          "recall1": 0,
+          "recall": 1,
+          "mrr": 0.5,
+          "ndcg": 0.7967075809905066
+        },
+        {
+          "id": "compat-width",
+          "language": "mixed",
+          "top5": [
+            "blueprint-decoy",
+            "blueprint"
+          ],
+          "recall1": 0,
+          "recall": 1,
+          "mrr": 0.5,
+          "ndcg": 0.7967075809905066
+        },
+        {
+          "id": "chinese",
+          "language": "zh",
+          "top5": [
+            "deploy",
+            "deploy-decoy"
+          ],
+          "recall1": 1,
+          "recall": 1,
+          "mrr": 1,
+          "ndcg": 1
+        },
+        {
+          "id": "preference",
+          "language": "zh",
+          "top5": [
+            "language",
+            "deploy-decoy"
+          ],
+          "recall1": 1,
+          "recall": 1,
+          "mrr": 1,
+          "ndcg": 1
+        },
+        {
+          "id": "english-preference",
+          "language": "en",
+          "top5": [
+            "editor"
+          ],
+          "recall1": 1,
+          "recall": 1,
+          "mrr": 1,
+          "ndcg": 1
+        },
+        {
+          "id": "long-record",
+          "language": "zh",
+          "top5": [
+            "long",
+            "language",
+            "blueprint"
+          ],
+          "recall1": 1,
+          "recall": 1,
+          "mrr": 1,
+          "ndcg": 1
+        },
+        {
+          "id": "cross-session",
+          "language": "zh",
+          "top5": [
+            "previous-session",
+            "language",
+            "synonym-zh"
+          ],
+          "recall1": 1,
+          "recall": 1,
+          "mrr": 1,
+          "ndcg": 1
+        },
+        {
+          "id": "legitimate-quote",
+          "language": "en",
+          "top5": [
+            "quote"
+          ],
+          "recall1": 1,
+          "recall": 1,
+          "mrr": 1,
+          "ndcg": 1
+        },
+        {
+          "id": "synonym-with-anchor-zh",
+          "language": "zh",
+          "top5": [
+            "alias-zh",
+            "language",
+            "blueprint",
+            "long"
+          ],
+          "recall1": 1,
+          "recall": 1,
+          "mrr": 1,
+          "ndcg": 1
+        },
+        {
+          "id": "synonym-with-anchor-en",
+          "language": "en",
+          "top5": [
+            "alias-en"
+          ],
+          "recall1": 1,
+          "recall": 1,
+          "mrr": 1,
+          "ndcg": 1
+        },
+        {
+          "id": "disjoint-synonym-zh",
+          "language": "zh",
+          "top5": [],
+          "recall1": 0,
+          "recall": 0,
+          "mrr": 0,
+          "ndcg": 0
+        },
+        {
+          "id": "disjoint-synonym-en",
+          "language": "en",
+          "top5": [],
+          "recall1": 0,
+          "recall": 0,
+          "mrr": 0,
+          "ndcg": 0
+        }
+      ]
+    },
+    "after": {
+      "synthetic": true,
+      "productionRead": false,
+      "corpusVersion": 1,
+      "records": 19,
+      "noise": 0,
+      "queryCount": 14,
+      "rounds": 10,
+      "metrics": {
+        "recallAt1": 0.7142857142857143,
+        "recallAt5": 0.8571428571428571,
+        "mrr": 0.7857142857142857,
+        "ndcgAt5": 0.8281010829986438,
+        "p50Ms": 0.39829999999997767,
+        "p95Ms": 0.8966000000000065,
+        "cpuMs": 62,
+        "materializedRowsPerQuery": 1.7857142857142858,
+        "heapDeltaBytes": 2128624,
+        "rssDeltaBytes": 3735552,
+        "databaseBytes": 4096,
+        "walBytes": 1985872
+      },
+      "safety": {
+        "expiredAbsent": true,
+        "forgottenAbsent": true,
+        "crossSessionTrace": true,
+        "foreignScopeEmpty": true,
+        "conflictsExcludedFromL3": true
+      },
+      "results": [
+        {
+          "id": "english-case",
+          "language": "en",
+          "top5": [
+            "release",
+            "release-decoy"
+          ],
+          "recall1": 1,
+          "recall": 1,
+          "mrr": 1,
+          "ndcg": 1
+        },
+        {
+          "id": "english-control",
+          "language": "en",
+          "top5": [
+            "release",
+            "release-decoy"
+          ],
+          "recall1": 1,
+          "recall": 1,
+          "mrr": 1,
+          "ndcg": 1
+        },
+        {
+          "id": "mixed-case",
+          "language": "mixed",
+          "top5": [
+            "blueprint-decoy",
+            "blueprint"
+          ],
+          "recall1": 0,
+          "recall": 1,
+          "mrr": 0.5,
+          "ndcg": 0.7967075809905066
+        },
+        {
+          "id": "compat-width",
+          "language": "mixed",
+          "top5": [
+            "blueprint-decoy",
+            "blueprint"
+          ],
+          "recall1": 0,
+          "recall": 1,
+          "mrr": 0.5,
+          "ndcg": 0.7967075809905066
+        },
+        {
+          "id": "chinese",
+          "language": "zh",
+          "top5": [
+            "deploy",
+            "deploy-decoy"
+          ],
+          "recall1": 1,
+          "recall": 1,
+          "mrr": 1,
+          "ndcg": 1
+        },
+        {
+          "id": "preference",
+          "language": "zh",
+          "top5": [
+            "language",
+            "deploy-decoy"
+          ],
+          "recall1": 1,
+          "recall": 1,
+          "mrr": 1,
+          "ndcg": 1
+        },
+        {
+          "id": "english-preference",
+          "language": "en",
+          "top5": [
+            "editor"
+          ],
+          "recall1": 1,
+          "recall": 1,
+          "mrr": 1,
+          "ndcg": 1
+        },
+        {
+          "id": "long-record",
+          "language": "zh",
+          "top5": [
+            "long",
+            "language",
+            "blueprint"
+          ],
+          "recall1": 1,
+          "recall": 1,
+          "mrr": 1,
+          "ndcg": 1
+        },
+        {
+          "id": "cross-session",
+          "language": "zh",
+          "top5": [
+            "previous-session",
+            "language",
+            "synonym-zh"
+          ],
+          "recall1": 1,
+          "recall": 1,
+          "mrr": 1,
+          "ndcg": 1
+        },
+        {
+          "id": "legitimate-quote",
+          "language": "en",
+          "top5": [
+            "quote"
+          ],
+          "recall1": 1,
+          "recall": 1,
+          "mrr": 1,
+          "ndcg": 1
+        },
+        {
+          "id": "synonym-with-anchor-zh",
+          "language": "zh",
+          "top5": [
+            "alias-zh",
+            "language",
+            "blueprint",
+            "long"
+          ],
+          "recall1": 1,
+          "recall": 1,
+          "mrr": 1,
+          "ndcg": 1
+        },
+        {
+          "id": "synonym-with-anchor-en",
+          "language": "en",
+          "top5": [
+            "alias-en"
+          ],
+          "recall1": 1,
+          "recall": 1,
+          "mrr": 1,
+          "ndcg": 1
+        },
+        {
+          "id": "disjoint-synonym-zh",
+          "language": "zh",
+          "top5": [],
+          "recall1": 0,
+          "recall": 0,
+          "mrr": 0,
+          "ndcg": 0
+        },
+        {
+          "id": "disjoint-synonym-en",
+          "language": "en",
+          "top5": [],
+          "recall1": 0,
+          "recall": 0,
+          "mrr": 0,
+          "ndcg": 0
+        }
+      ]
+    }
+  },
+  "background2000": {
+    "before": {
+      "synthetic": true,
+      "productionRead": false,
+      "corpusVersion": 1,
+      "records": 19,
+      "noise": 2000,
+      "queryCount": 14,
+      "rounds": 10,
+      "metrics": {
+        "recallAt1": 0.5714285714285714,
+        "recallAt5": 0.8571428571428571,
+        "mrr": 0.6904761904761905,
+        "ndcgAt5": 0.7836052088472819,
+        "p50Ms": 5.890699999999924,
+        "p95Ms": 7.8129999999998745,
+        "cpuMs": 860,
+        "materializedRowsPerQuery": 2018.9285714285713,
+        "heapDeltaBytes": 46010008,
+        "rssDeltaBytes": 49123328,
+        "databaseBytes": 4096,
+        "walBytes": 3296032
+      },
+      "safety": {
+        "expiredAbsent": true,
+        "forgottenAbsent": true,
+        "crossSessionTrace": true,
+        "foreignScopeEmpty": true,
+        "conflictsExcludedFromL3": true
+      },
+      "results": [
+        {
+          "id": "english-case",
+          "language": "en",
+          "top5": [
+            "release-decoy",
+            "release"
+          ],
+          "recall1": 0,
+          "recall": 1,
+          "mrr": 0.5,
+          "ndcg": 0.7967075809905066
+        },
+        {
+          "id": "english-control",
+          "language": "en",
+          "top5": [
+            "release-decoy",
+            "release"
+          ],
+          "recall1": 0,
+          "recall": 1,
+          "mrr": 0.5,
+          "ndcg": 0.7967075809905066
+        },
+        {
+          "id": "mixed-case",
+          "language": "mixed",
+          "top5": [
+            "blueprint-decoy",
+            "noise-42",
+            "blueprint"
+          ],
+          "recall1": 0,
+          "recall": 1,
+          "mrr": 0.3333333333333333,
+          "ndcg": 0.6885288809404666
+        },
+        {
+          "id": "compat-width",
+          "language": "mixed",
+          "top5": [
+            "blueprint-decoy",
+            "noise-42",
+            "blueprint"
+          ],
+          "recall1": 0,
+          "recall": 1,
+          "mrr": 0.3333333333333333,
+          "ndcg": 0.6885288809404666
+        },
+        {
+          "id": "chinese",
+          "language": "zh",
+          "top5": [
+            "deploy",
+            "deploy-decoy"
+          ],
+          "recall1": 1,
+          "recall": 1,
+          "mrr": 1,
+          "ndcg": 1
+        },
+        {
+          "id": "preference",
+          "language": "zh",
+          "top5": [
+            "language",
+            "deploy-decoy"
+          ],
+          "recall1": 1,
+          "recall": 1,
+          "mrr": 1,
+          "ndcg": 1
+        },
+        {
+          "id": "english-preference",
+          "language": "en",
+          "top5": [
+            "editor"
+          ],
+          "recall1": 1,
+          "recall": 1,
+          "mrr": 1,
+          "ndcg": 1
+        },
+        {
+          "id": "long-record",
+          "language": "zh",
+          "top5": [
+            "long",
+            "language",
+            "blueprint"
+          ],
+          "recall1": 1,
+          "recall": 1,
+          "mrr": 1,
+          "ndcg": 1
+        },
+        {
+          "id": "cross-session",
+          "language": "zh",
+          "top5": [
+            "previous-session",
+            "language",
+            "synonym-zh"
+          ],
+          "recall1": 1,
+          "recall": 1,
+          "mrr": 1,
+          "ndcg": 1
+        },
+        {
+          "id": "legitimate-quote",
+          "language": "en",
+          "top5": [
+            "quote"
+          ],
+          "recall1": 1,
+          "recall": 1,
+          "mrr": 1,
+          "ndcg": 1
+        },
+        {
+          "id": "synonym-with-anchor-zh",
+          "language": "zh",
+          "top5": [
+            "alias-zh",
+            "language",
+            "blueprint",
+            "long"
+          ],
+          "recall1": 1,
+          "recall": 1,
+          "mrr": 1,
+          "ndcg": 1
+        },
+        {
+          "id": "synonym-with-anchor-en",
+          "language": "en",
+          "top5": [
+            "alias-en"
+          ],
+          "recall1": 1,
+          "recall": 1,
+          "mrr": 1,
+          "ndcg": 1
+        },
+        {
+          "id": "disjoint-synonym-zh",
+          "language": "zh",
+          "top5": [],
+          "recall1": 0,
+          "recall": 0,
+          "mrr": 0,
+          "ndcg": 0
+        },
+        {
+          "id": "disjoint-synonym-en",
+          "language": "en",
+          "top5": [],
+          "recall1": 0,
+          "recall": 0,
+          "mrr": 0,
+          "ndcg": 0
+        }
+      ]
+    },
+    "after": {
+      "synthetic": true,
+      "productionRead": false,
+      "corpusVersion": 1,
+      "records": 19,
+      "noise": 2000,
+      "queryCount": 14,
+      "rounds": 10,
+      "metrics": {
+        "recallAt1": 0.5714285714285714,
+        "recallAt5": 0.8571428571428571,
+        "mrr": 0.6904761904761905,
+        "ndcgAt5": 0.7836052088472819,
+        "p50Ms": 0.4349000000000842,
+        "p95Ms": 0.9238000000000284,
+        "cpuMs": 62,
+        "materializedRowsPerQuery": 1.9285714285714286,
+        "heapDeltaBytes": 3264864,
+        "rssDeltaBytes": 376832,
+        "databaseBytes": 4096,
+        "walBytes": 3296032
+      },
+      "safety": {
+        "expiredAbsent": true,
+        "forgottenAbsent": true,
+        "crossSessionTrace": true,
+        "foreignScopeEmpty": true,
+        "conflictsExcludedFromL3": true
+      },
+      "results": [
+        {
+          "id": "english-case",
+          "language": "en",
+          "top5": [
+            "release-decoy",
+            "release"
+          ],
+          "recall1": 0,
+          "recall": 1,
+          "mrr": 0.5,
+          "ndcg": 0.7967075809905066
+        },
+        {
+          "id": "english-control",
+          "language": "en",
+          "top5": [
+            "release-decoy",
+            "release"
+          ],
+          "recall1": 0,
+          "recall": 1,
+          "mrr": 0.5,
+          "ndcg": 0.7967075809905066
+        },
+        {
+          "id": "mixed-case",
+          "language": "mixed",
+          "top5": [
+            "blueprint-decoy",
+            "noise-42",
+            "blueprint"
+          ],
+          "recall1": 0,
+          "recall": 1,
+          "mrr": 0.3333333333333333,
+          "ndcg": 0.6885288809404666
+        },
+        {
+          "id": "compat-width",
+          "language": "mixed",
+          "top5": [
+            "blueprint-decoy",
+            "noise-42",
+            "blueprint"
+          ],
+          "recall1": 0,
+          "recall": 1,
+          "mrr": 0.3333333333333333,
+          "ndcg": 0.6885288809404666
+        },
+        {
+          "id": "chinese",
+          "language": "zh",
+          "top5": [
+            "deploy",
+            "deploy-decoy"
+          ],
+          "recall1": 1,
+          "recall": 1,
+          "mrr": 1,
+          "ndcg": 1
+        },
+        {
+          "id": "preference",
+          "language": "zh",
+          "top5": [
+            "language",
+            "deploy-decoy"
+          ],
+          "recall1": 1,
+          "recall": 1,
+          "mrr": 1,
+          "ndcg": 1
+        },
+        {
+          "id": "english-preference",
+          "language": "en",
+          "top5": [
+            "editor"
+          ],
+          "recall1": 1,
+          "recall": 1,
+          "mrr": 1,
+          "ndcg": 1
+        },
+        {
+          "id": "long-record",
+          "language": "zh",
+          "top5": [
+            "long",
+            "language",
+            "blueprint"
+          ],
+          "recall1": 1,
+          "recall": 1,
+          "mrr": 1,
+          "ndcg": 1
+        },
+        {
+          "id": "cross-session",
+          "language": "zh",
+          "top5": [
+            "previous-session",
+            "language",
+            "synonym-zh"
+          ],
+          "recall1": 1,
+          "recall": 1,
+          "mrr": 1,
+          "ndcg": 1
+        },
+        {
+          "id": "legitimate-quote",
+          "language": "en",
+          "top5": [
+            "quote"
+          ],
+          "recall1": 1,
+          "recall": 1,
+          "mrr": 1,
+          "ndcg": 1
+        },
+        {
+          "id": "synonym-with-anchor-zh",
+          "language": "zh",
+          "top5": [
+            "alias-zh",
+            "language",
+            "blueprint",
+            "long"
+          ],
+          "recall1": 1,
+          "recall": 1,
+          "mrr": 1,
+          "ndcg": 1
+        },
+        {
+          "id": "synonym-with-anchor-en",
+          "language": "en",
+          "top5": [
+            "alias-en"
+          ],
+          "recall1": 1,
+          "recall": 1,
+          "mrr": 1,
+          "ndcg": 1
+        },
+        {
+          "id": "disjoint-synonym-zh",
+          "language": "zh",
+          "top5": [],
+          "recall1": 0,
+          "recall": 0,
+          "mrr": 0,
+          "ndcg": 0
+        },
+        {
+          "id": "disjoint-synonym-en",
+          "language": "en",
+          "top5": [],
+          "recall1": 0,
+          "recall": 0,
+          "mrr": 0,
+          "ndcg": 0
+        }
+      ]
+    }
+  }
+}
