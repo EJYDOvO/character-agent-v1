@@ -13,6 +13,7 @@ test('missing cases, changed corpus and self-reviewed predictions cannot silentl
  const r=run('dev');r.results.pop();assert.throws(()=>score(r));
  const other=run('held');other.datasetDigest='changed';assert.throws(()=>score(other));
  const self=run('dev');self.results[0].review.independent=false;assert.throws(()=>score(self));
+ const positives=run('held');for(const r of positives.results)r.review.conflictDetected=true;assert(score(positives).conflictAccuracy<1&&score(positives).conflictPrecision<1,'always predicting conflict must not look perfect');
 });
 test('model inputs exclude semantic answer rubrics and use current runtime prompts',()=>{for(const split of ['dev','held']){const p=prepare(split);assert.equal(p.cases.length,8);assert(!JSON.stringify(p.cases).includes('rubric'));assert(p.prompts.extraction.includes('quote'));assert.equal(p.networkCalls,0);}});
 for(const split of ['dev','held'])test('actual Memory core provenance/CAS/forget replay on '+split+' (not a semantic-model test)',()=>{
