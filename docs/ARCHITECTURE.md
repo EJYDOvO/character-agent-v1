@@ -106,6 +106,8 @@ Core 提供 `dshMemory`，保留 `characterMemory` 服务别名。SQLite 原有 
 
 存量审计只读原生 `schedule.catalog()` 与 `sessionPersistence.stat()`；仅从固定作用域的 `routes/qq_bindings`、QQ prefs 当前/previousSessionId 出发，沿原生持久 `parentSession` 向祖先查证，并核对 Preset 与非委派根。Preset/cwd/消息正文相同都不能单独证明归属。启动/冷恢复可事务补齐已核实的**提醒绑定**，不修改主路由、Schedule 或 Memory；并发证据变化拒绝补写。归属不明的冷恢复在原生投递确认前拒绝，保留任务；已存活的未绑定根在原生 `followup` 接入前拒绝 Schedule，避免消费 occurrence，工具及模型也被拒绝。重载扫描已有 Character 根，实际 Agent 上的门禁动态查询新 Provider；不增加 inbox、调度器或权限存储。此处不替代有权加载任意 Host 插件的可信计算基。
 
+DSH 0.2.2 的 Schedule 目录项以 `target` 表示投递目标：只有 `{kind:'session'}` 的固定 Session 进入上述归属链审计；`new_once`/`new` 或缺少目标的行一律记为 `untrusted_target`，不从 Session ID、Preset 或记录推定 Owner。0.2.2 的 `schedule_*` 模型工具改为 Host 范围，Owner 根上限定为 Owner 自己的提醒：`schedule_create` 只能 `target:this_session`；`schedule_view`/`schedule_edit` 只能操作固定投递到调用 Session，或投递到持有持久提醒绑定（`qq_bindings`，与提醒送达使用同一证据）的早先 Owner Session 的任务，改投只能是 `this_session`。Long Task 根、角色/其他主体与未证明归属的 Session 一律拒绝。准入守卫（同步）只检查参数；归属在原生工具体运行前的 `tools/execute` 环节，用新鲜的原生 `view()` 判定，修改再以该修订号钉住原生 `expectedUpdatedAt` CAS，因此不依赖缓存，也不会因并发改投而写到别人的任务上。视图失败、服务缺失或调用方已被轮换下线时拒绝。`schedule_list` 仍是同一 Owner 的 Host 范围只读列表。0.2.2 新增的 `[SCHEDULE CHANGE]` 管理通知不是到期提醒，不进入 Outbox。
+
 可选角色模式（I1/I2）：QQTK Identity & Access 是 Agent I/O 与 Conversation Manager 之间的第二道闸门，决定 Principal、角色与可撤销授权；Character Identity 只对 Owner 绑定身份、Memory、提醒与 Outbox，对其他角色仅放行其角色 Preset Session。细节见 [Identity & Access](IDENTITY-ACCESS.md)。
 
 ## 生命周期与单例

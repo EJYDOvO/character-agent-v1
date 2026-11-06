@@ -1,6 +1,6 @@
 # Worker V2：原生 Preset 权限
 
-Character 是唯一面向用户的 Root，保留完整 Creator 工具、Skills、原生委派和模型偏好。Worker 使用 DSH 0.2.1-rc.2 / rc.3 原生 `subagent` / `spawn`、独立 Preset 和独立 Session；默认目标 `worker-general`，可信 `allowedAgentPresets` 白名单，`maxDepth:1`。Fork/workflow 是 Creator 的其他通道，不具有相同隔离语义。
+Character 是唯一面向用户的 Root，保留完整 Creator 工具、Skills、原生委派和模型偏好。Worker 使用 DSH 原生 `subagent` / `spawn`（当前目标 0.2.2-rc.1；0.2.2 在 spawn 时而非父 Agent 挂载时解析目标 Preset，缺失目标仍被拒绝且不创建子 Agent）、独立 Preset 和独立 Session；默认目标 `worker-general`，可信 `allowedAgentPresets` 白名单，`maxDepth:1`。Fork/workflow 是 Creator 的其他通道，不具有相同隔离语义。
 
 ## 工具范围（test.23）
 
@@ -62,7 +62,7 @@ Root 策略（test.23）：内置 Worker 没有文件工具，Root 先读取所�
 
 ### rc.3 销毁与热重载适配
 
-Character 的 Spawn 声明使用现有 Tools 包内的 `subagent.mjs` 转调原生 `dsh-tool-subagent`，保留原生 Config、注入、模型选择、Provider、白名单、深度与工具授权。仅在原生组件重扫 Agent 注册表时，跳过 `fiber.assertActive()` 明确抛出 `INACTIVE_EFFECT` 的已关闭 Context；不修改注册表，不吞掉其他初始化错误，不新增运行时或权限服务。官方 Creator 和 Fork 声明不改。下一次安装须从本次源码重建匹配的 Core 与 Tools 包，不复用缺少新模块的旧产物。
+Character 的 Spawn 声明使用现有 Tools 包内的 `subagent.mjs` 转调原生 `dsh-tool-subagent`，保留原生 Config、注入、模型选择、Provider、白名单、深度与工具授权。仅在原生组件重扫 Agent 注册表时，跳过 `fiber.assertActive()` 明确抛出 `INACTIVE_EFFECT` 的已关闭 Context；不修改注册表，不吞掉其他初始化错误，不新增运行时或权限服务。官方 Creator 和 Fork 声明不改。下一次安装须从本次源码重建匹配的 Core 与 Tools 包，不复用缺少新模块的旧产物。该适配是为 0.2.1-rc.3 加的：在 0.2.2-rc.1 隔离宿主上用原生 `dsh-tool-subagent`（`run-lifecycle.ps1 --native-subagent`，两个进程各 3 轮“关闭中 Context + Spawn 重载”）同样通过，原生实现已不再在此处抛出 `INACTIVE_EFFECT`。适配在 0.2.2 上不再必要但行为中性，本轮保留，移除另行处理。
 
 rc.3 的原生销毁先关闭 Context、后移除注册表项。普通工具变更通常有缓存保护；在该窗口热重载 standing Spawn 后，缓存重建会重新向已关闭 Context 注入工具。真实 Host 对照在首轮复现相同调用点的异常，适配后隔离压力验证 30 轮通过。原首次失败缺少阶段信息，无法证明当时发生了完全相同的热重载顺序。
 

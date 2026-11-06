@@ -3,6 +3,7 @@ import { scheduledEvents } from './schedule.mjs';
 import { confirmationEvidence } from './confirmation.mjs';
 import { auditBindings } from './bindings.mjs';
 import { protectSession } from './boundary.mjs';
+import { scheduleToolDenial, verifyScheduleCall, UNAVAILABLE } from './schedule-scope.mjs';
 import { createOutbox } from './outbox.mjs';
 import { successSampler } from './diagnostics.mjs';
 import { DatabaseSync } from 'node:sqlite';
@@ -87,7 +88,7 @@ export function apply(ctx,config) {
    // stale audit or replace the main route. The next restore audits afresh.
    if(closed||runtime!==value||gatewayEpoch!==epoch||JSON.stringify(evidence())!==result.evidence)throw Error('QQ ownership evidence changed during audit');
    db.exec('BEGIN IMMEDIATE');try{for(const id of result.missing)db.prepare('INSERT OR IGNORE INTO qq_bindings VALUES(?,?,?)').run(id,conversationScope.conversationId,presetId);db.exec('COMMIT');}catch(e){db.exec('ROLLBACK');throw e;}
-   if(result.anomalies.length||result.issues.length)ctx.logger?.warn(`QQ Schedule ownership audit: ${result.rows.filter(r=>r.binding==='unproven'||r.binding==='unverifiable_binding').length} unproven tasks; ${result.missing.length} evidenced reminder bindings recovered; ${result.issues.length} header issues`);
+   if(result.anomalies.length||result.issues.length)ctx.logger?.warn(`QQ Schedule ownership audit: ${result.rows.filter(r=>['unproven','unverifiable_binding','untrusted_target'].includes(r.binding)).length} unproven tasks; ${result.missing.length} evidenced reminder bindings recovered; ${result.issues.length} header issues`);
    return result;
   })();try{return await auditing;}finally{auditing=undefined;}
  }
@@ -136,6 +137,18 @@ export function apply(ctx,config) {
   authorize,forSession,validateGateway,
   isCurrentAgent(agent){return !!agent&&ctx.get?.('agents')?.get(agent.id)===agent&&isCurrentId(agent.id)&&!!forSession(agent.id);},
   canDeliverReminder(agent){return !closed&&!!agent&&ctx.get?.('agents')?.get(agent.id)===agent&&isOwnerPreset(composed(agent))&&hasReminderBinding(agent.id);},
+  // Native tool guard input (argument rules); undefined allows.
+  scheduleToolDenial(exec){return closed?UNAVAILABLE:scheduleToolDenial(exec);},
+  // Execution-time ownership: a fresh native view, accepted for the caller's own
+  // Session or an Owner Session holding a persisted reminder binding (the same
+  // evidence canDeliverReminder uses); task roots, role/foreign and unproven
+  // Sessions are refused.
+  async verifyScheduleCall(exec){
+   if(closed)return {denied:UNAVAILABLE};
+   const caller=exec?.agent,native=ctx.get?.('schedule');
+   return verifyScheduleCall(exec,{sessionId:caller?.session?.id??caller?.id,trusted:id=>!closed&&hasReminderBinding(id),
+    view:async id=>{if(!native)throw Error('Native Schedule unavailable');return native.view({id});}});
+  },
   // Host composition: the Presets a Gateway may compose (Owner ids, then role ids).
   allowedPresets:()=>Object.freeze({owner:Object.freeze([...ownerPresets]),roles:Object.freeze([...rolePresets])}),
   auditSchedules:async()=>{const {evidence:_,...report}=await auditSchedules();return report;},

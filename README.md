@@ -2,7 +2,7 @@
 
 基于官方 Creator 构建的完整主 Agent，提供可信身份、分层长期记忆、QQ 组合适配及原生独立 Worker。QQ 接入与通用 I/O/Conversation Manager 位于独立的 [QQTK](https://github.com/EJYDOvO/harness-qq-toolkit-public) 仓库。两个仓库都不分发 DSH 本体、真实 Persona、凭据或用户数据。
 
-当前源码：Character **0.1.0-test.29**，Interaction **0.1.0-test.9**；目标宿主 **DSH 0.2.1-rc.3 / Node 24**。源码、隔离验证与实例部署分别记录在 [STATUS](docs/STATUS.md)。
+当前源码：Character **0.1.0-test.30**，Interaction **0.1.0-test.9**；目标宿主 **DSH 0.2.2-rc.1 / Node 24**（Schedule API 只支持 0.2.2）。源码、隔离验证与实例部署分别记录在 [STATUS](docs/STATUS.md)。
 
 ## 内容
 
@@ -22,7 +22,7 @@
 
 ## 干净设备开始
 
-先安装合法取得的官方 DSH rc.3 和 Node 24，再 Clone 本仓库及 QQTK，分别执行 `npm ci`。完整操作见 [安装、私有配置、数据迁移与回滚](docs/INTEGRATION.md)。构建不依赖已有 desktop Profile；依赖通过根锁文件固定，官方 Creator 从显式指定的发行包只读获取。
+先安装合法取得的官方 DSH 0.2.2-rc.1 和 Node 24，再 Clone 本仓库及 QQTK，分别执行 `npm ci`。完整操作见 [安装、私有配置、数据迁移与回滚](docs/INTEGRATION.md)。构建不依赖已有 desktop Profile；依赖通过根锁文件固定，官方 Creator 从显式指定的发行包只读获取。
 
 `npm test` 和 `npm run test:audit` 不连接真实 QQ。原生宿主测试另需 DSH；不能把 Node 测试或 QQ API accepted 当作手机验收。
 

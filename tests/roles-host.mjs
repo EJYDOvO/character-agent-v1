@@ -69,7 +69,7 @@ export function apply(ctx,config){
    out=await say('mock-friend','hello');const guest=record('mock-friend');assert.equal(guest.agentPreset,'character-guest');
    assert.match(out.join('\n'),/persona:public tools:0/);assert.throws(()=>identity.forSession(guest.sessionId));assert.throws(()=>ctx.get('memoryIdentity').forSession(guest.sessionId));
    await say('mock-friend','tool please');assert.equal(toolRuns,1,'a guest-submitted tool call never executes');
-   assert.equal(ctx.tools.schemas(guest.agent).length,0);assert(ctx.tools.guardReason({agent:guest.agent,name:'role_probe_tool'}));
+   assert.equal(ctx.tools.schemas(guest.agent).length,0);assert(ctx.tools.checkGuards({agent:guest.agent,name:'role_probe_tool'}));
    check('Guest: character-guest Preset with public Persona; no visible or executable tools; no Character Identity or Memory');
 
    // 3. Commands: Owner-only by default; nickname-like or forged role text never authorizes.
