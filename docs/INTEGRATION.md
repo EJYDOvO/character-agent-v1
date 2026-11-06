@@ -77,3 +77,5 @@ allowed（退出 0）只表示监控状态完全未变；needs_replay（2）须�
 旧 TaskMemoryStore 的 task-memory/*.json 为自定义 vault（taskId/title/updatedAt/entries），不按原生 per-record 解码；门禁完整记录原始哈希，仅完全未变允许，新增、修改、删除或损坏均拒绝，不自动迁移或排除这些文件。
 
 SQLite WAL 允许保留前一轮 checkpoint 的物理尾部。门禁按官方 WAL-index 格式校验双份 SHM 头、校验和、salt、页尺寸、mxFrame 和全部已提交帧；只有已证明属于旧 salt 的剩余空间可作为复用容量。整个 WAL 仍计算哈希，缺失/损坏/不一致或未提交尾部均拒绝，不执行 checkpoint、截断或修复。参考：https://sqlite.org/walformat.html 与 https://sqlite.org/fileformat2.html#walreset 。
+
+0.2.2 并行初始化下，QQ Adapter 仅对原生 agent-preset/not-found 做最多两秒的有界等待；预设必须真实注册且可解析后才启动 Gateway。损坏预设、其他错误或 Context dispose 均立即拒绝，不回退 Creator，不绕过 Owner 校验；发行版 0.1.0-test.31。
