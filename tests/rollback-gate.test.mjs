@@ -64,3 +64,8 @@ test('invalid snapshot fails closed',()=>{assert.equal(decide({},{}).decision,'h
 
 test('damaged WAL frame/checksum refuses even with SHM present',t=>{const f=fixture(t);try{const wal=fs.readFileSync(f.state+'-wal');wal[wal.length-1]^=1;fs.writeFileSync(f.state+'-wal',wal);assert.equal(decide(f.before,observe(f.input)).decision,'host_rollback_refused');}finally{f.db.close();}});
 test('corrupt historical Session frame tail refuses',t=>{const f=fixture(t);f.db.close();fs.appendFileSync(path.join(f.home,'sessions/w/s1/session.v4.jsonl.zstd'),'tail');assert.equal(decide(f.before,observe(f.input)).decision,'host_rollback_refused');});
+
+for(const mutation of ['unchanged','change','delete','add','corrupt','invalid'])test('legacy task-memory vault: '+mutation,t=>{const f=fixture(t);f.db.close();const vault={taskId:'fixture',title:'fixture',updatedAt:1,entries:[]};f.write('storages/task-memory/fixture.json',vault);f.before=observe(f.input);
+ if(mutation==='change')f.write('storages/task-memory/fixture.json',{...vault,updatedAt:2});if(mutation==='delete')fs.rmSync(path.join(f.home,'storages/task-memory/fixture.json'));if(mutation==='add')f.write('storages/task-memory/another.json',{...vault,taskId:'another'});if(mutation==='corrupt')f.write('storages/task-memory/fixture.json','{bad');if(mutation==='invalid')f.write('storages/task-memory/fixture.json',{});
+ assert.equal(decide(f.before,observe(f.input)).decision,'host_rollback_'+(mutation==='unchanged'?'allowed':'refused'));
+});

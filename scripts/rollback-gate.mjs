@@ -22,14 +22,22 @@ const json=file=>JSON.parse(fs.readFileSync(file,'utf8').replace(/^\uFEFF/,''));
 const value=v=>v instanceof Uint8Array?'x'+Buffer.from(v).toString('hex'):typeof v==='bigint'?v.toString():v;
 // DSH storages: single-file units carry {unit:{name,version}}; per-record domains carry {version,record} per file.
 function storages(home){
- const root=path.join(home,'storages'),units={},records={};
+ const root=path.join(home,'storages'),units={},records={},legacy={};
  if(!fs.existsSync(root))throw Error('Missing storages directory');
  for(const e of fs.readdirSync(root,{withFileTypes:true})){
   const p=path.join(root,e.name);if(e.isSymbolicLink())throw Error('Monitored symlink: '+p);
   if(e.isFile()&&e.name.endsWith('.json')){const raw=fs.readFileSync(p),doc=JSON.parse(raw.toString('utf8').replace(/^\uFEFF/,''));if(!doc.unit?.name||!Number.isInteger(doc.unit.version))throw Error('Invalid storage unit '+p);if(units[doc.unit.name])throw Error('Duplicate storage unit');units[doc.unit.name]={version:doc.unit.version,path:e.name,sha256:sha(raw)};}
+  else if(e.isDirectory()&&e.name==='task-memory'){
+   // Legacy TaskMemoryStore vaults are custom JSON, not native per-record units.
+   // Preserve every byte in the gate; any mutation is refused, never inferred compatible.
+   for(const rel of walk(p)){if(!rel.endsWith('.json'))throw Error('Unknown legacy state file');const raw=fs.readFileSync(path.join(p,rel)),doc=JSON.parse(raw.toString('utf8'));
+    if(typeof doc.taskId!=='string'||!doc.taskId||typeof doc.title!=='string'||!Number.isFinite(doc.updatedAt)||!Array.isArray(doc.entries))throw Error('Invalid legacy task-memory vault');
+    legacy[e.name+'/'+rel]=sha(raw);
+   }
+  }
   else if(e.isDirectory()&&e.name!=='session_projcache'){const files={},versions=new Set();for(const rel of walk(p)){if(!rel.endsWith('.json'))throw Error('Unknown storage record '+rel);const raw=fs.readFileSync(path.join(p,rel));const doc=JSON.parse(raw.toString('utf8'));if(!Number.isInteger(doc.version)||!doc.record||typeof doc.record!=='object')throw Error('Invalid storage record '+rel);versions.add(doc.version??null);files[rel]={sha256:sha(raw),status:doc.record?.status??null};}records[e.name]={versions:[...versions].sort(),files};}
  }
- return {units,records};
+ return {units,records,legacy};
 }
 function validateSession(raw,format){
  let offset=0,first=true;
@@ -85,6 +93,9 @@ function decideState(before,now){
  for(const [file,h] of Object.entries(before.files))if(typeof h!=='string'||typeof now.files[file]!=='string')return refused('Missing/invalid monitored file '+file);
  for(const [file,v] of Object.entries(before.sqlite))if(!v||v.missing||v.unreadable||!now.sqlite[file])return refused('Missing/unreadable SQLite '+file);
 
+ for(const rel of new Set([...Object.keys(before.storages.legacy??{}),...Object.keys(now.storages.legacy??{})])){
+  const a=before.storages.legacy?.[rel],b=now.storages.legacy?.[rel];if(!/^[a-f0-9]{64}$/.test(a)||a!==b)blockers.push('legacy task-memory state added/changed/removed: '+rel);
+ }
  for(const [name,u] of Object.entries(now.storages.units)){const b=before.storages.units[name];if(!/^[a-f0-9]{64}$/.test(u.sha256)||!Number.isInteger(u.version))throw Error('Invalid unit observation');
   if(!b){blockers.push(`storage unit ${name} created by the new Host (version ${u.version})`);continue;}
   if(u.path!==b.path)changes.push('storage unit '+name+' path changed');if(u.version!==b.version)blockers.push(`storage unit ${name} version ${b.version} -> ${u.version}`);else if(u.sha256!==b.sha256)changes.push(`storage unit ${name} rewritten`);}
