@@ -79,3 +79,30 @@ allowed（退出 0）只表示监控状态完全未变；needs_replay（2）须�
 SQLite WAL 允许保留前一轮 checkpoint 的物理尾部。门禁按官方 WAL-index 格式校验双份 SHM 头、校验和、salt、页尺寸、mxFrame 和全部已提交帧；只有已证明属于旧 salt 的剩余空间可作为复用容量。整个 WAL 仍计算哈希，缺失/损坏/不一致或未提交尾部均拒绝，不执行 checkpoint、截断或修复。参考：https://sqlite.org/walformat.html 与 https://sqlite.org/fileformat2.html#walreset 。
 
 0.2.2 并行初始化下，QQ Adapter 仅对原生 agent-preset/not-found 做最多两秒的有界等待；预设必须真实注册且可解析后才启动 Gateway。损坏预设、其他错误或 Context dispose 均立即拒绝，不回退 Creator，不绕过 Owner 校验；发行版 0.1.0-test.31。
+
+
+## 自定义模型预算门禁（0.2.2）
+
+升级前须为每个自定义模型显式设置 contextWindow 和 maxTokens，不能依赖宿主默认 1M/128K。两者是模型/路由上限；每次请求仍由原生 SDK 根据输入估算和安全余量动态裁剪。不要将所有模型统一固定为 8192，也不要依据模型名称猜容量。
+
+QQTK 的只读能力探测（只输出 policy/diff，不写 Profile；当前支持环境凭据的 OpenAI-compatible /models）：
+
+```sh
+node <QQTK>/maintenance/model-budget-probe.mjs --profile <PROFILE> --home <HOME> --provider <PROVIDER> --runtime-version 0.2.2-rc.1
+```
+
+它拒绝缺少容量、非法容量、重复路由、超大响应和重定向。可先使用 DSH Models 页原生发现；其他协议或凭据方式使用原生发现并人工审核。探测结果须经管理员审核再应用，仅将差异字段添加到现有模型对象，不覆盖提供商、凭据或输入模态。无法发现容量时填写经复核的手动声明，source=reviewed-manual，不能随意补默认值。
+
+将配套 model-policy.json 放在目标 Profile，包含 schemaVersion=1、profile、testedRuntime、maxAgeDays（默认30，最多90）以及模型记录（provider/id/contextWindow/maxTokens/endpointSha256/source/observedAt）。策略不含密钥或明文服务地址。端点、模型集合、数值、目标运行时或 Profile 名称改变，均须重新复核；证据过期须重新探测或人工核实，不应只修改日期。
+
+```sh
+node <QQTK>/maintenance/model-budget-check.mjs --profile <PROFILE> --runtime-version 0.2.2-rc.1
+```
+
+pin-check 的 pre-switch/post-switch 已调用此门禁；模型定义存在但缺少策略或预算时失败。候选与实际 Profile 的策略 profile 字段应各自匹配目录名。检查全程只读，不发网络请求、不安装插件、不修改配置。没有声明自定义模型的官方内置目录无需此实例策略。
+
+portable 配置的 model 对象可显式传入 contextWindow、maxTokens、observedAt、capabilitySource；prepare 会保留这些数字并生成配套策略。未提供预算的旧 prepare 输入不会被自动填值，切换前 pin-check 会拒绝它。新安装也必须运行此门禁，不能只用 portable verify 的包校验代替。
+
+静态文件检查不等于运行时已加载：配置应用后还须用已认证 Settings describe 比较有效值，并做隔离原生模型请求，确认 request/context 的窗口与实际发送的输出预算符合预期。直接由第三方插件覆盖输出参数的路径不属于此配置门禁的强制拦截范围，未改宿主/SDK。
+
+回滚仅恢复本次模型配置与 model-policy.json；不恢复 Session、Memory、Schedule 或数据库快照。真实模型测试单独授权、使用合成数据，不将手机收发或原生审批视为已验证。
