@@ -3,9 +3,9 @@ const RETIRED='Historical or unbound QQ Session: tools are disabled';
 const refusal=message=>({content:[{type:'text',text:'Error: '+message}],isError:true,error:{message}});
 // Install on the actual Agent plane. Dynamic service lookup survives provider HMR;
 // no permanent restrict([]), since a newly created main root is admitted after setup.
-// v2 adds the execution-time Schedule check: an Agent fenced by an earlier
-// boundary (provider HMR) is fenced again, so it never keeps the guard alone.
-const installed=globalThis[Symbol.for('dsh.character.session-boundary.v2')]??=new WeakSet();
+// v3 rechecks identity for every dispatched tool, including a call prepared
+// before rotation/HMR. A prior boundary must not suppress this new fence.
+const installed=globalThis[Symbol.for('dsh.character.session-boundary.v3')]??=new WeakSet();
 export function protectSession(agent){
  if(installed.has(agent))return;installed.add(agent);
  const own=agent.ctx,allowed=caller=>{try{return own.get('characterIdentity')?.isCurrentAgent(caller)===true;}catch{return false;}};
@@ -19,8 +19,8 @@ export function protectSession(agent){
  // approval waits and earlier calls of the batch), from a fresh native view, and
  // an edit is pinned to the verified revision. Missing service fails closed.
  own.on('tools/execute',async(exec,next)=>{
+  if(!allowed(exec?.agent))return refusal(RETIRED);
   if(!isScheduleTool(exec?.name))return next();
-  if(!allowed(exec.agent))return refusal(RETIRED);
   let decision;
   try{const service=own.get('characterIdentity');decision=typeof service?.verifyScheduleCall==='function'?await service.verifyScheduleCall(exec):{denied:UNAVAILABLE};}catch{decision={denied:UNAVAILABLE};}
   if(decision?.denied)return refusal(decision.denied);
