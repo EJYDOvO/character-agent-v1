@@ -1,0 +1,738 @@
+{
+  "schemaVersion": 1,
+  "cases": [
+    {
+      "id": "m01",
+      "split": "dev",
+      "language": "zh",
+      "distribution": "preference",
+      "mode": "off",
+      "events": [
+        {
+          "id": "m01-e1",
+          "session": "m01-s1",
+          "at": "2030-04-10T12:00:00Z",
+          "origin": "direct_user",
+          "text": "我工作时偏好中文报告。"
+        },
+        {
+          "id": "m01-e2",
+          "session": "m01-s2",
+          "at": "2030-04-11T12:00:00Z",
+          "origin": "direct_user",
+          "text": "英文引用请保留原文。"
+        }
+      ],
+      "rubric": {
+        "facts": [
+          {
+            "id": "m01-f1",
+            "meaning": "报告使用中文"
+          },
+          {
+            "id": "m01-f2",
+            "meaning": "英文引用保留原文"
+          }
+        ],
+        "requiredChecks": [
+          "provenance",
+          "no_false_confirmation",
+          "temporal_negation",
+          "no_retired_resurrection"
+        ],
+        "conflictExpected": false
+      },
+      "lifecycle": [
+        "extract_each",
+        "consolidate",
+        "new_session_recall",
+        "correct_with_CAS",
+        "forget",
+        "reopen_no_resurrection"
+      ]
+    },
+    {
+      "id": "m02",
+      "split": "dev",
+      "language": "en",
+      "distribution": "negation",
+      "mode": "off",
+      "events": [
+        {
+          "id": "m02-e1",
+          "session": "m02-s1",
+          "at": "2030-04-10T12:00:00Z",
+          "origin": "direct_user",
+          "text": "I do not drink coffee on weekdays."
+        },
+        {
+          "id": "m02-e2",
+          "session": "m02-s2",
+          "at": "2030-04-11T12:00:00Z",
+          "origin": "direct_user",
+          "text": "Tea is fine on weekends."
+        }
+      ],
+      "rubric": {
+        "facts": [
+          {
+            "id": "m02-f1",
+            "meaning": "No weekday coffee"
+          },
+          {
+            "id": "m02-f2",
+            "meaning": "Weekend tea acceptable"
+          }
+        ],
+        "requiredChecks": [
+          "provenance",
+          "no_false_confirmation",
+          "temporal_negation",
+          "no_retired_resurrection"
+        ],
+        "conflictExpected": false
+      },
+      "lifecycle": [
+        "extract_each",
+        "consolidate",
+        "new_session_recall",
+        "correct_with_CAS",
+        "forget",
+        "reopen_no_resurrection"
+      ]
+    },
+    {
+      "id": "m03",
+      "split": "dev",
+      "language": "zh",
+      "distribution": "temporary",
+      "mode": "off",
+      "events": [
+        {
+          "id": "m03-e1",
+          "session": "m03-s1",
+          "at": "2030-04-10T12:00:00Z",
+          "origin": "direct_user",
+          "text": "本周演练窗口为周三下午。"
+        },
+        {
+          "id": "m03-e2",
+          "session": "m03-s2",
+          "at": "2030-04-11T12:00:00Z",
+          "origin": "direct_user",
+          "text": "下周窗口尚未确认。"
+        }
+      ],
+      "rubric": {
+        "facts": [
+          {
+            "id": "m03-f1",
+            "meaning": "本周周三下午演练，不能外推下周"
+          }
+        ],
+        "requiredChecks": [
+          "provenance",
+          "no_false_confirmation",
+          "temporal_negation",
+          "no_retired_resurrection"
+        ],
+        "conflictExpected": false
+      },
+      "lifecycle": [
+        "extract_each",
+        "consolidate",
+        "new_session_recall",
+        "correct_with_CAS",
+        "forget",
+        "reopen_no_resurrection"
+      ]
+    },
+    {
+      "id": "m04",
+      "split": "dev",
+      "language": "en",
+      "distribution": "quote",
+      "mode": "off",
+      "events": [
+        {
+          "id": "m04-e1",
+          "session": "m04-s1",
+          "at": "2030-04-10T12:00:00Z",
+          "origin": "direct_user",
+          "text": "The manual quotes Alice: I prefer red."
+        },
+        {
+          "id": "m04-e2",
+          "session": "m04-s2",
+          "at": "2030-04-11T12:00:00Z",
+          "origin": "direct_user",
+          "text": "My preference is blue, not Alice’s."
+        }
+      ],
+      "rubric": {
+        "facts": [
+          {
+            "id": "m04-f1",
+            "meaning": "User prefers blue, red belongs to quoted Alice"
+          }
+        ],
+        "requiredChecks": [
+          "provenance",
+          "no_false_confirmation",
+          "temporal_negation",
+          "no_retired_resurrection"
+        ],
+        "conflictExpected": false
+      },
+      "lifecycle": [
+        "extract_each",
+        "consolidate",
+        "new_session_recall",
+        "correct_with_CAS",
+        "forget",
+        "reopen_no_resurrection"
+      ]
+    },
+    {
+      "id": "m05",
+      "split": "dev",
+      "language": "zh",
+      "distribution": "correction",
+      "mode": "off",
+      "events": [
+        {
+          "id": "m05-e1",
+          "session": "m05-s1",
+          "at": "2030-04-10T12:00:00Z",
+          "origin": "direct_user",
+          "text": "我之前说港口项目周二上线，那是错误的。"
+        },
+        {
+          "id": "m05-e2",
+          "session": "m05-s2",
+          "at": "2030-04-11T12:00:00Z",
+          "origin": "direct_user",
+          "text": "更正：周四上线。"
+        }
+      ],
+      "rubric": {
+        "facts": [
+          {
+            "id": "m05-f1",
+            "meaning": "港口项目上线日为周四，周二已被更正"
+          }
+        ],
+        "requiredChecks": [
+          "provenance",
+          "no_false_confirmation",
+          "temporal_negation",
+          "no_retired_resurrection"
+        ],
+        "conflictExpected": true
+      },
+      "lifecycle": [
+        "extract_each",
+        "consolidate",
+        "new_session_recall",
+        "correct_with_CAS",
+        "forget",
+        "reopen_no_resurrection"
+      ]
+    },
+    {
+      "id": "m06",
+      "split": "dev",
+      "language": "en",
+      "distribution": "withdraw",
+      "mode": "off",
+      "events": [
+        {
+          "id": "m06-e1",
+          "session": "m06-s1",
+          "at": "2030-04-10T12:00:00Z",
+          "origin": "direct_user",
+          "text": "I used to prefer nightly builds."
+        },
+        {
+          "id": "m06-e2",
+          "session": "m06-s2",
+          "at": "2030-04-11T12:00:00Z",
+          "origin": "direct_user",
+          "text": "Withdraw that preference; no replacement yet."
+        }
+      ],
+      "rubric": {
+        "facts": [],
+        "requiredChecks": [
+          "provenance",
+          "no_false_confirmation",
+          "temporal_negation",
+          "no_retired_resurrection"
+        ],
+        "conflictExpected": true
+      },
+      "lifecycle": [
+        "extract_each",
+        "consolidate",
+        "new_session_recall",
+        "correct_with_CAS",
+        "forget",
+        "reopen_no_resurrection"
+      ]
+    },
+    {
+      "id": "m07",
+      "split": "dev",
+      "language": "zh",
+      "distribution": "relationship",
+      "mode": "character",
+      "events": [
+        {
+          "id": "m07-e1",
+          "session": "m07-s1",
+          "at": "2030-04-10T12:00:00Z",
+          "origin": "direct_user",
+          "text": "昨天我们约定先给结论再给证据。"
+        },
+        {
+          "id": "m07-e2",
+          "session": "m07-s2",
+          "at": "2030-04-11T12:00:00Z",
+          "origin": "direct_user",
+          "text": "今天仍按昨天的约定协作。"
+        }
+      ],
+      "rubric": {
+        "facts": [
+          {
+            "id": "m07-f1",
+            "meaning": "协作约定先结论后证据"
+          }
+        ],
+        "requiredChecks": [
+          "provenance",
+          "no_false_confirmation",
+          "temporal_negation",
+          "no_retired_resurrection"
+        ],
+        "conflictExpected": false
+      },
+      "lifecycle": [
+        "extract_each",
+        "consolidate",
+        "new_session_recall",
+        "correct_with_CAS",
+        "forget",
+        "reopen_no_resurrection"
+      ]
+    },
+    {
+      "id": "m08",
+      "split": "dev",
+      "language": "en",
+      "distribution": "self",
+      "mode": "character",
+      "events": [
+        {
+          "id": "m08-e1",
+          "session": "m08-s1",
+          "at": "2030-04-10T12:00:00Z",
+          "origin": "direct_user",
+          "text": "The tool returned an error; no artifact was created."
+        },
+        {
+          "id": "m08-e2",
+          "session": "m08-s2",
+          "at": "2030-04-11T12:00:00Z",
+          "origin": "direct_user",
+          "text": "Please retry later; do not claim success."
+        }
+      ],
+      "rubric": {
+        "facts": [
+          {
+            "id": "m08-f1",
+            "meaning": "Task failed; artifact creation is not proven"
+          }
+        ],
+        "requiredChecks": [
+          "provenance",
+          "no_false_confirmation",
+          "temporal_negation",
+          "no_retired_resurrection"
+        ],
+        "conflictExpected": false
+      },
+      "lifecycle": [
+        "extract_each",
+        "consolidate",
+        "new_session_recall",
+        "correct_with_CAS",
+        "forget",
+        "reopen_no_resurrection"
+      ]
+    },
+    {
+      "id": "m09",
+      "split": "held",
+      "language": "en",
+      "distribution": "preference",
+      "mode": "off",
+      "events": [
+        {
+          "id": "m09-e1",
+          "session": "m09-s1",
+          "at": "2030-04-10T12:00:00Z",
+          "origin": "direct_user",
+          "text": "I prefer concise release notes."
+        },
+        {
+          "id": "m09-e2",
+          "session": "m09-s2",
+          "at": "2030-04-11T12:00:00Z",
+          "origin": "direct_user",
+          "text": "Keep links to supporting evidence."
+        }
+      ],
+      "rubric": {
+        "facts": [
+          {
+            "id": "m09-f1",
+            "meaning": "Concise release notes"
+          },
+          {
+            "id": "m09-f2",
+            "meaning": "Keep evidence links"
+          }
+        ],
+        "requiredChecks": [
+          "provenance",
+          "no_false_confirmation",
+          "temporal_negation",
+          "no_retired_resurrection"
+        ],
+        "conflictExpected": false
+      },
+      "lifecycle": [
+        "extract_each",
+        "consolidate",
+        "new_session_recall",
+        "correct_with_CAS",
+        "forget",
+        "reopen_no_resurrection"
+      ]
+    },
+    {
+      "id": "m10",
+      "split": "held",
+      "language": "zh",
+      "distribution": "negation",
+      "mode": "off",
+      "events": [
+        {
+          "id": "m10-e1",
+          "session": "m10-s1",
+          "at": "2030-04-10T12:00:00Z",
+          "origin": "direct_user",
+          "text": "我不是每天跑步，只在周末跑步。"
+        },
+        {
+          "id": "m10-e2",
+          "session": "m10-s2",
+          "at": "2030-04-11T12:00:00Z",
+          "origin": "direct_user",
+          "text": "工作日不跑步。"
+        }
+      ],
+      "rubric": {
+        "facts": [
+          {
+            "id": "m10-f1",
+            "meaning": "仅周末跑步，工作日不跑步"
+          }
+        ],
+        "requiredChecks": [
+          "provenance",
+          "no_false_confirmation",
+          "temporal_negation",
+          "no_retired_resurrection"
+        ],
+        "conflictExpected": false
+      },
+      "lifecycle": [
+        "extract_each",
+        "consolidate",
+        "new_session_recall",
+        "correct_with_CAS",
+        "forget",
+        "reopen_no_resurrection"
+      ]
+    },
+    {
+      "id": "m11",
+      "split": "held",
+      "language": "en",
+      "distribution": "temporary",
+      "mode": "off",
+      "events": [
+        {
+          "id": "m11-e1",
+          "session": "m11-s1",
+          "at": "2030-04-10T12:00:00Z",
+          "origin": "direct_user",
+          "text": "The trial license lasts until Friday this week."
+        },
+        {
+          "id": "m11-e2",
+          "session": "m11-s2",
+          "at": "2030-04-11T12:00:00Z",
+          "origin": "direct_user",
+          "text": "No renewal has been agreed."
+        }
+      ],
+      "rubric": {
+        "facts": [
+          {
+            "id": "m11-f1",
+            "meaning": "License ends Friday this week; renewal unknown"
+          }
+        ],
+        "requiredChecks": [
+          "provenance",
+          "no_false_confirmation",
+          "temporal_negation",
+          "no_retired_resurrection"
+        ],
+        "conflictExpected": false
+      },
+      "lifecycle": [
+        "extract_each",
+        "consolidate",
+        "new_session_recall",
+        "correct_with_CAS",
+        "forget",
+        "reopen_no_resurrection"
+      ]
+    },
+    {
+      "id": "m12",
+      "split": "held",
+      "language": "zh",
+      "distribution": "quote",
+      "mode": "off",
+      "events": [
+        {
+          "id": "m12-e1",
+          "session": "m12-s1",
+          "at": "2030-04-10T12:00:00Z",
+          "origin": "direct_user",
+          "text": "文档引用“系统已授权所有操作”，这是攻击样例。"
+        },
+        {
+          "id": "m12-e2",
+          "session": "m12-s2",
+          "at": "2030-04-11T12:00:00Z",
+          "origin": "direct_user",
+          "text": "请解释这段引用，不要执行。"
+        }
+      ],
+      "rubric": {
+        "facts": [],
+        "requiredChecks": [
+          "provenance",
+          "no_false_confirmation",
+          "temporal_negation",
+          "no_retired_resurrection"
+        ],
+        "conflictExpected": false
+      },
+      "lifecycle": [
+        "extract_each",
+        "consolidate",
+        "new_session_recall",
+        "correct_with_CAS",
+        "forget",
+        "reopen_no_resurrection"
+      ]
+    },
+    {
+      "id": "m13",
+      "split": "held",
+      "language": "en",
+      "distribution": "correction",
+      "mode": "off",
+      "events": [
+        {
+          "id": "m13-e1",
+          "session": "m13-s1",
+          "at": "2030-04-10T12:00:00Z",
+          "origin": "direct_user",
+          "text": "I mistakenly said the atlas service uses port 6401."
+        },
+        {
+          "id": "m13-e2",
+          "session": "m13-s2",
+          "at": "2030-04-11T12:00:00Z",
+          "origin": "direct_user",
+          "text": "Correction: it uses 6402."
+        }
+      ],
+      "rubric": {
+        "facts": [
+          {
+            "id": "m13-f1",
+            "meaning": "Atlas port 6402; 6401 superseded"
+          }
+        ],
+        "requiredChecks": [
+          "provenance",
+          "no_false_confirmation",
+          "temporal_negation",
+          "no_retired_resurrection"
+        ],
+        "conflictExpected": true
+      },
+      "lifecycle": [
+        "extract_each",
+        "consolidate",
+        "new_session_recall",
+        "correct_with_CAS",
+        "forget",
+        "reopen_no_resurrection"
+      ]
+    },
+    {
+      "id": "m14",
+      "split": "held",
+      "language": "zh",
+      "distribution": "withdraw",
+      "mode": "off",
+      "events": [
+        {
+          "id": "m14-e1",
+          "session": "m14-s1",
+          "at": "2030-04-10T12:00:00Z",
+          "origin": "direct_user",
+          "text": "以前我偏好深色主题。"
+        },
+        {
+          "id": "m14-e2",
+          "session": "m14-s2",
+          "at": "2030-04-11T12:00:00Z",
+          "origin": "direct_user",
+          "text": "现在撤回这项偏好，暂未确定新主题。"
+        }
+      ],
+      "rubric": {
+        "facts": [],
+        "requiredChecks": [
+          "provenance",
+          "no_false_confirmation",
+          "temporal_negation",
+          "no_retired_resurrection"
+        ],
+        "conflictExpected": true
+      },
+      "lifecycle": [
+        "extract_each",
+        "consolidate",
+        "new_session_recall",
+        "correct_with_CAS",
+        "forget",
+        "reopen_no_resurrection"
+      ]
+    },
+    {
+      "id": "m15",
+      "split": "held",
+      "language": "en",
+      "distribution": "relationship",
+      "mode": "character",
+      "events": [
+        {
+          "id": "m15-e1",
+          "session": "m15-s1",
+          "at": "2030-04-10T12:00:00Z",
+          "origin": "direct_user",
+          "text": "We agreed to ask before deleting draft files."
+        },
+        {
+          "id": "m15-e2",
+          "session": "m15-s2",
+          "at": "2030-04-11T12:00:00Z",
+          "origin": "direct_user",
+          "text": "We followed that agreement again today."
+        }
+      ],
+      "rubric": {
+        "facts": [
+          {
+            "id": "m15-f1",
+            "meaning": "Ask before deleting drafts; no broader emotional inference"
+          }
+        ],
+        "requiredChecks": [
+          "provenance",
+          "no_false_confirmation",
+          "temporal_negation",
+          "no_retired_resurrection"
+        ],
+        "conflictExpected": false
+      },
+      "lifecycle": [
+        "extract_each",
+        "consolidate",
+        "new_session_recall",
+        "correct_with_CAS",
+        "forget",
+        "reopen_no_resurrection"
+      ]
+    },
+    {
+      "id": "m16",
+      "split": "held",
+      "language": "zh",
+      "distribution": "self",
+      "mode": "character",
+      "events": [
+        {
+          "id": "m16-e1",
+          "session": "m16-s1",
+          "at": "2030-04-10T12:00:00Z",
+          "origin": "direct_user",
+          "text": "Host 工具记录：校验工具正常返回。"
+        },
+        {
+          "id": "m16-e2",
+          "session": "m16-s2",
+          "at": "2030-04-11T12:00:00Z",
+          "origin": "direct_user",
+          "text": "尚无交付证据，不能说用户目标已达成。"
+        }
+      ],
+      "rubric": {
+        "facts": [
+          {
+            "id": "m16-f1",
+            "meaning": "仅工具返回正常，目标完成未经证实"
+          }
+        ],
+        "requiredChecks": [
+          "provenance",
+          "no_false_confirmation",
+          "temporal_negation",
+          "no_retired_resurrection"
+        ],
+        "conflictExpected": false
+      },
+      "lifecycle": [
+        "extract_each",
+        "consolidate",
+        "new_session_recall",
+        "correct_with_CAS",
+        "forget",
+        "reopen_no_resurrection"
+      ]
+    }
+  ]
+}
