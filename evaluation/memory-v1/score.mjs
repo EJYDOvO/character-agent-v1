@@ -12,10 +12,15 @@ export function score(run){
  assert.equal(run.targetHost,'0.2.2-rc.1');assert(['recorded-model','deterministic-fixture'].includes(run.kind));
  const cases=corpus.cases.filter(c=>c.split===run.split);assert.equal(run.results.length,cases.length);
  assert.equal(new Set(run.results.map(r=>r.id)).size,cases.length);
- let tp=0,fp=0,expected=0,inferred=0,duplicates=0,total=0,sourceOK=0,conflicts=0,conflictTotal=0,conflictFalsePositive=0,conflictCorrect=0,tokens=0,usageKnown=true;
+ let tp=0,fp=0,expected=0,inferred=0,duplicates=0,total=0,sourceOK=0,conflicts=0,conflictTotal=0,conflictFalsePositive=0,conflictCorrect=0,tokens=0,usageKnown=true,failed=0,abstain=0,abstainCorrect=0;
  for(const c of cases){
   const r=run.results.find(r=>r.id===c.id);assert(r,'Missing case');assert(Array.isArray(r.predictions));assert.equal(r.review?.independent,true);
   assert.equal(typeof r.review.conflictDetected,'boolean');
+  // A failed/absent model call must stay distinguishable from a correct
+  // decision to store nothing; it keeps its expected facts and conflicts.
+  assert(['completed','failed'].includes(r.outcome),'Result outcome must be completed or failed');
+  if(r.outcome==='failed'){failed++;assert.equal(r.predictions.length,0,'Failed calls cannot carry predictions');assert.equal(r.review.conflictDetected,false,'Failed calls cannot detect conflicts');}
+  if(!c.rubric.facts.length){abstain++;abstainCorrect+=Number(r.outcome==='completed'&&r.predictions.length===0);}
   const seen=new Set();expected+=c.rubric.facts.length;
   for(const p of r.predictions){
    assert.equal(typeof p.unsupported,'boolean');assert.equal(typeof p.meaningPreserved,'boolean');assert(Array.isArray(p.sources));
@@ -30,6 +35,6 @@ export function score(run){
   conflictCorrect+=Number(r.review.conflictDetected===c.rubric.conflictExpected);
   if(r.usage?.provenance==='provider'&&Number.isSafeInteger(r.usage.inputTokens)&&r.usage.inputTokens>=0&&Number.isSafeInteger(r.usage.outputTokens)&&r.usage.outputTokens>=0)tokens+=r.usage.inputTokens+r.usage.outputTokens;else usageKnown=false;
  }
- return {kind:run.kind,realModelQualityValidated:false,split:run.split,cases:cases.length,precision:ratio(tp,tp+fp),recall:ratio(tp,expected),unsupportedInferenceRate:ratio(inferred,total),duplicateRate:ratio(duplicates,total),sourceCorrectness:ratio(sourceOK,total),conflictRecall:ratio(conflicts,conflictTotal),conflictPrecision:ratio(conflicts,conflicts+conflictFalsePositive),conflictAccuracy:ratio(conflictCorrect,cases.length),tokens:usageKnown?tokens:null,usageComplete:usageKnown};
+ return {kind:run.kind,realModelQualityValidated:false,split:run.split,cases:cases.length,failedCases:failed,completionRate:ratio(cases.length-failed,cases.length),abstentionAccuracy:ratio(abstainCorrect,abstain),precision:ratio(tp,tp+fp),recall:ratio(tp,expected),unsupportedInferenceRate:ratio(inferred,total),duplicateRate:ratio(duplicates,total),sourceCorrectness:ratio(sourceOK,total),conflictRecall:ratio(conflicts,conflictTotal),conflictPrecision:ratio(conflicts,conflicts+conflictFalsePositive),conflictAccuracy:ratio(conflictCorrect,cases.length),tokens:usageKnown?tokens:null,usageComplete:usageKnown};
 }
 if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){console.log(JSON.stringify(process.argv[2]?score(JSON.parse(fs.readFileSync(process.argv[2]))):{datasetDigest:digest,cases:corpus.cases.length,realModelQualityValidated:false,reason:'No recorded model run; semantic judgments and provider usage required'},null,2));}

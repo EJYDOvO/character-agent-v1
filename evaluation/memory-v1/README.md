@@ -13,7 +13,8 @@ tests. Held cases are public reproducibility fixtures, not secret blind samples;
 a future quality campaign should commission a fresh externally held corpus.
 Never tune on held results or edit expectations to make a strategy pass.
 
-`prepare.mjs` emits model inputs without answer rubrics and loads the current
+`prepare.mjs` emits model inputs without answer rubrics or scenario labels
+(`distribution` names the expected outcome, e.g. withdrawal) and loads the current
 runtime extraction/consolidation prompts, rather than maintaining a competing
 prompt. It performs no network requests and does not execute a model. A model
 driver must use an isolated Home, feed events through a trusted fixture ingress,
@@ -38,7 +39,8 @@ No credentials are read by these commands. Run artifacts stay outside Git.
 
 Run schema: `{datasetDigest,targetHost,kind,split,results}`. `kind` is
 `recorded-model` or `deterministic-fixture`. Each result is
-`{id,predictions,review,usage?}`. Predictions contain `{factId|null,
+`{id,outcome,predictions,review,usage?}`; `outcome` is `completed` or
+`failed` (error, timeout, refusal or absent output). Predictions contain `{factId|null,
 meaningPreserved:boolean,unsupported:boolean,sources:[{eventId,quote}]}`.
 Review contains `{independent:true,conflictDetected:boolean}`. A separate,
 preferably blinded reviewer aligns paraphrases with rubric facts and judges
@@ -51,7 +53,11 @@ Precision counts unique correct aligned facts; duplicates count as extra false
 positives. Recall divides by expected facts. Unsupported inference and duplicates
 divide by all predictions. Source correctness checks event identity plus literal
 quote, not semantic entailment. Conflict recall covers correction/withdrawal
-cases. Empty denominators are null. Missing/duplicate cases, wrong dataset or
+cases. A failed case keeps its expected facts
+and conflicts (no predictions, no detected conflict allowed), is reported in
+`failedCases`/`completionRate`, and never counts as correct abstention:
+`abstentionAccuracy` covers cases whose rubric expects nothing stored and
+requires a completed call with no predictions. Empty denominators are null. Missing/duplicate cases, wrong dataset or
 self-reviewed entries refuse scoring. Provider `{inputTokens,outputTokens,
 provenance:'provider'}` is required for complete token totals; absent or estimated
 usage is null, never zero. Include extraction, consolidation, retries and failed
@@ -63,8 +69,9 @@ separate report must establish that evidence before making quality claims.
 
 ## What was actually tested
 
-Five new deterministic tests cover score arithmetic and counterexamples, incomplete
-runs, rubric leakage, and actual Memory core replay on both splits. The replay
+Six new deterministic tests cover score arithmetic and counterexamples, incomplete
+runs, failed-call accounting, rubric/label leakage, and actual Memory core replay
+on both splits. The replay
 uses literal synthetic candidate responses, not a model; verifies inference stays
 uncertain, original sources trace across Sessions, forged handles/CAS fail and
 forgotten records disappear. It does not claim extraction accuracy. Existing

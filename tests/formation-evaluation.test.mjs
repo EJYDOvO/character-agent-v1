@@ -3,7 +3,7 @@ import {corpus,digest,score} from '../evaluation/memory-v1/score.mjs';
 import {LayeredMemory} from '../packages/character-memory-core/layered.mjs';
 import {processJob} from '../packages/character-memory-core/extraction.mjs';
 import {prepare} from '../evaluation/memory-v1/prepare.mjs';
-const run=split=>({datasetDigest:digest,targetHost:'0.2.2-rc.1',kind:'deterministic-fixture',split,results:corpus.cases.filter(c=>c.split===split).map(c=>({id:c.id,predictions:c.rubric.facts.map(f=>({factId:f.id,meaningPreserved:true,unsupported:false,sources:[{eventId:c.events[0].id,quote:c.events[0].text}]})),review:{independent:true,conflictDetected:c.rubric.conflictExpected}}))});
+const run=split=>({datasetDigest:digest,targetHost:'0.2.2-rc.1',kind:'deterministic-fixture',split,results:corpus.cases.filter(c=>c.split===split).map(c=>({id:c.id,predictions:c.rubric.facts.map(f=>({factId:f.id,meaningPreserved:true,unsupported:false,sources:[{eventId:c.events[0].id,quote:c.events[0].text}]})),outcome:'completed',review:{independent:true,conflictDetected:c.rubric.conflictExpected}}))});
 test('frozen bilingual development/held formation corpus and scorer arithmetic',()=>{
  assert.equal(digest,'77be8953c01d6bb2c8572392085d6d8622484837c8d1c08b6711fe0b7f070b03');
  for(const split of ['dev','held']){const r=run(split),m=score(r);assert.equal(m.precision,1);assert.equal(m.recall,1);assert.equal(m.sourceCorrectness,1);assert.equal(m.tokens,null);assert.equal(m.realModelQualityValidated,false);
@@ -15,7 +15,14 @@ test('missing cases, changed corpus and self-reviewed predictions cannot silentl
  const self=run('dev');self.results[0].review.independent=false;assert.throws(()=>score(self));
  const positives=run('held');for(const r of positives.results)r.review.conflictDetected=true;assert(score(positives).conflictAccuracy<1&&score(positives).conflictPrecision<1,'always predicting conflict must not look perfect');
 });
-test('model inputs exclude semantic answer rubrics and use current runtime prompts',()=>{for(const split of ['dev','held']){const p=prepare(split);assert.equal(p.cases.length,8);assert(!JSON.stringify(p.cases).includes('rubric'));assert(p.prompts.extraction.includes('quote'));assert.equal(p.networkCalls,0);}});
+test('failed model calls are not scored as correct abstention',()=>{
+ const ok=score(run('held'));assert.equal(ok.abstentionAccuracy,1);assert.equal(ok.failedCases,0);assert.equal(ok.completionRate,1);
+ const r=run('held');for(const x of r.results){x.outcome='failed';x.predictions=[];x.review.conflictDetected=false;}
+ const m=score(r);assert.equal(m.failedCases,8);assert.equal(m.completionRate,0);assert.equal(m.abstentionAccuracy,0);assert.equal(m.recall,0);assert.equal(m.conflictRecall,0);
+ const missing=run('dev');delete missing.results[0].outcome;assert.throws(()=>score(missing),/outcome/);
+ const forged=run('dev');forged.results[0].outcome='failed';assert.throws(()=>score(forged),/Failed calls/);
+});
+test('model inputs exclude semantic answer rubrics and use current runtime prompts',()=>{for(const split of ['dev','held']){const p=prepare(split);assert.equal(p.cases.length,8);assert(!JSON.stringify(p.cases).includes('rubric'));for(const c of p.cases)assert.deepEqual(Object.keys(c).sort(),['events','id','language','lifecycle','mode'],'scenario labels must not reach model inputs');assert(p.prompts.extraction.includes('quote'));assert.equal(p.networkCalls,0);}});
 for(const split of ['dev','held'])test('actual Memory core provenance/CAS/forget replay on '+split+' (not a semantic-model test)',()=>{
  return (async()=>{const dir=fs.mkdtempSync(path.join(os.tmpdir(),'formation-contract-'));try{for(const c of corpus.cases.filter(c=>c.split===split)){
   const handles=new Map(c.events.map(e=>[e.session,Object.freeze({sessionId:e.session})]));const allowed=new Set(handles.values());
