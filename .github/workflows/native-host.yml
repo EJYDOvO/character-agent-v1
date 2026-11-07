@@ -1,0 +1,54 @@
+name: Native Host gates (DSH 0.2.2-rc.1)
+# Runs only on a dedicated self-hosted Windows runner that holds the pinned,
+# signed test Host (docs/evidence/native-host-pin.json). Not enabled until such
+# a runner with the labels below is registered and DSH_TEST_HOST_ROOT is set;
+# until then this workflow never runs and is NOT a required check. Isolated
+# Homes and synthetic model/QQ transport only: no production data or QQ.
+on:
+  workflow_dispatch:
+    inputs:
+      qqtk_ref:
+        description: QQTK commit or branch to test against
+        required: true
+        default: main
+permissions:
+  contents: read
+concurrency:
+  group: native-host
+  cancel-in-progress: false
+jobs:
+  native:
+    runs-on: [self-hosted, Windows, dsh-0.2.2-rc.1]
+    timeout-minutes: 90
+    env:
+      DSH_CHARACTER_HOST_ROOT: ${{ vars.DSH_TEST_HOST_ROOT }}
+      DSH_INSTALL_ROOT: ${{ vars.DSH_TEST_HOST_ROOT }}
+      DSH_QQTK_PROJECT: ${{ github.workspace }}\qqtk
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: EJYDOvO/harness-qq-toolkit-public
+          ref: ${{ inputs.qqtk_ref }}
+          path: qqtk
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Locked dependencies
+        shell: pwsh
+        run: npm ci; if($LASTEXITCODE){exit $LASTEXITCODE}; Push-Location qqtk; npm ci; $c=$LASTEXITCODE; Pop-Location; exit $c
+      - name: Verified Host and required native gates
+        shell: pwsh
+        run: ./scripts/run-native-gates.ps1 -Summary "$env:RUNNER_TEMP\native\summary.json"
+      - name: Gate summary
+        if: ${{ !cancelled() }}
+        shell: pwsh
+        run: |
+          $f="$env:RUNNER_TEMP\native\summary.json"
+          if(Test-Path $f){$s=Get-Content $f -Raw|ConvertFrom-Json;"Native verdict: $($s.verdict)"|Out-File -Append $env:GITHUB_STEP_SUMMARY;foreach($g in $s.gates){"- $($g.id): $($g.status)"|Out-File -Append $env:GITHUB_STEP_SUMMARY}}
+          else{"Native verdict: not run (no summary)"|Out-File -Append $env:GITHUB_STEP_SUMMARY}
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: native-gates
+          path: ${{ runner.temp }}\native

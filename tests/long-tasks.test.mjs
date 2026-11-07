@@ -162,3 +162,43 @@ test('retained pre-0.2.2 rebound prompts still match their task; recovery writes
  assert.equal(await f.service.preStep(agent,{turn:1,messages:[receipt(task,'2030-01-01T00:00:00.000Z',row.record.prompt)]}),true);
  await f.tasks.put(task.id,{...f.tasks.get(task.id),state:'updating',pending:{...task,revision:2,prompt:'p2'}});await new LongTasks(f.host).recover();assert.equal(f.tasks.get(task.id).state,'active');assert.equal(f.tasks.get(task.id).revision,1,'Legacy suffix row is the unchanged revision');
 });
+async function settle(f,task,at,reason='completed',answer='已完成。'){
+ const agent=f.agents.get(task.sessionId),turn=Date.parse(at);
+ assert.equal(await f.service.preStep(agent,{turn,messages:[receipt(task,at)]}),true);
+ agent.session.events.push({type:'assistant/message',seq:Number.MAX_SAFE_INTEGER,data:{message:{content:[{type:'text',text:answer}]}}},{type:'turn/end',data:{turn,reason:{kind:reason}}});
+ await f.service.observe(agent.session,agent.session.events.at(-1));return f.runs.get(runId(task.id,at));
+}
+test('a completed run reports execution, unverified goal and delivery as separate facts',async()=>{
+ const f=await fixture(),records=new Map();
+ f.host.identity.notificationRecord=(s,id)=>{f.host.identity.validateConversation(s);return records.get(id)??null;};
+ const task=await f.service.create(f.owner,{...args,every_seconds:60,after_seconds:undefined});
+ const run=await settle(f,task,'2030-01-01T00:00:00.000Z',`completed`,'模型自述：目标已经达成。');
+ records.set('long-task:'+run.id,{id:'long-task:'+run.id,kind:'task_completed',status:'unknown',at:'2030-01-01T00:00:01.000Z',attention:'unknown'});
+ const [listed]=await f.service.list(f.owner),view=listed.runs.at(-1);
+ assert.equal(view.status,'completed','stored run state machine is unchanged');assert.equal(view.execution,'completed');
+ assert.equal(view.goalVerification,'unverified','model self-report is not goal evidence');
+ assert.deepEqual(view.delivery,{eventId:'long-task:'+run.id,status:'unknown',enqueuedAt:'2030-01-01T00:00:01.000Z',attention:'unknown'});
+ assert.equal(listed.deliveryAttention.length,1);assert.equal(listed.deliveryAttention[0].runId,run.id);
+ assert.equal(f.notified.size,1,'listing never resends');
+});
+test('delivery attention covers runs beyond the 20 shown and marks rows missing from the Outbox',async()=>{
+ const f=await fixture(),task=await f.service.create(f.owner,{...args,every_seconds:60,after_seconds:undefined});
+ const missing=new Set();
+ f.host.identity.notificationRecord=(_s,id)=>missing.has(id)?null:{id,kind:'task_completed',status:'sent',at:'2030-01-01T00:00:00.000Z',attention:null};
+ f.host.identity.notificationStatus=(_s,id)=>missing.has(id)?null:'sent';
+ const first=await settle(f,task,'2030-01-01T00:00:00.000Z','aborted');missing.add('long-task:'+first.id);
+ for(let i=1;i<=21;i++)await settle(f,task,new Date(Date.parse('2030-01-01T00:00:00.000Z')+i*60000).toISOString());
+ const [listed]=await f.service.list(f.owner);
+ assert.equal(listed.runs.length,20);assert(!listed.runs.some(r=>r.id===first.id),'oldest run is outside the shown window');
+ assert.equal(listed.deliveryAttention.length,1,'only the abnormal delivery is attention');
+ const [row]=listed.deliveryAttention;
+ assert.equal(row.runId,first.id);assert.equal(row.execution,'interrupted');assert.equal(row.status,'unrecorded');assert.equal(row.attention,'unrecorded');
+ assert.equal(row.lastReported,'sent','the run keeps what was reported when it settled');assert.equal(row.eventId,'long-task:'+first.id);
+});
+test('running runs are not delivery attention and other scopes stay invisible',async()=>{
+ const f=await fixture(),task=await f.service.create(f.owner,args),agent=f.agents.get(task.sessionId);
+ await f.service.preStep(agent,{turn:1,messages:[receipt(task)]});
+ const [listed]=await f.service.list(f.owner);assert.equal(listed.executionState,'running');
+ assert.deepEqual(listed.runs[0].delivery,{eventId:'long-task:'+listed.runs[0].id,status:'not-due',attention:null});assert.equal(listed.runs[0].goalVerification,'pending');assert.deepEqual(listed.deliveryAttention,[]);
+ const row=f.tasks.get(task.id);row.scope.conversationId='someone-else';await f.tasks.put(row.id,row);assert.deepEqual(await f.service.list(f.owner),[]);
+});

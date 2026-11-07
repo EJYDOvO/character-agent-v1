@@ -64,6 +64,26 @@ Root/children/retries. Missing usage/RSS is null. No-cost/no-tool denominators
 are null. An `independent` label is not attestation; the scorer always leaves
 `realModelQualityValidated:false`.
 
+## Execution-time budget contract
+
+No model execution driver exists yet. `budget.mjs` is the interface a future
+driver must use: one `createBudget(case.budget)` ledger per trial, the same
+object handed to Root and every Worker. Before each model call the driver
+reserves tokens (the grant caps that call), and settles provider usage after it;
+`beforeTool` and `beforeSpawn` run before dispatch (depth is at most 1, like
+native Spawn). Exhausting tokens, the wall deadline or `cancel()` aborts the
+shared `signal`; a refused tool/spawn does not end the trial. `close()`
+releases the timer and returns the ledger to store as `budgetLedger`.
+
+The scorer keeps refusing over-budget traces and names the trace in the error
+(`Refused trace <id>/<mode>: ...`) so refusals are recorded, not dropped. With a
+ledger it also refuses provider usage above a grant, unsettled reservations,
+totals that differ from the trace and a terminated trial not reporting
+`budget_exhausted`/`cancelled`. The only tolerance: a ledger-recorded wall stop
+may exceed `wallMs` by `WALL_ABORT_GRACE_MS` while the abort propagates; it
+counts in `budgetTerminations` and never as success. Tests use a fake clock;
+real provider cancellation latency and resource release are unmeasured.
+
 ## Audit and conclusion
 
 Current policy already avoids mandatory Planner use, defines specialist roles,

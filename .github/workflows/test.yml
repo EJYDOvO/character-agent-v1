@@ -31,4 +31,4 @@ jobs:
           echo "Commit: $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
           echo "Node: $(node --version)" >> "$GITHUB_STEP_SUMMARY"
           echo "OS: $RUNNER_OS. Test counts are in the unmodified test output above." >> "$GITHUB_STEP_SUMMARY"
-          echo "DSH/SDK: not installed on hosted CI; native integration is a separate Windows gate." >> "$GITHUB_STEP_SUMMARY"
+          echo "Native Host gates: NOT RUN here (no DSH Host on hosted runners). See the Native Host gates workflow; absence is not a pass." >> "$GITHUB_STEP_SUMMARY"
