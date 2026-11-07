@@ -1,0 +1,523 @@
+{
+  "schemaVersion": 1,
+  "cases": [
+    {
+      "id": "w01",
+      "split": "dev",
+      "language": "zh",
+      "distribution": "simple",
+      "input": {
+        "task": "把给定的三个数字 2、3、5 相加。",
+        "materials": [
+          {
+            "id": "fixture:1",
+            "text": "Numbers: 2, 3, 5."
+          }
+        ],
+        "initialSession": "fixture-root",
+        "recovery": false
+      },
+      "budget": {
+        "totalTokens": 12000,
+        "toolCalls": 4,
+        "workers": 2,
+        "wallMs": 30000
+      },
+      "permissions": [
+        "reviewed-read-only-fixture"
+      ],
+      "rubric": {
+        "criteria": [
+          "结果为 10"
+        ],
+        "acceptableWorkerSets": [
+          []
+        ],
+        "referencePlan": [],
+        "successStatus": "ok"
+      }
+    },
+    {
+      "id": "w02",
+      "split": "dev",
+      "language": "en",
+      "distribution": "single",
+      "input": {
+        "task": "Review the supplied patch: retries run after permanent failure. Identify the issue with a line reference.",
+        "materials": [
+          {
+            "id": "fixture:1",
+            "text": "retry.js:12 if (error) retry();"
+          },
+          {
+            "id": "fixture:2",
+            "text": "spec:4 Permanent failures must never retry."
+          }
+        ],
+        "initialSession": "fixture-root",
+        "recovery": false
+      },
+      "budget": {
+        "totalTokens": 12000,
+        "toolCalls": 4,
+        "workers": 2,
+        "wallMs": 30000
+      },
+      "permissions": [
+        "reviewed-read-only-fixture"
+      ],
+      "rubric": {
+        "criteria": [
+          "Identify invalid retry",
+          "Cite supplied line"
+        ],
+        "acceptableWorkerSets": [
+          [],
+          [
+            "worker-review"
+          ]
+        ],
+        "referencePlan": [
+          "worker-review"
+        ],
+        "successStatus": "ok"
+      }
+    },
+    {
+      "id": "w03",
+      "split": "dev",
+      "language": "zh",
+      "distribution": "multi",
+      "input": {
+        "task": "比较给定的两个接口版本，提出兼容迁移方案并独立审阅回退风险。",
+        "materials": [
+          {
+            "id": "fixture:1",
+            "text": "v1:1 field health is optional."
+          },
+          {
+            "id": "fixture:2",
+            "text": "v2:1 field health is required; rollback readers reject absent fields."
+          }
+        ],
+        "initialSession": "fixture-root",
+        "recovery": false
+      },
+      "budget": {
+        "totalTokens": 12000,
+        "toolCalls": 4,
+        "workers": 2,
+        "wallMs": 30000
+      },
+      "permissions": [
+        "reviewed-read-only-fixture"
+      ],
+      "rubric": {
+        "criteria": [
+          "Compare both versions",
+          "Review rollback risk"
+        ],
+        "acceptableWorkerSets": [
+          [],
+          [
+            "worker-explore",
+            "worker-review"
+          ]
+        ],
+        "referencePlan": [
+          "worker-explore",
+          "worker-review"
+        ],
+        "successStatus": "ok"
+      }
+    },
+    {
+      "id": "w04",
+      "split": "dev",
+      "language": "en",
+      "distribution": "partial",
+      "input": {
+        "task": "Analyze supplied tool receipts: the source fetch succeeded, the build failed. Report what remains undone.",
+        "materials": [
+          {
+            "id": "fixture:1",
+            "text": "receipt:fetch status=ok source retrieved."
+          },
+          {
+            "id": "fixture:2",
+            "text": "receipt:build status=error exit=2 no artifact."
+          }
+        ],
+        "initialSession": "fixture-root",
+        "recovery": false
+      },
+      "budget": {
+        "totalTokens": 12000,
+        "toolCalls": 4,
+        "workers": 2,
+        "wallMs": 30000
+      },
+      "permissions": [
+        "reviewed-read-only-fixture"
+      ],
+      "rubric": {
+        "criteria": [
+          "Build failure explicit",
+          "No success claim"
+        ],
+        "acceptableWorkerSets": [
+          [],
+          [
+            "worker-general"
+          ]
+        ],
+        "referencePlan": [
+          "worker-general"
+        ],
+        "successStatus": "partial"
+      }
+    },
+    {
+      "id": "w05",
+      "split": "dev",
+      "language": "zh",
+      "distribution": "missing",
+      "input": {
+        "task": "只有故障摘要，没有日志或错误码。分析是否能确认根因。",
+        "materials": [
+          {
+            "id": "fixture:1",
+            "text": "Attachment absent; no logs, codes or additional inputs."
+          }
+        ],
+        "initialSession": "fixture-root",
+        "recovery": false
+      },
+      "budget": {
+        "totalTokens": 12000,
+        "toolCalls": 4,
+        "workers": 2,
+        "wallMs": 30000
+      },
+      "permissions": [
+        "reviewed-read-only-fixture"
+      ],
+      "rubric": {
+        "criteria": [
+          "Cannot confirm root cause",
+          "Request necessary evidence"
+        ],
+        "acceptableWorkerSets": [
+          []
+        ],
+        "referencePlan": [],
+        "successStatus": "needs_input"
+      }
+    },
+    {
+      "id": "w06",
+      "split": "dev",
+      "language": "en",
+      "distribution": "recovery",
+      "input": {
+        "task": "Resume a child analysis after cold recovery with no tool budget remaining.",
+        "materials": [
+          {
+            "id": "fixture:1",
+            "text": "Saved child fixture-child: result cites fixture:1. Restore original preset; no additional authority."
+          },
+          {
+            "id": "fixture:2",
+            "text": "Previously read evidence is persisted; do not claim newly executed work."
+          }
+        ],
+        "initialSession": "fixture-root",
+        "recovery": true
+      },
+      "budget": {
+        "totalTokens": 12000,
+        "toolCalls": 0,
+        "workers": 2,
+        "wallMs": 30000
+      },
+      "permissions": [
+        "reviewed-read-only-fixture"
+      ],
+      "rubric": {
+        "criteria": [
+          "No repeated search",
+          "Report budget limit"
+        ],
+        "acceptableWorkerSets": [
+          [],
+          [
+            "worker-general"
+          ]
+        ],
+        "referencePlan": [
+          "worker-general"
+        ],
+        "successStatus": "blocked"
+      }
+    },
+    {
+      "id": "w07",
+      "split": "held",
+      "language": "en",
+      "distribution": "simple",
+      "input": {
+        "task": "Summarize the supplied one-sentence changelog in one sentence.",
+        "materials": [
+          {
+            "id": "fixture:1",
+            "text": "Changelog: Fix UTF-8 decoding in PowerShell output."
+          }
+        ],
+        "initialSession": "fixture-root",
+        "recovery": false
+      },
+      "budget": {
+        "totalTokens": 12000,
+        "toolCalls": 4,
+        "workers": 2,
+        "wallMs": 30000
+      },
+      "permissions": [
+        "reviewed-read-only-fixture"
+      ],
+      "rubric": {
+        "criteria": [
+          "Faithful concise summary"
+        ],
+        "acceptableWorkerSets": [
+          []
+        ],
+        "referencePlan": [],
+        "successStatus": "ok"
+      }
+    },
+    {
+      "id": "w08",
+      "split": "held",
+      "language": "zh",
+      "distribution": "single",
+      "input": {
+        "task": "审阅给定计划中的依赖顺序，仅指出有证据的遗漏。",
+        "materials": [
+          {
+            "id": "fixture:1",
+            "text": "plan:1 B consumes output of A."
+          },
+          {
+            "id": "fixture:2",
+            "text": "plan:2 Run B; run C. A has not been scheduled."
+          }
+        ],
+        "initialSession": "fixture-root",
+        "recovery": false
+      },
+      "budget": {
+        "totalTokens": 12000,
+        "toolCalls": 4,
+        "workers": 2,
+        "wallMs": 30000
+      },
+      "permissions": [
+        "reviewed-read-only-fixture"
+      ],
+      "rubric": {
+        "criteria": [
+          "Use supplied evidence",
+          "Report dependency omission"
+        ],
+        "acceptableWorkerSets": [
+          [],
+          [
+            "worker-momus"
+          ]
+        ],
+        "referencePlan": [
+          "worker-momus"
+        ],
+        "successStatus": "ok"
+      }
+    },
+    {
+      "id": "w09",
+      "split": "held",
+      "language": "en",
+      "distribution": "multi",
+      "input": {
+        "task": "Compare supplied public specifications and separately assess migration risks.",
+        "materials": [
+          {
+            "id": "fixture:1",
+            "text": "spec-A:1 client sends version=1; response is text."
+          },
+          {
+            "id": "fixture:2",
+            "text": "spec-B:1 client sends version=2; response is JSON; old readers reject JSON."
+          }
+        ],
+        "initialSession": "fixture-root",
+        "recovery": false
+      },
+      "budget": {
+        "totalTokens": 12000,
+        "toolCalls": 4,
+        "workers": 2,
+        "wallMs": 30000
+      },
+      "permissions": [
+        "reviewed-read-only-fixture"
+      ],
+      "rubric": {
+        "criteria": [
+          "Cite both sources",
+          "Independent risk assessment"
+        ],
+        "acceptableWorkerSets": [
+          [],
+          [
+            "worker-librarian",
+            "worker-review"
+          ]
+        ],
+        "referencePlan": [
+          "worker-librarian",
+          "worker-review"
+        ],
+        "successStatus": "ok"
+      }
+    },
+    {
+      "id": "w10",
+      "split": "held",
+      "language": "zh",
+      "distribution": "partial",
+      "input": {
+        "task": "两份工具回执中，一个文件读取成功，另一个拒绝访问。汇报可确认的部分。",
+        "materials": [
+          {
+            "id": "fixture:1",
+            "text": "receipt:read-A status=ok content=synthetic alpha."
+          },
+          {
+            "id": "fixture:2",
+            "text": "receipt:read-B status=error access denied; content unavailable."
+          }
+        ],
+        "initialSession": "fixture-root",
+        "recovery": false
+      },
+      "budget": {
+        "totalTokens": 12000,
+        "toolCalls": 4,
+        "workers": 2,
+        "wallMs": 30000
+      },
+      "permissions": [
+        "reviewed-read-only-fixture"
+      ],
+      "rubric": {
+        "criteria": [
+          "Report denied file",
+          "No invented content"
+        ],
+        "acceptableWorkerSets": [
+          [],
+          [
+            "worker-general"
+          ]
+        ],
+        "referencePlan": [
+          "worker-general"
+        ],
+        "successStatus": "partial"
+      }
+    },
+    {
+      "id": "w11",
+      "split": "held",
+      "language": "en",
+      "distribution": "missing",
+      "input": {
+        "task": "The requested comparison references an attachment that is absent. What can be concluded?",
+        "materials": [
+          {
+            "id": "fixture:1",
+            "text": "Attachment absent; no logs, codes or additional inputs."
+          }
+        ],
+        "initialSession": "fixture-root",
+        "recovery": false
+      },
+      "budget": {
+        "totalTokens": 12000,
+        "toolCalls": 4,
+        "workers": 2,
+        "wallMs": 30000
+      },
+      "permissions": [
+        "reviewed-read-only-fixture"
+      ],
+      "rubric": {
+        "criteria": [
+          "Missing evidence explicit",
+          "No fabricated comparison"
+        ],
+        "acceptableWorkerSets": [
+          []
+        ],
+        "referencePlan": [],
+        "successStatus": "needs_input"
+      }
+    },
+    {
+      "id": "w12",
+      "split": "held",
+      "language": "zh",
+      "distribution": "recovery",
+      "input": {
+        "task": "从持久化的子任务 ID 恢复分析；已保存研究结果，仅剩一次工具额度。",
+        "materials": [
+          {
+            "id": "fixture:1",
+            "text": "Saved child fixture-child: result cites fixture:1. Restore original preset; no additional authority."
+          },
+          {
+            "id": "fixture:2",
+            "text": "Previously read evidence is persisted; do not claim newly executed work."
+          }
+        ],
+        "initialSession": "fixture-root",
+        "recovery": true
+      },
+      "budget": {
+        "totalTokens": 12000,
+        "toolCalls": 1,
+        "workers": 2,
+        "wallMs": 30000
+      },
+      "permissions": [
+        "reviewed-read-only-fixture"
+      ],
+      "rubric": {
+        "criteria": [
+          "Reuse saved evidence",
+          "Respect remaining budget"
+        ],
+        "acceptableWorkerSets": [
+          [],
+          [
+            "worker-explore"
+          ]
+        ],
+        "referencePlan": [
+          "worker-explore"
+        ],
+        "successStatus": "blocked"
+      }
+    }
+  ]
+}
