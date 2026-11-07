@@ -226,7 +226,9 @@ export function apply(ctx,config) {
   },
   async notifyConversation(scope,event){service.validateConversation(scope);if(typeof event.eventId!=='string'||!event.eventId.startsWith('long-task:'))throw Error('Stable task event id required');enqueue({...event,conversation:conversationScope.conversationId});await pump();return statusOf(event.eventId);},
   notificationStatus(scope,id){service.validateConversation(scope);return outbox.status(id,conversationScope.conversationId);},
+  notificationRecord(scope,id){service.validateConversation(scope);return outbox.record(id,conversationScope.conversationId);},
   inspect(trusted){authorize(trusted,'read');return outbox.inspect(trusted.conversationId);},
+  attention(trusted){authorize(trusted,'read');return outbox.attention(trusted.conversationId);},
   cancel(trusted,eventId){authorize(trusted,'write');return outbox.cancel(eventId,trusted.conversationId);}
  });
  // Retired/unknown Character roots cannot run tools or an LLM, including Web

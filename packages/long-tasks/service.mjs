@@ -7,6 +7,22 @@ const text=m=>m?.content?.filter(b=>b.type==='text').map(b=>b.text).join('\n')??
 const unbound=prompt=>typeof prompt==='string'?prompt.replace(/\n\[HOST BINDING [0-9a-f-]{36}\]$/u,''):prompt;
 const missed=result=>!result||typeof result!=='object'||'code' in result;
 const actorOf=agent=>agent?.session?.id??agent?.id;
+// Three separate facts per run, derived for display; stored rows are unchanged.
+// execution: how the Agent turn settled. goalVerification: no independent
+// verifier exists, so a settled run is never reported as goal-achieved.
+// delivery: the Outbox row for the run's stable event id (API acceptance at
+// most; never proof the user read it). With no row in the current Owner
+// Conversation's Outbox (never enqueued, or recorded elsewhere) it is
+// 'unrecorded' and the run's last reported status is kept beside it.
+function runView(identity,scope,run){
+ const eventId='long-task:'+run.id,settled=terminal.has(run.status);
+ const record=identity.notificationRecord?.(scope,eventId)??null;
+ const status=record?.status??identity.notificationStatus?.(scope,eventId)??null;
+ const delivery=!settled?{eventId,status:status??'not-due',attention:null}
+  :status?{eventId,status,enqueuedAt:record?.at??null,attention:record?.attention??null,...(record?.held?{held:record.held}:{})}
+  :{eventId,status:'unrecorded',lastReported:run.notification??null,enqueuedAt:null,attention:'unrecorded'};
+ return {...run,notification:status??run.notification,execution:run.status,goalVerification:settled?'unverified':'pending',delivery};
+}
 export class LongTasks {
  constructor(host,{presetId='long-task',allowTools=[]}={}){this.h=host;this.presetId=presetId;this.allowTools=allowTools;this.chain=Promise.resolve();this.active=new Map();this.closed=false;this.ready=new Promise((resolve,reject)=>{this.resolveReady=resolve;this.rejectReady=reject;});this.ready.catch(()=>{});}
  serial(fn){const p=this.chain.then(()=>{if(this.closed)throw Error('Long tasks disabled');return fn();});this.chain=p.catch(()=>{});return p;}
@@ -34,7 +50,11 @@ export class LongTasks {
   const catalog=await this.h.schedule.catalog();
   const byTask=new Map();for(const [,run]of this.h.runs.entries()){const rows=byTask.get(run.taskId)??[];rows.push(run);byTask.set(run.taskId,rows);}
   const state=(t,schedule)=>t.state!=='active'||!schedule?t.state:targetSession(schedule)!==t.sessionId?'schedule_mismatch':schedule.status==='ended'?'ended':schedule.status==='paused'?'paused':t.state;
-  return [...this.h.tasks.entries()].map(([,t])=>t).filter(t=>['principalId','characterId','projectId','conversationId'].every(k=>t.scope[k]===scope[k])).map(t=>{const schedule=catalog.find(s=>s.id===t.scheduleId),runs=(byTask.get(t.id)??[]).slice(-20).map(r=>({...r,notification:this.h.identity.notificationStatus?.(t.scope,'long-task:'+r.id)??r.notification}));return {...t,schedule,executionState:runs.some(r=>r.status==='running')?'running':state(t,schedule),runs};});
+  return [...this.h.tasks.entries()].map(([,t])=>t).filter(t=>['principalId','characterId','projectId','conversationId'].every(k=>t.scope[k]===scope[k])).map(t=>{const schedule=catalog.find(s=>s.id===t.scheduleId),all=(byTask.get(t.id)??[]).map(r=>runView(this.h.identity,t.scope,r)),runs=all.slice(-20);
+   // Attention covers every run, not only the 20 shown: an older uncertain or
+   // never-enqueued notification must stay visible. Ids, times and states only.
+   const deliveryAttention=all.filter(r=>r.delivery.attention).slice(-20).map(r=>({runId:r.id,occurrenceAt:r.occurrenceAt,endedAt:r.endedAt??null,execution:r.execution,...r.delivery}));
+   return {...t,schedule,executionState:all.some(r=>r.status==='running')?'running':state(t,schedule),runs,deliveryAttention};});
  });}
  async update(agent,{id,revision,title,prompt,change},signal){await this.ready;return this.serial(async()=>{
   signal?.throwIfAborted();

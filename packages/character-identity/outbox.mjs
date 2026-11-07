@@ -12,6 +12,9 @@
 //     limit) returns to 'pending'; a platform refusal stays 'not-sent'.
 //   - Terminal writes apply only to the row this owner still holds ('sending').
 import {createHash,randomUUID} from 'node:crypto';
+// A pending row older than this has neither been delivered nor settled; it is
+// reported for Owner attention (often held: unverified source or no Gateway).
+export const STALE_PENDING_MS=15*60_000;
 const KINDS=['scheduled_reminder','task_completed','task_failed','task_timeout','maintenance_result','configured_alert'];
 // One owner per state file in a process (HMR may overlap an old and a new
 // instance): a new owner recovers and pumps only after the previous one closed.
@@ -123,6 +126,19 @@ export function createOutbox({db,key,logger,now=Date.now,retryAfterMs=60_000,dia
  const status=(id,conversation)=>db.prepare('SELECT status FROM outbox WHERE id=?'+(conversation?' AND conversation=?':'')).get(...(conversation?[id,conversation]:[id]))?.status??null;
  const cancel=(id,conversation)=>db.prepare("UPDATE outbox SET status='cancelled' WHERE id=? AND conversation=? AND status='pending'").run(id,conversation).changes===1;
  const inspect=conversation=>db.prepare('SELECT id,kind,status,at FROM outbox WHERE conversation=? ORDER BY at DESC LIMIT 30').all(conversation);
+ // Read-only delivery views over the existing columns: id, kind, status and the
+ // enqueue time only, never the text. Nothing here retries or changes a row;
+ // an uncertain delivery stays uncertain until a separate resend contract exists.
+ const classify=(row,cutoff)=>({...row,attention:['unknown','partial','not-sent'].includes(row.status)?row.status:row.status==='pending'&&row.at<cutoff?'stale-pending':null,...(row.status==='pending'&&held.get(row.id)===Infinity?{held:'authorization'}:{})});
+ const cutoffOf=ms=>new Date(now()-ms).toISOString();
+ function record(id,conversation,{stalePendingMs=STALE_PENDING_MS}={}){
+  const row=db.prepare('SELECT id,kind,status,at FROM outbox WHERE id=? AND conversation=?').get(id,conversation);
+  return row?classify(row,cutoffOf(stalePendingMs)):null;
+ }
+ function attention(conversation,{stalePendingMs=STALE_PENDING_MS}={}){
+  const cutoff=cutoffOf(stalePendingMs);
+  return db.prepare("SELECT id,kind,status,at FROM outbox WHERE conversation=? AND (status IN ('unknown','partial','not-sent') OR (status='pending' AND at<?)) ORDER BY at DESC LIMIT 100").all(conversation,cutoff).map(row=>classify(row,cutoff));
+ }
  /** Stop: queued hand-overs are cancelled (provably unsent → pending), an in-flight part completes; then the lease is released. */
  function close(){
   if(closing)return closing;
@@ -135,5 +151,5 @@ export function createOutbox({db,key,logger,now=Date.now,retryAfterMs=60_000,dia
    release();if(leases.get(key)===lease)leases.delete(key);
   })();return closing;
  }
- return Object.freeze({ready,enqueue,pump,releaseHeld,status,cancel,inspect,sourceOf,close,size:()=>({held:held.size,attempts:attempts.size})});
+ return Object.freeze({ready,enqueue,pump,releaseHeld,status,record,attention,cancel,inspect,sourceOf,close,size:()=>({held:held.size,attempts:attempts.size})});
 }

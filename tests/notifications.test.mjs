@@ -108,3 +108,12 @@ test('evidenced binding repair is atomic, read-only audit changes nothing, and f
  try{f.service.attach(f.runtime);const old=f.makeAgent('old-root');await f.events.get('agent/created')({agent:old,source:'resume'});assert.equal(f.runtime.manager.preserveScheduledSession(old.id),true);assert.throws(()=>f.service.forSession(old.id));assert.equal((await f.service.auditSchedules()).rows[0].binding,'bound');assert.deepEqual(f.host.schedule.catalog&&await f.host.schedule.catalog(),[{id:'legacy',target:{kind:'session',sessionId:'old-root'},status:'active'}]);}
  finally{f.dispose();}
 });
+test('Owner-authorized attention lists an uncertain delivery without text; forged scopes and other Sessions are refused',async()=>{const f=fixture();let sends=0;try{f.runtime.notifications.send=async()=>{sends++;return {status:'unknown',reason:'timeout-or-network',parts:[{index:0,status:'unknown'}]};};f.service.attach(f.runtime);await f.runtime.manager.getOrCreate('c2c','owner','owner',{scope:'c2c',targetId:'owner'});
+ const scope=f.service.conversationScope(),status=await f.service.notifyConversation(scope,{eventId:'long-task:visible',kind:'task_completed',text:'[长期任务] 私密结果正文'});assert.equal(status.status,'unknown');
+ const trusted=f.service.forSession('session'),rows=f.service.attention(trusted);assert.deepEqual(rows.map(r=>[r.id,r.status,r.attention]),[['long-task:visible','unknown','unknown']]);assert(!JSON.stringify(rows).includes('私密结果正文'));
+ assert.equal(f.service.notificationRecord(scope,'long-task:visible').attention,'unknown');
+ assert.throws(()=>f.service.notificationRecord({...scope,projectId:'forged'},'long-task:visible'));
+ assert.throws(()=>f.service.attention({...trusted}),'a copied capability is not the Owner');
+ f.makeAgent('stranger');assert.throws(()=>f.service.attention(f.service.forSession('stranger')));
+ await f.service.notifyConversation(scope,{eventId:'long-task:visible',kind:'task_completed',text:'[长期任务] 私密结果正文'});assert.equal(sends,1,'unknown is never resent');
+}finally{f.dispose();}});
