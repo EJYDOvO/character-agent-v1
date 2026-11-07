@@ -21,8 +21,11 @@ function readVersion(root){
 function authenticode(exe){
  if(process.platform!=='win32')return {status:'unsupported-platform',signer:null};
  const script="$s=Get-AuthenticodeSignature -LiteralPath $env:VERIFY_HOST_EXE;[pscustomobject]@{status=[string]$s.Status;signer=[string]$s.SignerCertificate.Subject}|ConvertTo-Json -Compress";
- const out=cp.execFileSync('powershell.exe',['-NoProfile','-NonInteractive','-Command',script],{encoding:'utf8',env:{...process.env,VERIFY_HOST_EXE:exe},windowsHide:true});
- return JSON.parse(out);
+ // Windows PowerShell 5.1 started from PowerShell 7 inherits PSModulePath and
+ // then cannot load its own Security module; give it its default module path.
+ const {PSModulePath,PSMODULEPATH,...env}=process.env;
+ try{return JSON.parse(cp.execFileSync('powershell.exe',['-NoProfile','-NonInteractive','-Command',script],{encoding:'utf8',env:{...env,VERIFY_HOST_EXE:exe},windowsHide:true,stdio:['ignore','pipe','pipe']}));}
+ catch(error){return {status:'error',signer:null,error:String(error.stderr||error.message).slice(0,300)};}
 }
 function verifyHost(root,pin=JSON.parse(fs.readFileSync(PIN,'utf8')),{signature=authenticode}={}){
  const checks=[],fail=reason=>({ok:false,reason,checks,pin:{version:pin.version}});

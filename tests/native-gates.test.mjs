@@ -56,3 +56,6 @@ test('required gates cover Worker, Identity, Schedule and Long Tasks lifecycles 
  const pin=JSON.parse(fs.readFileSync(new URL('../docs/evidence/native-host-pin.json',import.meta.url),'utf8'));
  assert.equal(pin.version,'0.2.2-rc.1');for(const k of ['executableSha256','appAsarSha256','appAsarUnpackedTreeSha256'])assert.match(pin[k],/^[0-9a-f]{64}$/,k);
 });
+test('a signature check that errors is a refusal, not a crash or a pass',()=>{
+ const h=fakeHost();try{const r=verifyHost(h.root,h.pin,{signature:()=>({status:'error',signer:null,error:'module not loaded'})});assert.equal(r.ok,false);assert.match(r.reason,/signature/);}finally{h.cleanup();}
+});
