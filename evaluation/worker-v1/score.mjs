@@ -9,11 +9,11 @@ export function compare(run){
  const cases=corpus.cases.filter(c=>c.split===run.split);assert.equal(run.results.length,cases.length*3);
  const summary={};
  for(const mode of ['direct','policy','control']){
-  let success=0,unnecessary=0,selection=0,calls=0,effective=0,verified=0,workerResults=0,tokens=0,known=true,failuresReported=0;const times=[],rss=[];
+  let success=0,unnecessary=0,selection=0,calls=0,effective=0,verified=0,workerResults=0,tokens=0,known=true,failuresReported=0,falseFailures=0;const times=[],rss=[];
   for(const c of cases){
    const rows=run.results.filter(r=>r.id===c.id&&r.mode===mode);assert.equal(rows.length,1,'Missing or duplicate paired condition');const r=rows[0];
    assert(same(r.budget,c.budget)&&same(r.permissions,c.permissions));assert.equal(r.inputDigest,createHash('sha256').update(JSON.stringify(c.input)).digest('hex'));
-   assert.equal(r.model,run.model);assert.equal(r.settingsDigest,run.settingsDigest);assert(r.review?.independent&&typeof r.review.correct==='boolean');
+   assert.equal(r.model,run.model);assert.equal(r.settingsDigest,run.settingsDigest);assert(r.review?.independent===true&&typeof r.review.correct==='boolean');
    assert(Array.isArray(r.workers)&&Array.isArray(r.tools)&&Array.isArray(r.verifications));
    if(mode==='direct')assert.equal(r.workers.length,0);if(mode==='control')assert(same([...r.workers].sort(),[...c.rubric.referencePlan].sort()));
    assert(r.workers.length<=c.budget.workers&&r.tools.length<=c.budget.toolCalls);assert(Number.isFinite(r.elapsedMs)&&r.elapsedMs>=0&&r.elapsedMs<=c.budget.wallMs);
@@ -26,11 +26,14 @@ export function compare(run){
    const references=new Set([...c.input.materials.map(m=>m.id),...r.tools.map(t=>t.id)]);
    for(const v of r.verifications){assert(Number.isInteger(v.workerIndex)&&v.workerIndex>=0&&v.workerIndex<r.workers.length);assert(Array.isArray(v.evidenceRefs)&&v.evidenceRefs.length>0&&v.evidenceRefs.every(id=>references.has(id)));}
    verified+=new Set(r.verifications.map(v=>v.workerIndex)).size;
-   failuresReported+=Number(c.rubric.successStatus!=='ok'&&r.review.failureReported);times.push(r.elapsedMs);
+   failuresReported+=Number(c.rubric.successStatus!=='ok'&&r.review.failureReported);
+   // Reporting failure on a task that should succeed is the paired error; without
+   // it, always reporting failure would score a perfect failure-reporting rate.
+   falseFailures+=Number(c.rubric.successStatus==='ok'&&r.review.failureReported);times.push(r.elapsedMs);
    if(Number.isFinite(r.peakRssBytes)&&r.peakRssBytes>=0)rss.push(r.peakRssBytes);
    if(r.usage?.provenance==='provider'&&Number.isSafeInteger(r.usage.totalTokens)&&r.usage.totalTokens>=0){assert(r.usage.totalTokens<=c.budget.totalTokens);tokens+=r.usage.totalTokens;}else known=false;
   }
-  times.sort((a,b)=>a-b);summary[mode]={successRate:rate(success,cases.length),unnecessaryDelegationRate:rate(unnecessary,cases.filter(c=>!c.rubric.referencePlan.length).length),selectionReasonableness:rate(selection,cases.length),toolCalls:calls,effectiveToolRate:rate(effective,calls),rootVerificationCoverage:rate(verified,workerResults),failureReportingRate:rate(failuresReported,cases.filter(c=>c.rubric.successStatus!=='ok').length),tokens:known?tokens:null,p50Ms:times[Math.floor(times.length/2)],peakRssBytes:rss.length===cases.length?Math.max(...rss):null};
+  times.sort((a,b)=>a-b);summary[mode]={successRate:rate(success,cases.length),unnecessaryDelegationRate:rate(unnecessary,cases.filter(c=>!c.rubric.referencePlan.length).length),selectionReasonableness:rate(selection,cases.length),toolCalls:calls,effectiveToolRate:rate(effective,calls),rootVerificationCoverage:rate(verified,workerResults),failureReportingRate:rate(failuresReported,cases.filter(c=>c.rubric.successStatus!=='ok').length),falseFailureReportRate:rate(falseFailures,cases.filter(c=>c.rubric.successStatus==='ok').length),tokens:known?tokens:null,p50Ms:times[Math.floor(times.length/2)],peakRssBytes:rss.length===cases.length?Math.max(...rss):null};
  }
  return {kind:run.kind,realModelQualityValidated:false,split:run.split,cases:cases.length,summary};
 }

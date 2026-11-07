@@ -59,7 +59,7 @@ Refused runs must be reported, never silently dropped and replaced by successes.
 It reports outcome correctness (including correct partial/blocked/needs_input),
 unnecessary delegation on simple/missing tasks, rubric-compatible selection,
 tool effectiveness, Root verification coverage, failure reporting on non-ok
-tasks, tokens, p50 wall time and peak RSS. Provider total tokens must include
+tasks paired with false failure reports on ok tasks, tokens, p50 wall time and peak RSS. Provider total tokens must include
 Root/children/retries. Missing usage/RSS is null. No-cost/no-tool denominators
 are null. An `independent` label is not attestation; the scorer always leaves
 `realModelQualityValidated:false`.
@@ -73,8 +73,8 @@ parent communication, late global tool scope, identity and cold recovery already
 have native regression coverage. Root verifying semantic claims is primarily a
 model behavior; policy text alone does not prove it occurs.
 
-Four new deterministic tests validate split freeze, score arithmetic, deliberate
-bad success/verification/tool traces, fairness refusals and reference-plan leakage.
+Five new deterministic tests validate split freeze, score arithmetic, deliberate
+bad success/verification/tool traces, blanket failure reporting, fairness refusals and reference-plan leakage.
 Synthetic perfect traces are scorer unit fixtures, not measured delegation
 success rates. No dedicated model credentials were configured; direct/policy/
 control success, token cost and latency have not been measured on a real model.
