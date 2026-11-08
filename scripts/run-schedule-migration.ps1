@@ -3,7 +3,9 @@ $ErrorActionPreference='Stop'
 # DSH_MIGRATION_FROM_ROOT: previous Host (writes v1). DSH_CHARACTER_HOST_ROOT: target Host.
 if(!$env:DSH_MIGRATION_FROM_ROOT -or !$env:DSH_CHARACTER_HOST_ROOT){throw 'Set DSH_MIGRATION_FROM_ROOT and DSH_CHARACTER_HOST_ROOT explicitly'}
 $project=Split-Path $PSScriptRoot -Parent
-$runId=[guid]::NewGuid().ToString();$home2=Join-Path $project ("test-data/migration-$runId");$dir=Join-Path $home2 'profiles/migration'
+$node=$env:DSH_NODE_EXE;if(!$node){$node=(Get-Command node -ErrorAction Stop).Source}
+# Isolated Home outside any git work tree (scripts/test-home.cjs).
+$runId=[guid]::NewGuid().ToString();$home2=(& $node (Join-Path $PSScriptRoot 'test-home.cjs') new migration).Trim();if($LASTEXITCODE -ne 0 -or !$home2){throw 'Isolated test Home not created'};$dir=Join-Path $home2 'profiles/migration'
 New-Item -ItemType Directory -Force -Path $dir,(Join-Path $home2 'tmp') | Out-Null
 [IO.File]::WriteAllText((Join-Path $dir 'package.json'),(@{name='schedule-migration';private=$true;dsh=@{profile=@{bundles=@('@deepseek-ai/dsh-base','@deepseek-ai/dsh-web-app')}}}|ConvertTo-Json -Depth 5))
 $probe=([Uri](Join-Path $project 'tests/schedule-migration-host.mjs')).AbsoluteUri;$result=Join-Path $home2 'result.json'
