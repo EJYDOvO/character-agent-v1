@@ -90,7 +90,7 @@ export function apply(ctx,config){
      const result=await callTool(ctx,record.agent,name,args,{signal:AbortSignal.timeout(5000)});assert(denied(result),name+' on a task root Schedule must be denied');}
     assert.deepEqual((await ctx.schedule.view({id:periodic.scheduleId})).target,{kind:'session',sessionId:periodic.sessionId});assert((await ctx.schedule.view({id:once.scheduleId})).target);
     report.checks.push('Owner root cannot view, delete or retarget independent task Schedules through native tools');
-    assert.deepEqual([...ctx.tools.view(taskAgent).visible.keys()],['task_fixture_read']);
+    assert.deepEqual([...ctx.tools.view(taskAgent).visible.keys()].sort(),['task_fixture_read','task_fixture_slow']);
     assert((await ctx.skills.list({scope:record.agent,cwd:config.cwd})).some(s=>s.name==='long-tasks'));
     await ctx.sessions.flush(record.agent.session);
     // Deliberate pre-upgrade missing binding in this synthetic DB only. The
@@ -110,7 +110,7 @@ export function apply(ctx,config){
     expire();assert.equal((await get('busy-input')).sessionId,first);record.lastActivity=0;manager.evictor.check();assert(manager.sessions.has(key));control.release();await record.agent.whenIdle();
     report.phase='idle-session-rotation';record=await get('after-busy');assert.notEqual(record.sessionId,first);
     expire();const concurrent=await Promise.all(Array.from({length:5},(_,i)=>get('parallel-'+i)));assert.equal(new Set(concurrent.map(r=>r.sessionId)).size,1);assert.notEqual(concurrent[0].sessionId,record.sessionId);record=concurrent[0];report.checks.push('12h user inactivity, busy/eviction protection, no fork and concurrent rotation');
-    const zoned=Object.entries(state.zonedTasks),expected=7;
+    const zoned=Object.entries(state.zonedTasks);let expected=7;
     for(const [kind,z] of zoned){const row=await ctx.schedule.view({id:z.schedule});assert.equal(row.kind,kind,'Restarted Host keeps the '+kind+' rule');assert.equal(row.timeZone,'UTC');assert(row.status==='active');}
     const deadline=Math.max(Date.now()+72000,state.zonedDue+30000);let tasks;
     while(Date.now()<deadline){tasks=await ctx.longTasks.list(record.agent);if([state.once,state.error,state.periodic,...zoned.map(([,z])=>z.id)].every(id=>{const r=tasks.find(t=>t.id===id)?.runs[0];return r&&r.status!=='running'&&r.notification==='sent';})&&deliveries.some(d=>d.text.includes('Legacy reminder')))break;await sleep(150);}
@@ -120,6 +120,7 @@ export function apply(ctx,config){
      assert.equal(Date.parse((await ctx.schedule.view({id:z.schedule})).scheduledAt),state.zonedDue+z.period,kind+' advances to its next period');}
     report.checks.push('Long Tasks daily/weekly/cron: native time_zone rules created, updated, kept across restart, delivered once, advanced one period');
     assert.equal(tasks.find(t=>t.id===state.cancelled).runs.length,0);assert.equal(deliveries.length,expected,'Six results plus one legacy reminder');assert(deliveries.every(d=>d.target.targetId==='fixture-owner'));
+    assert(!deliveries.some(d=>d.text.includes('任务尚未结束')),'Short tasks send no activity report');
     const old=ctx.agents.get(state.reminderSession);assert(old,'Official Schedule cold-resumed its original Session');assert.equal(ctx.characterIdentity.route(ctx.characterIdentity.forSession(record.sessionId)).session,record.sessionId);
     assert.throws(()=>ctx.characterIdentity.forSession(old.id));assert.throws(()=>ctx.memoryIdentity.forSession(old.id));await assert.rejects(()=>ctx.longTasks.create(old,{title:'bypass',prompt:'no',after_seconds:1}));
     const audit=await ctx.characterIdentity.auditSchedules();assert.equal(audit.rows.find(r=>r.id===state.oldReminder).binding,'bound');
@@ -161,6 +162,18 @@ export function apply(ctx,config){
     const once=tasks.find(t=>t.id===state.once),agent=ctx.agents.get(once.sessionId),before=once.runs.length,delivery=agent.session.snapshotEvents().find(e=>e.type==='user/message'&&(e.data?.message??e.data)?.source?.kind==='schedule'),duplicate=delivery?.data?.message??delivery?.data;
     assert(duplicate);agent.followup(duplicate);await agent.whenIdle();await sleep(100);assert.equal((await ctx.longTasks.list(record.agent)).find(t=>t.id===state.once).runs.length,before);assert.equal(deliveries.length,expected);
     await ctx.longTasks.cancel(record.agent,{id:state.periodic,revision:tasks.find(t=>t.id===state.periodic).revision});
+    // C2 Lite: a task whose one tool call outlasts the first-report window gets
+    // one activity report from native step/tool events through the same Outbox,
+    // then its unchanged terminal notification. Runs after the periodic task is
+    // cancelled so its 20 s cannot admit another periodic occurrence.
+    const slow=await ctx.longTasks.create(record.agent,{title:'Activity',prompt:'slow-tool-fixture',after_seconds:1}),slowEnd=Date.now()+60000;let slowRun;
+    while(Date.now()<slowEnd){slowRun=(await ctx.longTasks.list(record.agent)).find(t=>t.id===slow.id)?.runs[0];if(slowRun&&slowRun.status!=='running'&&slowRun.notification==='sent')break;await sleep(150);}
+    assert.equal(slowRun?.status,'completed');const slowTexts=deliveries.filter(d=>d.text.startsWith('[长期任务] Activity')).map(d=>d.text);
+    assert.equal(slowTexts.length,2,'one activity report, then the terminal notification');assert.match(slowTexts[1],/本轮执行结束/u);
+    assert.match(slowTexts[0],/任务尚未结束[\s\S]*当前处于第 1 个执行步骤；发起 1 次工具调用（工具 task_fixture_slow）[\s\S]*正在等待工具 task_fixture_slow 返回/u);
+    assert.equal(slowRun.report.count,1);assert(slowRun.report.eventId.startsWith('long-task:'+slowRun.id+':activity:'));assert.equal(slowRun.activity.calls,1);assert.equal(slowRun.activity.results,1);assert.deepEqual(slowRun.activity.open,[]);
+    {const db=new DatabaseSync(config.cwd+'/coordination.sqlite');try{assert.deepEqual({...db.prepare('SELECT kind,status FROM outbox WHERE id=?').get(slowRun.report.eventId)},{kind:'task_activity',status:'sent'});}finally{db.close();}}
+    expected+=2;report.checks.push('Long Task activity: native step/tool events give one report after the first window through the same Outbox, beside the unchanged terminal notification; short tasks send none');
     const llmCalls=globalThis[Symbol.for('fixture.tasks.llm.calls')],oldReads=globalThis[Symbol.for('fixture.tasks.read.calls')];
     old.followup(createUserMessage({source:{kind:'user'},content:[{type:'text',text:'read-tool-fixture'}]}));await old.whenIdle();await sleep(100);
     assert.equal(globalThis[Symbol.for('fixture.tasks.llm.calls')],llmCalls,'Retired root must not call the model');

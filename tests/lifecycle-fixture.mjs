@@ -14,7 +14,7 @@ export async function apply(ctx,config){
  class Fixture extends LlmAdapter{async *stream(request){
   globalThis[Symbol.for('fixture.tasks.llm.calls')]++;
   const input=JSON.stringify(request.messages.filter(m=>m.role==='user')),tool=request.messages.some(m=>m.role==='tool');
-  const name=input.includes('owner-busy-fixture')?'task_fixture_wait':input.includes('read-tool-fixture')?'task_fixture_read':null;
+  const name=input.includes('owner-busy-fixture')?'task_fixture_wait':input.includes('read-tool-fixture')?'task_fixture_read':input.includes('slow-tool-fixture')?'task_fixture_slow':null;
   if(name&&!tool){yield {type:'tool-call-delta',index:0,id:'fixture-call',name,argumentsDelta:'{}'};yield {type:'finish',reason:{kind:'stop'}};return;}
   yield {type:'text-delta',index:0,text:'Synthetic task result; goal not independently verified.'};yield {type:'finish',reason:{kind:'stop'}};
  }}

@@ -14,6 +14,10 @@
 
 新 portable 入口显式指定发行目录、新 Home、模型、账号、Owner、Persona 与可选插件；根依赖锁和版本清单进入 Git，生成 Core/包/Profile 与数据不进入 Git。旧布局脚本仍用于现有兼容回归，不代表新设备配置默认值。
 
+## 分支待审（未合并、未部署）
+
+- C2 Lite（分支 `feat/c2-lite-task-activity`，Character test.34 / Long Tasks test.4）：运行中的 Long Task 依据原生 `step/start`、`tool/call`、`tool/result` 事件，经同一 Outbox 发出低频活动汇报（`task_activity`，ID `long-task:<runId>:activity:<事件序号>`）。首次在运行满 90 秒后，之后至少间隔 5 分钟且只在有新活动时发送；首次汇报后的第一次工具错误可立即提示一次。内容只有计数、步骤、工具名与等待状态，不含参数、结果、百分比或预计时间，不调用模型。每个 run 一个内存定时器，结束/取消/停用时清除；重启沿用原有结算，不重建定时器。终态状态机、终态通知 ID、权限与 `allowTools` 不变。详见 [Long Tasks README](../packages/long-tasks/README.md)。验证（2026-11-08，本机 Windows，固定 0.2.2-rc.1 宿主，合成模型与假 Sender）：Character 单元 372/372、安全 35/35；`run-native-gates.ps1` 四项门禁全部通过（lifecycle 第二阶段新增检查：慢工具任务在首次窗口后得到一条真实原生事件生成的活动汇报，Outbox 行为 `task_activity`/`sent`，其后是未改变的终态通知；短任务没有活动汇报）。首次真实宿主运行发现两处单元测试未覆盖的问题并已修正：原生 `tool/result` 的调用 ID 在 `toolCallId`/`source.callId`，不是 `callId`；合成任务在真实宿主上需要 3–4 秒，门禁首次窗口改为 15 秒。同日一次整套门禁中 lifecycle 第 127 行既有断言（未证明归属提醒的目标 Session 不应被加载）失败一次，其余三次运行通过，原因未查明；另一次 workers 门禁结束后，DSH workspace-changes 在工作副本中启动的 `git add` 阻塞约一小时，使运行器挂起（门禁本身已通过）。真实模型长任务与 QQ 手机送达未验证。
+
 ## 已合并、未部署
 
 - test.33（C0）：`long_task_list` 对每个 run 分开报告 `execution`、`goalVerification`（无独立验证器，结算后为 `unverified`）与 `delivery`（事件 ID、Outbox 状态、入队时间），并以 `deliveryAttention` 汇总全部 run 的 unknown/partial/not-sent/长时间 pending/unrecorded 投递；`character_notifications` 增加同样的 attention 视图。只读、无正文、不重发，不改 run 状态机与 Outbox Schema。Worker 评测增加执行期预算账本契约（尚无模型执行器）。原生门禁增加固定 Host 校验（版本、哈希、签名）与统一判定。

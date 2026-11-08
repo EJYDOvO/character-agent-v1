@@ -117,3 +117,12 @@ test('Owner-authorized attention lists an uncertain delivery without text; forge
  f.makeAgent('stranger');assert.throws(()=>f.service.attention(f.service.forSession('stranger')));
  await f.service.notifyConversation(scope,{eventId:'long-task:visible',kind:'task_completed',text:'[长期任务] 私密结果正文'});assert.equal(sends,1,'unknown is never resent');
 }finally{f.dispose();}});
+test('Long Task activity reports use the same Outbox: own id beside the terminal one, idempotent, unknown never resent',async()=>{const f=fixture();const sends=[];try{f.runtime.notifications.send=async request=>{sends.push(request.text);return sends.length===1?{status:'unknown',reason:'timeout-or-network',parts:[{index:0,status:'unknown'}]}:{status:'sent',parts:[{index:0,status:'sent'}]};};f.service.attach(f.runtime);await f.runtime.manager.getOrCreate('c2c','owner','owner',{scope:'c2c',targetId:'owner'});
+ const scope=f.service.conversationScope(),activity={eventId:'long-task:run-1:activity:7',kind:'task_activity',text:'[长期任务] 检查\n任务尚未结束'};
+ assert.equal((await f.service.notifyConversation(scope,activity)).status,'unknown');
+ assert.equal((await f.service.notifyConversation(scope,activity)).status,'unknown','replay of the same report enqueues nothing new');
+ await assert.rejects(()=>f.service.notifyConversation(scope,{...activity,text:'changed'}),/id conflict/);
+ assert.equal((await f.service.notifyConversation(scope,{eventId:'long-task:run-1',kind:'task_completed',text:'[长期任务] 检查\n本轮执行结束'})).status,'sent','the terminal notification is independent of the activity row');
+ assert.equal(sends.length,2,'the uncertain activity report is never resent');
+ assert.deepEqual(f.service.attention(f.service.forSession('session')).map(r=>[r.id,r.kind,r.attention]),[['long-task:run-1:activity:7','task_activity','unknown']]);
+}finally{f.dispose();}});

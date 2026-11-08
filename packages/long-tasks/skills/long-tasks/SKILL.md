@@ -10,5 +10,6 @@ description: 管理独立 Session 的长期工作，并区分提醒到期、指�
 - 后台任务拥有独立根 Session，没有主 QQ 聊天历史、QQ 身份或 Memory 授权。默认无工具；需要的受限工具必须由 Host 同时声明 taskPlugins 和 allowTools，不能通过任务文字授权，也不能借用主 QQ 审批。
 - 查询使用 `long_task_list`。原生 Schedule 的 lastDelivery 仅表示写入收件箱；run 的 completed 表示 Agent 本轮结束，不是独立的业务目标验收。failed、interrupted、needs_review、unknown 通知均需如实说明。
 - 每个 run 有三个独立事实：`execution`（Agent 本轮如何结算）、`goalVerification`（当前没有独立验证器，结算后始终为 `unverified`，模型自述不算证据）、`delivery`（通知事件 ID、Outbox 状态与入队时间）。`sent` 只表示平台 API 接受，不代表用户已读；`unknown` 可能已送达，不会也不应重发；`partial`、`not-sent`、长时间 `pending`（stale-pending）与 `unrecorded` 都要向 Owner 明确报告。`deliveryAttention` 汇总所有 run 中的异常投递，包括不在最近 20 条里的。不要自行补发通知。
+- 运行较久的任务会由 Host 自动发送低频活动汇报（`[长期任务]` 开头的“任务尚未结束”消息），它只反映已观察到的步骤与工具活动，不是进度或完成情况；不要据此宣称目标已完成，也不要自行补发或模仿这类汇报。`long_task_list` 中运行中的 run 带有 `activity`（计数与工具名）。
 - 修改/取消先查询 revision，使用 `long_task_update` / `long_task_cancel`；冲突后重新读取，不盲目重试。取消不能撤销已经发生的副作用。
 - 重启后不自动重放执行状态不明的同一 occurrence。若要重做，明确告知风险并取得用户请求，再新建任务。通知发送 API 成功不证明手机实际收件。

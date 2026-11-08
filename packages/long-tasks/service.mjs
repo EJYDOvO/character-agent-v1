@@ -1,10 +1,12 @@
 import {randomUUID} from 'node:crypto';
 import {changeSelector,instruction,nativeTiming,occurrences,runId,targetSession,timingSelector} from './state.mjs';
+import {FIRST_REPORT_MS,REPORT_INTERVAL_MS,activityText,emptyActivity,foldActivity,reportDue,reportMarker,toolFailed,unreported} from './activity.mjs';
 const terminal=new Set(['completed','failed','interrupted','cancelled','needs_review']);
 const text=m=>m?.content?.filter(b=>b.type==='text').map(b=>b.text).join('\n')??'';
 // Instructions rebound by the pre-0.2.2 overdue recovery carry this suffix in
 // retained Schedule rows. Historical data only; nothing writes it any more.
 const unbound=prompt=>typeof prompt==='string'?prompt.replace(/\n\[HOST BINDING [0-9a-f-]{36}\]$/u,''):prompt;
+const stopped=task=>!task||['cancelled','cancelling','failed'].includes(task.state);
 const missed=result=>!result||typeof result!=='object'||'code' in result;
 const actorOf=agent=>agent?.session?.id??agent?.id;
 // Three separate facts per run, derived for display; stored rows are unchanged.
@@ -24,7 +26,11 @@ function runView(identity,scope,run){
  return {...run,notification:status??run.notification,execution:run.status,goalVerification:settled?'unverified':'pending',delivery};
 }
 export class LongTasks {
- constructor(host,{presetId='long-task',allowTools=[]}={}){this.h=host;this.presetId=presetId;this.allowTools=allowTools;this.chain=Promise.resolve();this.active=new Map();this.closed=false;this.ready=new Promise((resolve,reject)=>{this.resolveReady=resolve;this.rejectReady=reject;});this.ready.catch(()=>{});}
+ constructor(host,{presetId='long-task',allowTools=[],activity={},clock={}}={}){this.h=host;this.presetId=presetId;this.allowTools=allowTools;
+  // Activity reports: one bounded timer per running run, in memory only. A
+  // restart settles every running run (recover), so no timer is ever rebuilt.
+  this.activity={firstMs:activity.firstMs??FIRST_REPORT_MS,intervalMs:activity.intervalMs??REPORT_INTERVAL_MS};
+  this.clock={now:clock.now??Date.now,setTimeout:clock.setTimeout??setTimeout,clearTimeout:clock.clearTimeout??clearTimeout};this.timers=new Map();this.chain=Promise.resolve();this.active=new Map();this.closed=false;this.ready=new Promise((resolve,reject)=>{this.resolveReady=resolve;this.rejectReady=reject;});this.ready.catch(()=>{});}
  serial(fn){const p=this.chain.then(()=>{if(this.closed)throw Error('Long tasks disabled');return fn();});this.chain=p.catch(()=>{});return p;}
  owner(agent){if(this.h.agents.get(agent?.id)!==agent)throw Error('Actual Host Agent required');const c=this.h.identity.forSession(agent.id);return this.h.identity.authorize(c,'write');}
  scoped(task,scope){if(!task||['principalId','characterId','projectId','conversationId'].some(k=>task.scope[k]!==scope[k]))throw Error('Task not found in authorized scope');return task;}
@@ -76,7 +82,7 @@ export class LongTasks {
   const task=this.scoped(this.h.tasks.get(id),scope);if(task.revision!==revision)throw Error('Task revision conflict');
   const cancelling={...task,state:'cancelling',revision:revision+1};await this.h.tasks.put(id,cancelling);
   await this.removeSchedule(task,actorOf(agent),signal);
-  this.h.agents.get(task.sessionId)?.cancel({kind:'user'});
+  this.disarm(task.sessionId);this.h.agents.get(task.sessionId)?.cancel({kind:'user'});
   const cancelled={...cancelling,state:'cancelled'};await this.h.tasks.put(id,cancelled);return cancelled;
  });}
  taskAgent(agent){if(this.closed)throw Error('Long tasks disabled');const task=[...this.h.tasks.entries()].map(([,t])=>t).find(t=>t.sessionId===agent?.id);if(!task||this.h.agents.get(agent.id)!==agent||this.h.presetOf(agent)!==task.presetId||agent.session.header.parentSession||['cancelled','cancelling','failed'].includes(task.state))throw Error('Trusted independent task root required');this.h.identity.validateConversation(task.scope);return task;}
@@ -94,16 +100,15 @@ export class LongTasks {
   const admittedPrompt=unbound(receipt.reminder_prompt);
   if(receipt.schedule_id!==task.scheduleId||admittedPrompt!==instruction(task))return false;
   if(this.h.runs.get(id))return false;
-  const run={id,taskId:task.id,sessionId:agent.id,status:'running',occurrenceAt:receipt.occurrence_at,turn:event.turn,startSeq:agent.session.seq??0,revision:task.revision,title:task.title,startedAt:new Date().toISOString(),toolError:false};
-  await this.h.runs.put(id,run);this.active.set(agent.id,run);return true;
+  const run={id,taskId:task.id,sessionId:agent.id,status:'running',occurrenceAt:receipt.occurrence_at,turn:event.turn,startSeq:agent.session.seq??0,revision:task.revision,title:task.title,startedAt:new Date(this.clock.now()).toISOString(),toolError:false,activity:emptyActivity()};
+  await this.h.runs.put(id,run);this.active.set(agent.id,run);this.arm(agent.id,run);return true;
  });}
  observe(session,event){return this.serial(async()=>{
   const run=this.active.get(session.header.id);if(!run)return;
-  if(event.type==='tool/result'){
-   const m=event.data?.message??event.data;let payload;try{payload=JSON.parse(text(m));}catch{}
-   if(m?.isError||m?.error||m?.source?.isError||payload?.error||payload?.ok===false){run.toolError=true;await this.h.runs.put(run.id,run);}
-  }
+  if(event.type!=='turn/end'&&foldActivity(run,event,new Date(this.clock.now()).toISOString()))this.arm(session.header.id,run);
+  if(event.type==='tool/result'&&toolFailed(event.data)&&!run.toolError){run.toolError=true;await this.h.runs.put(run.id,run);}
   if(event.type==='turn/end'&&event.data.turn===run.turn){
+   this.disarm(session.header.id);
    const events=typeof session.snapshotEvents==='function'?session.snapshotEvents():session.events??[];
    const messages=events.filter(e=>e.type==='assistant/message'&&(e.seq??0)>=run.startSeq).map(e=>e.data?.message??e.data),answer=text(messages.at(-1));
    const task=this.h.tasks.get(run.taskId),reason=event.data.reason?.kind;
@@ -112,6 +117,32 @@ export class LongTasks {
    await this.h.runs.put(run.id,settled);this.active.delete(session.header.id);await this.notify(task,settled);
   }
  });}
+ // One pending timer per running run, at the earliest due report. Fires into
+ // the serial chain; the run, task and coverage are re-checked there.
+ arm(sessionId,run){
+  if(this.closed||!unreported(run))return;
+  const due=reportDue(run,this.activity),current=this.timers.get(sessionId);
+  if(current&&current.run===run&&current.due<=due)return;
+  this.disarm(sessionId);
+  const handle=this.clock.setTimeout(()=>{if(this.timers.get(sessionId)?.handle!==handle)return;this.timers.delete(sessionId);void this.serial(()=>this.report(sessionId,run)).catch(()=>{});},Math.max(0,due-this.clock.now()));
+  handle?.unref?.();this.timers.set(sessionId,{handle,due,run});
+ }
+ disarm(sessionId){const t=this.timers.get(sessionId);if(t){this.clock.clearTimeout(t.handle);this.timers.delete(sessionId);}}
+ // A non-terminal activity notification through the same Outbox. The marker is
+ // written first: a crash before the enqueue loses one report, never repeats
+ // it. The id names the last native event covered, so a report can never be
+ // re-created for the same activity. Delivery never changes the run.
+ async report(sessionId,run){
+  if(this.active.get(sessionId)!==run||!unreported(run))return;
+  const task=this.h.tasks.get(run.taskId);if(stopped(task))return;
+  const now=this.clock.now();if(now<reportDue(run,this.activity))return this.arm(sessionId,run);
+  const eventId='long-task:'+run.id+':activity:'+(run.activity?.seq??'start'),text=activityText(run.title??task.title,run,now).slice(0,2900);
+  run.report=reportMarker(run,new Date(now).toISOString(),eventId);if(run.activity)run.activity.recent=[];
+  await this.h.runs.put(run.id,run);
+  // Enqueue is synchronous inside notifyConversation; the send is not awaited here.
+  try{void Promise.resolve(this.h.identity.notifyConversation(task.scope,{eventId,kind:'task_activity',text})).catch(()=>this.h.warn?.('Long task activity notification not recorded; the run is unchanged'));}
+  catch{this.h.warn?.('Long task activity notification not recorded; the run is unchanged');}
+ }
  async notify(task,run){
   if(!terminal.has(run.status))return;
   const kind=run.status==='completed'?'task_completed':'task_failed';
@@ -155,5 +186,5 @@ export class LongTasks {
   // catch-up, restored-inbox recovery). The occurrence ledger above still
   // rejects any repeat execution; no rebind, timer or replay queue here.
  });recovery.then(this.resolveReady,this.rejectReady);return recovery;}
- async close(){this.closed=true;this.rejectReady(Error('Long tasks disabled'));await this.chain;this.active.clear();}
+ async close(){this.closed=true;for(const id of [...this.timers.keys()])this.disarm(id);this.rejectReady(Error('Long tasks disabled'));await this.chain;this.active.clear();}
 }
