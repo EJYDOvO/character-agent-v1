@@ -26,7 +26,7 @@ try{
   while(!(Test-Path -LiteralPath $result) -and (Get-Date) -lt $deadline -and !$p.HasExited){Start-Sleep -Milliseconds 250;$p.Refresh()}
   if(Test-Path -LiteralPath $result){$report=Get-Content -LiteralPath $result -Raw|ConvertFrom-Json}else{$report=[pscustomobject]@{phase=$phase;ok=$false;runId=$runId;error='No report (Host exited or timed out)';exited=$p.HasExited}}
   $reports+=$report;$report|ConvertTo-Json -Depth 8
-  $p.Refresh();if(!$p.HasExited){Stop-Process -Id $p.Id};if(!$p.WaitForExit(5000)){throw 'Test Host did not stop'};$p=$null
+  $p.Refresh();if(!$p.HasExited){& taskkill.exe /T /F /PID $p.Id 2>&1 | Out-Null};if(!$p.WaitForExit(5000)){throw 'Test Host did not stop'};$p=$null
   if($phase -lt 3 -and (!$report.ok -or $report.runId -ne $runId -or $report.phase -ne $phase)){throw "Migration drill failed in phase $phase"}
   # Rollback gate on the stopped Host: snapshot after the previous Host, then judge each later state.
   $gate=Join-Path $project 'scripts/rollback-gate.mjs';$manifest=Join-Path $home2 'rollback-manifest.json';$node=$env:DSH_NODE_EXE;if(!$node){$node=(Get-Command node -ErrorAction Stop).Source}
@@ -42,6 +42,6 @@ try{
  }
  Write-Output ("MIGRATION_HOME=$home2")
 }finally{
- try{if($p){$p.Refresh();if(!$p.HasExited){Stop-Process -Id $p.Id};$p.WaitForExit(5000)|Out-Null}}
+ try{if($p){$p.Refresh();if(!$p.HasExited){& taskkill.exe /T /F /PID $p.Id 2>&1 | Out-Null};$p.WaitForExit(5000)|Out-Null}}
  finally{foreach($key in $saved.Keys){[Environment]::SetEnvironmentVariable($key,$saved[$key],'Process')}}
 }

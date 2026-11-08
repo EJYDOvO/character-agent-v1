@@ -22,3 +22,11 @@ test('no native-test staging builds a Host Home inside the project',()=>{
  assert(runner.includes('-RedirectStandardOutput')&&runner.includes('WaitForExit($gateTimeoutSeconds*1000)'),'the runner awaits the gate process, not its output pipe');
  assert(!runner.includes('| Out-String;$code'),'no pipe capture of gate output');
 });
+test('isolated Hosts are stopped with their own process tree only',()=>{
+ const dir=new URL('../scripts/',import.meta.url);
+ for(const file of fs.readdirSync(dir).filter(f=>/^run-.*\.ps1$/u.test(f)&&f!=='run-native-gates.ps1')){
+  const source=fs.readFileSync(new URL(file,dir),'utf8');if(!source.includes('Start-Process'))continue;
+  assert(!source.includes('Stop-Process -Id $p.Id'),file+': stopping only the Host leaves its children orphaned');
+  assert(source.includes('taskkill.exe /T /F /PID $p.Id'),file+': the tree of the started process, by its own PID');
+ }
+});

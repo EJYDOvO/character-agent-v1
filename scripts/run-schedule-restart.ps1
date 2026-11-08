@@ -25,9 +25,9 @@ try {
   $report=Get-Content -LiteralPath $run.result -Raw | ConvertFrom-Json
   $report | ConvertTo-Json -Depth 8
   if(!$report.ok -or $report.runId -ne $run.runId -or $report.restart -ne [bool]$phase){throw 'Restart gate failed or stale result'}
-  $p.Refresh();if(!$p.HasExited){Stop-Process -Id $p.Id};if(!$p.WaitForExit(5000)){throw 'Test Host did not stop'};$p=$null
+  $p.Refresh();if(!$p.HasExited){& taskkill.exe /T /F /PID $p.Id 2>&1 | Out-Null};if(!$p.WaitForExit(5000)){throw 'Test Host did not stop'};$p=$null
  }
 }finally{
- try{if($p){$p.Refresh();if(!$p.HasExited){Stop-Process -Id $p.Id};$p.WaitForExit(5000)|Out-Null}}
+ try{if($p){$p.Refresh();if(!$p.HasExited){& taskkill.exe /T /F /PID $p.Id 2>&1 | Out-Null};$p.WaitForExit(5000)|Out-Null}}
  finally{foreach($key in $saved.Keys){[Environment]::SetEnvironmentVariable($key,$saved[$key],'Process')}}
 }
