@@ -338,7 +338,7 @@ test('an activity report names its Host observation time; a later delivery is no
  assert.equal(f.notified.get('long-task:'+r.id).kind,'task_completed','the terminal notification is unchanged and separate');
  const {observedAt}=await import('../packages/long-tasks/activity.mjs');
  assert.equal(observedAt(Date.parse('2030-01-01T00:01:30.000Z'),'America/New_York'),'2029-12-31 19:01:30（UTC-05:00）','the date is part of the stamp across a day boundary');
- assert.equal(observedAt(Date.parse('2030-01-01T00:01:30.000Z'),'UTC'),'2030-01-01 00:01:30（UTC）');
+ assert.equal(observedAt(Date.parse('2030-01-01T00:01:30.000Z'),'UTC'),'2030-01-01 00:01:30（UTC+00:00）');assert.equal(observedAt(Date.parse('2030-07-01T12:00:00.500Z'),'Asia/Kolkata'),'2030-07-01 17:30:00（UTC+05:30）','half-hour offsets');
 });
 test('a tool error before the first report is folded into that report as the one alert of the run',async()=>{
  const f=await activityFixture(),task=await f.service.create(f.owner,args),r=await begin(f,task);

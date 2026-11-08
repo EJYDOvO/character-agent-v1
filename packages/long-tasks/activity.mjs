@@ -54,11 +54,15 @@ const tool=name=>name?`工具 ${name}`:'一个工具';
  * The Host clock's observation time as a full local date-time with its UTC
  * offset, e.g. "2030-01-01 08:01:30（UTC+08:00）". A report may sit in the
  * Outbox (Gateway away) and arrive later; the text names when it was observed.
- * timeZone: the Host's zone unless given (tests).
+ * timeZone: the Host's zone unless given (tests). The offset is computed from
+ * the wall-clock fields, not taken from ICU's zone name, whose spelling of UTC
+ * differs between ICU versions ("GMT" / "GMT+00:00").
  */
 export function observedAt(ms,timeZone){
- const parts=Object.fromEntries(new Intl.DateTimeFormat('en-CA',{timeZone,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23',timeZoneName:'longOffset'}).formatToParts(ms).map(p=>[p.type,p.value]));
- return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}:${parts.second}（${parts.timeZoneName.replace(/^GMT/u,'UTC')}）`;
+ const p=Object.fromEntries(new Intl.DateTimeFormat('en-CA',{timeZone,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).formatToParts(ms).map(x=>[x.type,x.value]));
+ const offset=Math.round((Date.UTC(+p.year,+p.month-1,+p.day,+p.hour,+p.minute,+p.second)-Math.floor(ms/1000)*1000)/60000),abs=Math.abs(offset);
+ const zone=`UTC${offset<0?'-':'+'}${String(Math.floor(abs/60)).padStart(2,'0')}:${String(abs%60).padStart(2,'0')}`;
+ return `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute}:${p.second}（${zone}）`;
 }
 /**
  * Deterministic Chinese summary of the facts observed up to `now`: no progress,
