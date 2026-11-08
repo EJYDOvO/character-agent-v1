@@ -58,7 +58,8 @@ test('native delivery is not execution; pre-step claims once and rejects user fr
 test('normal-return tool errors remain needs_review, with one stable completion notification',async()=>{
  const f=await fixture(),task=await f.service.create(f.owner,args),agent=f.agents.get(task.sessionId),message=receipt(task);
  await f.service.preStep(agent,{turn:1,messages:[message]});
- await f.service.observe(agent.session,{type:'tool/result',data:{message:{content:[{type:'text',text:'{"ok":false,"error":"network"}'}]}}});
+ // Native 0.2.2 shape: a logged event (seq) of the admitted turn; a normal-return JSON error payload.
+ await f.service.observe(agent.session,{type:'tool/result',seq:0,data:{turn:1,step:1,message:{role:'tool',toolCallId:'c1',source:{kind:'tool',callId:'c1'},content:[{type:'text',text:'{"ok":false,"error":"network"}'}]}}});
  agent.session.events.push({type:'assistant/message',data:{message:{content:[{type:'text',text:'查询未成功。'}]}}},{type:'turn/end',data:{turn:1,reason:{kind:'completed'}}});
  await f.service.observe(agent.session,agent.session.events.at(-1));const row=f.runs.get(runId(task.id,'2030-01-01T00:00:00.000Z'));assert.equal(row.status,'needs_review');assert.equal(row.notification,'sent');assert.equal(f.notified.size,1);
  const retry={...row,notification:'pending'};await f.runs.put(row.id,retry);const recovered=new LongTasks(f.host);await recovered.recover();assert.equal(f.notified.size,1);
@@ -209,7 +210,7 @@ function manualClock(start=Date.parse('2030-01-01T00:00:00.000Z')){
  return {now:()=>t,setTimeout(fn,ms){const h={at:t+ms,fn};timers.add(h);return h;},clearTimeout(h){timers.delete(h);},pending:()=>timers.size,
   async advance(ms,service){const end=t+ms;for(;;){const [next]=[...timers].filter(h=>h.at<=end).sort((a,b)=>a.at-b.at);if(!next)break;t=next.at;timers.delete(next);next.fn();await service.serial(()=>{}).catch(()=>{});}t=end;await service.serial(()=>{}).catch(()=>{});}};
 }
-async function activityFixture(){const clock=manualClock(),f=await fixture({clock});f.clock=clock;f.advance=ms=>clock.advance(ms,f.service);return f;}
+async function activityFixture(){const clock=manualClock(),f=await fixture({clock,activity:{timeZone:'Asia/Shanghai'}});f.clock=clock;f.advance=ms=>clock.advance(ms,f.service);return f;}
 async function begin(f,task,at='2030-01-01T00:00:00.000Z',turn=1){
  const agent=f.agents.get(task.sessionId);agent.session.seq=agent.session.events.length;
  assert.equal(await f.service.preStep(agent,{turn,messages:[receipt(task,at)]}),true);return {agent,turn,id:runId(task.id,at)};
@@ -234,11 +235,11 @@ test('a long run reports after 90 s, then at most every 5 min and only with new 
  await f.advance(89_000);assert.equal(reports(f).length,0);
  await f.advance(1_000);let sent=reports(f);assert.equal(sent.length,1);
  assert.equal(sent[0].eventId,`long-task:${r.id}:activity:${call.seq}`,'id names the run and the last covered native event');
- assert.match(sent[0].text,/^\[长期任务\] 检查\n任务尚未结束，已运行约 2 分钟。\n最近活动：当前处于第 1 个执行步骤；发起 1 次工具调用（工具 web_fetch）。\n正在等待工具 web_fetch 返回，已等待约 2 分钟。/u);
+ assert.match(sent[0].text,/^\[长期任务\] 检查\n截至 2030-01-01 08:01:30（UTC\+08:00），尚未观察到本轮结束事件（本轮已运行约 2 分钟）。\n最近活动：处于第 1 个执行步骤；发起 1 次工具调用（工具 web_fetch）。\n正在等待工具 web_fetch 返回，已等待约 2 分钟。/u);
  assert(sent.every(clean));
  await f.advance(20*60_000);assert.equal(reports(f).length,1,'a single long tool call is not repeated without new activity');
  await toolResult(f,r,'c1');await f.advance(0);sent=reports(f);assert.equal(sent.length,2,'the interval already passed: the new activity is reported');
- assert.match(sent[1].text,/自上次汇报以来：当前处于第 1 个执行步骤；收到 1 次工具返回。/u);assert.doesNotMatch(sent[1].text,/正在等待/u);
+ assert.match(sent[1].text,/自上次汇报以来：处于第 1 个执行步骤；收到 1 次工具返回。/u);assert.doesNotMatch(sent[1].text,/正在等待/u);
  await stepStart(f,r,2);await toolCall(f,r,'c2','search');await f.advance(4*60_000);assert.equal(reports(f).length,2,'within 5 min of the last report');
  await f.advance(60_000);assert.equal(reports(f).length,3);assert.match(reports(f)[2].text,/第 2 个执行步骤；发起 1 次工具调用（工具 search）/u);
  await finish(f,r);assert.equal(f.notified.get('long-task:'+r.id).kind,'task_completed');assert.equal(f.notified.size,4);assert.equal(f.clock.pending(),0);
@@ -247,9 +248,9 @@ test('a long run reports after 90 s, then at most every 5 min and only with new 
 });
 test('a tool error after the first report alerts once at once; it never fails the run',async()=>{
  const f=await activityFixture(),task=await f.service.create(f.owner,args),r=await begin(f,task);
- await stepStart(f,r,1);await f.advance(90_000);assert.equal(reports(f).length,1);assert.match(reports(f)[0].text,/当前处于第 1 个执行步骤/u);
+ await stepStart(f,r,1);await f.advance(90_000);assert.equal(reports(f).length,1);assert.match(reports(f)[0].text,/处于第 1 个执行步骤/u);
  await f.advance(30_000);await toolCall(f,r,'c1','read_file');await toolResult(f,r,'c1',true);await f.advance(0);
- let sent=reports(f);assert.equal(sent.length,2,'an alert skips the 5 min interval');assert.match(sent[1].text,/检测到工具执行异常。本轮任务尚未结束，最终结果尚未确定。/u);assert.match(sent[1].text,/其中 1 次报告错误/u);assert(clean(sent[1]));
+ let sent=reports(f);assert.equal(sent.length,2,'an alert skips the 5 min interval');assert.match(sent[1].text,/检测到工具执行异常；尚未观察到本轮结束事件，最终结果尚未确定。/u);assert.match(sent[1].text,/其中 1 次报告错误/u);assert(clean(sent[1]));
  await toolCall(f,r,'c2','read_file');await toolResult(f,r,'c2',true);await f.advance(0);assert.equal(reports(f).length,2,'one alert per run');
  await f.advance(5*60_000);sent=reports(f);assert.equal(sent.length,3);assert.doesNotMatch(sent[2].text,/检测到工具执行异常/u,'later errors follow the normal interval');
  assert.equal(f.runs.get(r.id).status,'running');await finish(f,r);assert.equal(f.runs.get(r.id).status,'needs_review');
@@ -310,4 +311,52 @@ test('concurrent tasks and successive periodic occurrences keep their activity a
  await f.advance(90_000);const rp=reports(f).find(e=>e.eventId.startsWith(`long-task:${second.id}:activity:`));
  assert.equal(rp.eventId,`long-task:${second.id}:activity:start`);assert.match(rp.text,/已开始执行，尚未观察到工具活动。/u);assert.doesNotMatch(rp.text,/tool_first|异常/u);
  assert(!reports(f).some(e=>e.eventId.startsWith(`long-task:${first.id}:`)),'the short first occurrence reported nothing');
+});
+test('an earlier occurrence\'s tool errors, replays and unowned results never mark the current run',async()=>{
+ const f=await activityFixture(),task=await f.service.create(f.owner,{title:'周期',prompt:'check',every_seconds:60});
+ const a=await begin(f,task,'2030-01-01T00:00:00.000Z',1);await toolCall(f,a,'a1','read_file');const oldError=await toolResult(f,a,'a1',true);await finish(f,a);
+ assert.equal(f.runs.get(a.id).status,'needs_review','the earlier run keeps its own tool error');
+ const b=await begin(f,task,'2030-01-01T00:01:00.000Z',2),agent=b.agent;
+ await f.service.observe(agent.session,oldError);
+ await emit(f,agent,'tool/result',{...oldError.data});
+ await f.service.observe(agent.session,{type:'tool/result',data:{turn:2,step:1,message:{role:'tool',toolCallId:'x',source:{kind:'tool',callId:'x'},content:[],isError:true}}});
+ await f.service.observe(agent.session,{type:'tool/result',seq:b.agent.session.seq-1,data:{turn:2,step:1,message:{role:'tool',toolCallId:'y',source:{kind:'tool',callId:'y'},content:[],isError:true}}});
+ await toolCall(f,b,'b1','web_fetch');await toolResult(f,b,'b1');await finish(f,b);
+ const run=f.runs.get(b.id);assert.equal(run.status,'completed','foreign or replayed errors must not mark Run B');assert.equal(run.toolError,false);
+ assert.equal(run.activity.errors,0);assert.equal(run.activity.results,1,'only the owned result is counted');
+ const replay=await f.service.create(f.owner,args),c=await begin(f,replay,'2030-01-01T00:00:00.000Z',7);
+ await toolCall(f,c,'c1','read_file');const own=await toolResult(f,c,'c1',true);await f.service.observe(c.agent.session,own);await f.service.observe(c.agent.session,own);await finish(f,c);
+ const owned=f.runs.get(c.id);assert.equal(owned.status,'needs_review','an owned tool error still needs review');assert.equal(owned.toolError,true);assert.equal(owned.activity.errors,1,'a replayed owned error is counted once');
+});
+test('an activity report names its Host observation time; a later delivery is not presented as live state',async()=>{
+ const f=await activityFixture(),task=await f.service.create(f.owner,args),r=await begin(f,task);
+ await toolCall(f,r,'c1','web_fetch');await f.advance(90_000);const [sent]=reports(f);
+ await f.advance(10_000);await toolResult(f,r,'c1');await finish(f,r);await f.advance(60*60_000);
+ assert.match(sent.text,/^\[长期任务\] 检查\n截至 2030-01-01 08:01:30（UTC\+08:00），尚未观察到本轮结束事件/u,'the observation time, with date and UTC offset, comes from the Host clock at report time');
+ assert.match(sent.text,/只反映上述时刻观察到的执行事件；送达时任务可能已经结束/u);assert.doesNotMatch(sent.text,/仍在运行|当前状态|正常推进/u);
+ assert.equal(f.runs.get(r.id).report.at,'2030-01-01T00:01:30.000Z','the ledger keeps the same observation time');assert.equal(f.runs.get(r.id).status,'completed');
+ assert.equal(f.notified.get('long-task:'+r.id).kind,'task_completed','the terminal notification is unchanged and separate');
+ const {observedAt}=await import('../packages/long-tasks/activity.mjs');
+ assert.equal(observedAt(Date.parse('2030-01-01T00:01:30.000Z'),'America/New_York'),'2029-12-31 19:01:30（UTC-05:00）','the date is part of the stamp across a day boundary');
+ assert.equal(observedAt(Date.parse('2030-01-01T00:01:30.000Z'),'UTC'),'2030-01-01 00:01:30（UTC）');
+});
+test('a tool error before the first report is folded into that report as the one alert of the run',async()=>{
+ const f=await activityFixture(),task=await f.service.create(f.owner,args),r=await begin(f,task);
+ await f.advance(10_000);await toolCall(f,r,'c1','read_file');await toolResult(f,r,'c1',true);
+ await f.advance(0);assert.equal(reports(f).length,0,'no early notification inside the first-report window');
+ await f.advance(80_000);let sent=reports(f);assert.equal(sent.length,1);assert.match(sent[0].text,/检测到工具执行异常/u);assert.match(sent[0].text,/其中 1 次报告错误/u);
+ assert.equal(f.runs.get(r.id).report.alerted,true,'the first report counts as the run\'s alert');
+ await f.advance(30_000);await toolCall(f,r,'c2','read_file');await toolResult(f,r,'c2',true);await f.advance(0);
+ assert.equal(reports(f).length,1,'a later error follows the normal interval');
+ await f.advance(269_000);assert.equal(reports(f).length,1,'still inside 5 min of the first report (t=389 s)');await f.advance(1_000);sent=reports(f);assert.equal(sent.length,2,'due 5 min after the first report');assert.doesNotMatch(sent[1].text,/检测到工具执行异常/u);assert.match(sent[1].text,/其中 1 次报告错误/u);
+ await finish(f,r);const run=f.runs.get(r.id);assert.equal(run.status,'needs_review');assert.equal(run.activity.errors,2);
+});
+test('more parallel calls than the tracked limit are counted from the aggregates, never named or matched wrongly',async()=>{
+ const f=await activityFixture(),task=await f.service.create(f.owner,args),r=await begin(f,task);
+ for(let i=0;i<25;i++)await toolCall(f,r,'p'+i,'tool_'+i);
+ await toolResult(f,r,'p0');await toolResult(f,r,'p24');await toolResult(f,r,'unknown-call');
+ await f.advance(90_000);const [sent]=reports(f),run=f.runs.get(r.id);
+ assert.match(sent.text,/有 22 个工具调用尚未返回。/u,'the outstanding count comes from calls minus results, not the bounded list');assert.doesNotMatch(sent.text,/正在等待|共 \d+ 个调用未返回/u);
+ assert(run.activity.open.length<=20,'the tracked list stays bounded');assert(!run.activity.open.some(c=>['p0','p24'].includes(c.callId)),'results are matched by exact call id only');
+ assert(clean(sent));assert(!JSON.stringify(run.activity).includes('secret'),'no arguments or results are stored');
 });

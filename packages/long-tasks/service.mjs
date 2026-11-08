@@ -1,6 +1,6 @@
 import {randomUUID} from 'node:crypto';
 import {changeSelector,instruction,nativeTiming,occurrences,runId,targetSession,timingSelector} from './state.mjs';
-import {FIRST_REPORT_MS,REPORT_INTERVAL_MS,activityText,emptyActivity,foldActivity,reportDue,reportMarker,toolFailed,unreported} from './activity.mjs';
+import {FIRST_REPORT_MS,REPORT_INTERVAL_MS,activityText,emptyActivity,foldActivity,reportDue,reportMarker,unreported} from './activity.mjs';
 const terminal=new Set(['completed','failed','interrupted','cancelled','needs_review']);
 const text=m=>m?.content?.filter(b=>b.type==='text').map(b=>b.text).join('\n')??'';
 // Instructions rebound by the pre-0.2.2 overdue recovery carry this suffix in
@@ -29,7 +29,7 @@ export class LongTasks {
  constructor(host,{presetId='long-task',allowTools=[],activity={},clock={}}={}){this.h=host;this.presetId=presetId;this.allowTools=allowTools;
   // Activity reports: one bounded timer per running run, in memory only. A
   // restart settles every running run (recover), so no timer is ever rebuilt.
-  this.activity={firstMs:activity.firstMs??FIRST_REPORT_MS,intervalMs:activity.intervalMs??REPORT_INTERVAL_MS};
+  this.activity={firstMs:activity.firstMs??FIRST_REPORT_MS,intervalMs:activity.intervalMs??REPORT_INTERVAL_MS,timeZone:activity.timeZone};
   this.clock={now:clock.now??Date.now,setTimeout:clock.setTimeout??setTimeout,clearTimeout:clock.clearTimeout??clearTimeout};this.timers=new Map();this.chain=Promise.resolve();this.active=new Map();this.closed=false;this.ready=new Promise((resolve,reject)=>{this.resolveReady=resolve;this.rejectReady=reject;});this.ready.catch(()=>{});}
  serial(fn){const p=this.chain.then(()=>{if(this.closed)throw Error('Long tasks disabled');return fn();});this.chain=p.catch(()=>{});return p;}
  owner(agent){if(this.h.agents.get(agent?.id)!==agent)throw Error('Actual Host Agent required');const c=this.h.identity.forSession(agent.id);return this.h.identity.authorize(c,'write');}
@@ -105,8 +105,13 @@ export class LongTasks {
  });}
  observe(session,event){return this.serial(async()=>{
   const run=this.active.get(session.header.id);if(!run)return;
-  if(event.type!=='turn/end'&&foldActivity(run,event,new Date(this.clock.now()).toISOString()))this.arm(session.header.id,run);
-  if(event.type==='tool/result'&&toolFailed(event.data)&&!run.toolError){run.toolError=true;await this.h.runs.put(run.id,run);}
+  // One ownership rule for activity and execution state: foldActivity accepts
+  // only a new event of this run's turn after its admission, so an earlier
+  // occurrence's result, a replay or an event without a log position changes
+  // neither the counters nor run.toolError.
+  const change=event.type==='turn/end'?false:foldActivity(run,event,new Date(this.clock.now()).toISOString());
+  if(change)this.arm(session.header.id,run);
+  if(change==='error'&&!run.toolError){run.toolError=true;await this.h.runs.put(run.id,run);}
   if(event.type==='turn/end'&&event.data.turn===run.turn){
    this.disarm(session.header.id);
    const events=typeof session.snapshotEvents==='function'?session.snapshotEvents():session.events??[];
@@ -136,7 +141,7 @@ export class LongTasks {
   if(this.active.get(sessionId)!==run||!unreported(run))return;
   const task=this.h.tasks.get(run.taskId);if(stopped(task))return;
   const now=this.clock.now();if(now<reportDue(run,this.activity))return this.arm(sessionId,run);
-  const eventId='long-task:'+run.id+':activity:'+(run.activity?.seq??'start'),text=activityText(run.title??task.title,run,now).slice(0,2900);
+  const eventId='long-task:'+run.id+':activity:'+(run.activity?.seq??'start'),text=activityText(run.title??task.title,run,now,this.activity).slice(0,2900);
   run.report=reportMarker(run,new Date(now).toISOString(),eventId);if(run.activity)run.activity.recent=[];
   await this.h.runs.put(run.id,run);
   // Enqueue is synchronous inside notifyConversation; the send is not awaited here.

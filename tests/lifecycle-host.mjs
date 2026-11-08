@@ -12,6 +12,16 @@ export const inject=['agents','agentPresets','tools','skills','sessions','schedu
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 export function apply(ctx,config){
  const control=ctx.lifecycleFixture;
+ // Cold resumes per Session: every attempt (prepended listener) and the ones
+ // accepted. DSH enters an Agent into the registry before the serial
+ // agent/created listeners run, and native Schedule retries a due delivery on
+ // every drive request, so an unproven target is briefly in ctx.agents while
+ // Identity refuses it (observed ~20 refused resumes per run, 15-55 ms each).
+ // This listener is registered after Identity's, so a refused resume never
+ // reaches it: an entry in `accepted` is a resume that passed the boundary.
+ const resumes={attempted:new Map(),accepted:new Map()},count=(map,id)=>map.get(id)??0;
+ ctx.on('agent/created',({agent,source})=>{if(source==='resume')resumes.attempted.set(agent.id,count(resumes.attempted,agent.id)+1);},true);
+ ctx.on('agent/created',({agent,source})=>{if(source==='resume')resumes.accepted.set(agent.id,count(resumes.accepted,agent.id)+1);});
  ctx.effect(()=>{const timer=setTimeout(()=>void run(),1000);return()=>clearTimeout(timer);});
  async function run(){
   const checkpoint=config.cwd+'/checkpoint.json',restart=fs.existsSync(checkpoint),state=restart?JSON.parse(fs.readFileSync(checkpoint)):null,report={ok:false,runId:config.runId,restart,host:config.version,provenance:config.provenance,qqNetwork:false,provider:'deterministic fixture',checks:[]};let manager,detach;
@@ -120,11 +130,11 @@ export function apply(ctx,config){
      assert.equal(Date.parse((await ctx.schedule.view({id:z.schedule})).scheduledAt),state.zonedDue+z.period,kind+' advances to its next period');}
     report.checks.push('Long Tasks daily/weekly/cron: native time_zone rules created, updated, kept across restart, delivered once, advanced one period');
     assert.equal(tasks.find(t=>t.id===state.cancelled).runs.length,0);assert.equal(deliveries.length,expected,'Six results plus one legacy reminder');assert(deliveries.every(d=>d.target.targetId==='fixture-owner'));
-    assert(!deliveries.some(d=>d.text.includes('任务尚未结束')),'Short tasks send no activity report');
-    const old=ctx.agents.get(state.reminderSession);assert(old,'Official Schedule cold-resumed its original Session');assert.equal(ctx.characterIdentity.route(ctx.characterIdentity.forSession(record.sessionId)).session,record.sessionId);
+    assert(!deliveries.some(d=>d.text.includes('尚未观察到本轮结束事件')),'Short tasks send no activity report');
+    const old=ctx.agents.get(state.reminderSession);assert(old,'Official Schedule cold-resumed its original Session');assert(count(resumes.accepted,state.reminderSession)>=1,'Accepted resumes are observed (control for the unproven-target check)');assert.equal(ctx.characterIdentity.route(ctx.characterIdentity.forSession(record.sessionId)).session,record.sessionId);
     assert.throws(()=>ctx.characterIdentity.forSession(old.id));assert.throws(()=>ctx.memoryIdentity.forSession(old.id));await assert.rejects(()=>ctx.longTasks.create(old,{title:'bypass',prompt:'no',after_seconds:1}));
     const audit=await ctx.characterIdentity.auditSchedules();assert.equal(audit.rows.find(r=>r.id===state.oldReminder).binding,'bound');
-    assert.equal(audit.rows.find(r=>r.id===state.unknownReminder).binding,'unproven');const unknown=(await ctx.schedule.catalog()).find(r=>r.id===state.unknownReminder);assert.equal(unknown.status,'active');assert.equal(unknown.lastDelivery,undefined);assert.equal(unknown.scheduledAt,state.unknownAt);assert.equal(unknown.target.sessionId,state.unknownSession);assert(!ctx.agents.get(unknown.target.sessionId));
+    assert.equal(audit.rows.find(r=>r.id===state.unknownReminder).binding,'unproven');const unknown=(await ctx.schedule.catalog()).find(r=>r.id===state.unknownReminder);assert.equal(unknown.status,'active');assert.equal(unknown.lastDelivery,undefined);assert.equal(unknown.scheduledAt,state.unknownAt);assert.equal(unknown.target.sessionId,state.unknownSession);assert.equal(count(resumes.accepted,state.unknownSession),0,'No cold resume of the unproven target is ever accepted');
     const unknownLive=(await ctx.schedule.catalog()).find(r=>r.id===liveUnknownReminder.id);assert.equal(unknownLive.status,'active');assert.equal(unknownLive.lastDelivery,undefined);
     // DSH 0.2.2 injects a "[SCHEDULE CHANGE] change: created" notice into involved live Sessions; it carries no
     // authority. The reminder itself must never reach the unproven inbox, and the root must not run.
@@ -170,7 +180,7 @@ export function apply(ctx,config){
     while(Date.now()<slowEnd){slowRun=(await ctx.longTasks.list(record.agent)).find(t=>t.id===slow.id)?.runs[0];if(slowRun&&slowRun.status!=='running'&&slowRun.notification==='sent')break;await sleep(150);}
     assert.equal(slowRun?.status,'completed');const slowTexts=deliveries.filter(d=>d.text.startsWith('[长期任务] Activity')).map(d=>d.text);
     assert.equal(slowTexts.length,2,'one activity report, then the terminal notification');assert.match(slowTexts[1],/本轮执行结束/u);
-    assert.match(slowTexts[0],/任务尚未结束[\s\S]*当前处于第 1 个执行步骤；发起 1 次工具调用（工具 task_fixture_slow）[\s\S]*正在等待工具 task_fixture_slow 返回/u);
+    assert.match(slowTexts[0],/尚未观察到本轮结束事件[\s\S]*处于第 1 个执行步骤；发起 1 次工具调用（工具 task_fixture_slow）[\s\S]*正在等待工具 task_fixture_slow 返回/u);
     assert.equal(slowRun.report.count,1);assert(slowRun.report.eventId.startsWith('long-task:'+slowRun.id+':activity:'));assert.equal(slowRun.activity.calls,1);assert.equal(slowRun.activity.results,1);assert.deepEqual(slowRun.activity.open,[]);
     {const db=new DatabaseSync(config.cwd+'/coordination.sqlite');try{assert.deepEqual({...db.prepare('SELECT kind,status FROM outbox WHERE id=?').get(slowRun.report.eventId)},{kind:'task_activity',status:'sent'});}finally{db.close();}}
     expected+=2;report.checks.push('Long Task activity: native step/tool events give one report after the first window through the same Outbox, beside the unchanged terminal notification; short tasks send none');
@@ -198,6 +208,7 @@ export function apply(ctx,config){
     await control.disable();assert(!ctx.get('longTasks'));assert(tools.checkGuards({agent,name:'task_fixture_read'}),'Unloaded service must deny retained task tools');
     agent.followup(duplicate);await agent.whenIdle();assert.equal(globalThis[Symbol.for('fixture.tasks.read.calls')],reads);assert.equal(deliveries.length,expected);
    }
+   if(restart){assert.equal(count(resumes.accepted,state.unknownSession),0,'The unproven target stayed refused for the whole restarted phase');report.checks.push(`Unproven reminder target: ${count(resumes.attempted,state.unknownSession)} native cold resumes attempted, 0 accepted, nothing delivered`);}
    report.phase='complete';report.ok=true;
   }catch(error){report.error=error.stack;}finally{control.release();detach?.();await manager?.disposeAll().catch(()=>{});fs.writeFileSync(config.result,JSON.stringify(report,null,2));}
  }
