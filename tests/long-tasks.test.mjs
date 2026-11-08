@@ -351,12 +351,26 @@ test('a tool error before the first report is folded into that report as the one
  await f.advance(269_000);assert.equal(reports(f).length,1,'still inside 5 min of the first report (t=389 s)');await f.advance(1_000);sent=reports(f);assert.equal(sent.length,2,'due 5 min after the first report');assert.doesNotMatch(sent[1].text,/检测到工具执行异常/u);assert.match(sent[1].text,/其中 1 次报告错误/u);
  await finish(f,r);const run=f.runs.get(r.id);assert.equal(run.status,'needs_review');assert.equal(run.activity.errors,2);
 });
-test('more parallel calls than the tracked limit are counted from the aggregates, never named or matched wrongly',async()=>{
+test('more parallel calls than the tracked limit give only a provable lower bound, never an exact count or a name',async()=>{
  const f=await activityFixture(),task=await f.service.create(f.owner,args),r=await begin(f,task);
  for(let i=0;i<25;i++)await toolCall(f,r,'p'+i,'tool_'+i);
+ // p0 was pushed out of the tracked list; 'unknown-call' matches no call at all.
  await toolResult(f,r,'p0');await toolResult(f,r,'p24');await toolResult(f,r,'unknown-call');
  await f.advance(90_000);const [sent]=reports(f),run=f.runs.get(r.id);
- assert.match(sent.text,/有 22 个工具调用尚未返回。/u,'the outstanding count comes from calls minus results, not the bounded list');assert.doesNotMatch(sent.text,/正在等待|共 \d+ 个调用未返回/u);
- assert(run.activity.open.length<=20,'the tracked list stays bounded');assert(!run.activity.open.some(c=>['p0','p24'].includes(c.callId)),'results are matched by exact call id only');
+ // Truth: 25 calls, real results for p0 and p24 -> 23 outstanding. Provable from bounded state: the 19 tracked ones.
+ const truth=23,stated=Number(/至少有 (\d+) 个工具调用尚未返回/u.exec(sent.text)?.[1]);
+ assert.equal(stated,19,'only the tracked unanswered calls are stated');assert(stated<=truth,'a lower bound never exceeds the truth');
+ assert.doesNotMatch(sent.text,/(?:^|[^至少])有 \d+ 个工具调用尚未返回|共 \d+ 个调用未返回|正在等待/u,'no exact count and no named call once calls were dropped');
+ assert.equal(run.activity.open.length,19);assert.equal(run.activity.dropped,5,'dropped calls are only counted');
+ assert(!run.activity.open.some(c=>['p0','p24'].includes(c.callId)),'results are matched by exact call id only');
  assert(clean(sent));assert(!JSON.stringify(run.activity).includes('secret'),'no arguments or results are stored');
+});
+test('a result that matches no recorded call does not reduce the outstanding count',async()=>{
+ const f=await activityFixture(),task=await f.service.create(f.owner,args),r=await begin(f,task);
+ await toolCall(f,r,'a','read_a');await toolCall(f,r,'b','read_b');await toolCall(f,r,'c','read_c');
+ await toolResult(f,r,'a');await toolResult(f,r,'ghost');
+ await f.advance(90_000);const [sent]=reports(f),run=f.runs.get(r.id);
+ // Truth: b and c are unanswered. calls - results would claim 1.
+ assert.match(sent.text,/正在等待工具 read_b 返回（共 2 个调用未返回）/u);assert.equal(run.activity.dropped,0);
+ assert.deepEqual(run.activity.open.map(c=>c.callId),['b','c']);assert.equal(run.status,'running','counting never changes the run');
 });

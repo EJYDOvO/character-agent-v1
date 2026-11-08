@@ -15,7 +15,7 @@ export function toolFailed(data){
 }
 const safeName=n=>typeof n==='string'&&/^[A-Za-z0-9_.:-]{1,64}$/u.test(n)?n:null;
 const counts=a=>({steps:a.steps,calls:a.calls,results:a.results,errors:a.errors});
-export const emptyActivity=()=>({seq:null,at:null,step:0,steps:0,calls:0,results:0,errors:0,open:[],recent:[]});
+export const emptyActivity=()=>({seq:null,at:null,step:0,steps:0,calls:0,results:0,errors:0,open:[],dropped:0,recent:[]});
 /**
  * Fold one native event into run.activity. Events of another turn, from before
  * the admission, without a log position, or already folded (replay) change
@@ -31,7 +31,10 @@ export function foldActivity(run,event,at){
  else if(event.type==='tool/call'){
   if(typeof d.callId!=='string')return false;
   const name=safeName(d.name);a.calls++;
-  a.open=[...a.open.filter(c=>c.callId!==d.callId),{callId:d.callId,name,at}].slice(-MAX_OPEN);
+  const open=[...a.open.filter(c=>c.callId!==d.callId),{callId:d.callId,name,at}];
+  // Bounded: calls pushed out of the list are only counted, never kept.
+  if(open.length>MAX_OPEN)a.dropped=(a.dropped??0)+open.length-MAX_OPEN;
+  a.open=open.slice(-MAX_OPEN);
   if(!a.recent.includes(name))a.recent=[...a.recent,name].slice(-MAX_RECENT-1);
  }else if(event.type==='tool/result'){
   const m=d.message??d,id=m?.toolCallId??m?.source?.callId;a.results++;
@@ -78,11 +81,14 @@ export function activityText(title,run,now,{timeZone}={}){
  if(calls>0){const names=a.recent.slice(-MAX_RECENT).map(tool),more=a.recent.length>MAX_RECENT?'等':'';parts.push(`发起 ${calls} 次工具调用（${names.join('、')}${more}）`);}
  if(results>0)parts.push(`收到 ${results} 次工具返回${errors>0?`，其中 ${errors} 次报告错误`:''}`);
  lines.push(parts.length?(run.report?'自上次汇报以来：':'最近活动：')+parts.join('；')+'。':'已开始执行，尚未观察到工具活动。');
- // Outstanding calls from the aggregate counters; `open` is bounded (MAX_OPEN)
- // and names a call only while every outstanding call is still tracked.
- const pending=Math.max(0,a.calls-a.results),[open]=a.open;
- if(pending>a.open.length)lines.push(`有 ${pending} 个工具调用尚未返回。`);
- else if(open)lines.push(`正在等待${open.name?`工具 ${open.name} `:'一个工具'}返回${pending>1?`（共 ${pending} 个调用未返回）`:''}，已等待${minutes(now-Date.parse(open.at))}。`);
+ // Outstanding calls are the tracked calls without a matching result. calls -
+ // results is not used: a result may match no recorded call. While no call was
+ // ever dropped from the bounded list the count is exact; after a drop the
+ // dropped calls' state is unknown, so only the tracked ones are stated, as a
+ // lower bound, and no call is named.
+ const tracked=a.open.length,[open]=a.open;
+ if(a.dropped>0)lines.push(tracked?`至少有 ${tracked} 个工具调用尚未返回（调用较多，只跟踪最近 ${MAX_OPEN} 个，更早的调用是否返回无法确认）。`:`有较早的工具调用无法确认是否已返回（只跟踪最近 ${MAX_OPEN} 个）。`);
+ else if(open)lines.push(`正在等待${open.name?`工具 ${open.name} `:'一个工具'}返回${tracked>1?`（共 ${tracked} 个调用未返回）`:''}，已等待${minutes(now-Date.parse(open.at))}。`);
  if(alert)lines.push('工具出错不等于任务失败，Agent 可能继续处理。');
  lines.push('（只反映上述时刻观察到的执行事件；送达时任务可能已经结束。不代表目标进度或完成情况。）');
  return lines.join('\n');
