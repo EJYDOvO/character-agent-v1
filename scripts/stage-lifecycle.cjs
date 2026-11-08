@@ -7,7 +7,7 @@ const provenance={...require('./audit-evidence.cjs')(),qqPatches:Object.fromEntr
 const yaml=require('js-yaml'),dialect=require('./deployment-plan.cjs').entryYaml(yaml),archive=require('./host-archive.cjs').openArchive();
 const version=JSON.parse(archive.read('dsh/package.json')).version;if(version!=='0.2.2-rc.1')throw Error('Revalidate lifecycle SDK fixture for this Host');
 const creator=dialect.load(archive.read('dsh/node_modules/@deepseek-ai/dsh-web-app/presets/cordis.patch.yml'))[0].insert[0];archive.close();
-const home=path.join(project,'test-data','lifecycle-'+randomUUID()),dir=home+'/profiles/lifecycle',runId=randomUUID(),local=rel=>pathToFileURL(path.join(project,rel)).href;
+fs.mkdirSync(project+'/test-data',{recursive:true});const home=require('./test-home.cjs').newHome('lifecycle'),dir=home+'/profiles/lifecycle',runId=randomUUID(),local=rel=>pathToFileURL(path.join(project,rel)).href;
 fs.mkdirSync(dir,{recursive:true});fs.mkdirSync(home+'/tmp');
 const pnpm=require('./toolchain.cjs').pnpm,managerSource=toolkit+'/plugin-sources/dsh-conversation-manager';
 require('node:child_process').execFileSync(process.execPath,[pnpm,'pack','--pack-destination',home+'/tmp'],{cwd:managerSource,stdio:'pipe',windowsHide:true});

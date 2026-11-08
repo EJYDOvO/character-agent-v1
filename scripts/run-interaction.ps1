@@ -26,7 +26,7 @@ $p=Start-Process -FilePath $exe -ArgumentList @('--expose-internals',('"{0}"' -f
  if(!$report.ok){throw 'Isolated Interaction assertions failed'}
 } finally {
  try {
-  if($p){$p.Refresh();if(!$p.HasExited){Stop-Process -Id $p.Id};if(!$p.WaitForExit(5000)){throw 'Isolated test process did not exit'}}
+  if($p){$p.Refresh();if(!$p.HasExited){& taskkill.exe /T /F /PID $p.Id 2>&1 | Out-Null};if(!$p.WaitForExit(5000)){throw 'Isolated test process did not exit'}}
  } finally {
   foreach($key in $saved.Keys){[Environment]::SetEnvironmentVariable($key,$saved[$key],'Process')}
  }

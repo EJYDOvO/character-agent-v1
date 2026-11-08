@@ -23,7 +23,7 @@
 
 ## DSH 0.2.2-rc.1 隔离验证
 
-固定测试宿主见 [native-host-pin.json](evidence/native-host-pin.json)；`scripts/run-native-gates.ps1` 先校验宿主，再运行 lifecycle（含 Long Tasks）、workers、roles、schedule-restart 四项必需门禁。宿主缺失、版本或哈希不符、签名不符、门禁失败或未运行，都不判为通过。GitHub Hosted CI 不含 DSH，只跑单元与安全审计；`native-host.yml` 需要专用 self-hosted Windows runner，在注册之前不会运行，也不是必需检查。
+固定测试宿主见 [native-host-pin.json](evidence/native-host-pin.json)；`scripts/run-native-gates.ps1` 先校验宿主，再运行 lifecycle（含 Long Tasks）、workers、roles、schedule-restart 四项必需门禁。宿主缺失、版本或哈希不符、签名不符、门禁失败或未运行，都不判为通过。隔离 Home 建在系统临时目录下的 `dsh-character-gates`（可用 `DSH_CHARACTER_TEST_ROOT` 指定），必须位于任何 git 工作树之外：DSH workspace-changes 会在每轮结束时对 Session 工作目录所在仓库做快照，Home 放在项目内时，宿主在快照中途被停止会留下孤儿 `git add`，并因继承的句柄挂住运行器。运行器只等待各门禁进程本身（输出写文件，单项超时 20 分钟），残留子进程不再阻塞。GitHub Hosted CI 不含 DSH，只跑单元与安全审计；`native-host.yml` 需要专用 self-hosted Windows runner，在注册之前不会运行，也不是必需检查。
 
 最近一次本地运行（2026-11-08，C0 分支代码 `a859f77`，运行时工作树仅 `docs/STATUS.md` 未提交；本机 Windows，非 CI runner）：宿主校验通过（版本、三项哈希、Authenticode 签名有效），lifecycle、workers（两阶段各 9 项检查）、roles、schedule-restart 均通过。模型与 QQ 传输为合成夹具，Home 为全新隔离目录；它不证明真实 QQ 送达、真实模型质量或生产迁移。
 

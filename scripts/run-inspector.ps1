@@ -34,11 +34,11 @@ $p=Start-Process -FilePath $exe -ArgumentList @('--expose-internals','--import',
   $previewDeadline=(Get-Date).AddSeconds(600)
   while(!(Test-Path -LiteralPath (Join-Path $run.home 'preview.done')) -and (Get-Date) -lt $previewDeadline -and !$p.HasExited){Start-Sleep -Milliseconds 250;$p.Refresh()}
  }
- $p.Refresh();if(!$p.HasExited){Stop-Process -Id $p.Id};if(!$p.WaitForExit(5000)){throw 'Isolated Host did not stop'};$p=$null
+ $p.Refresh();if(!$p.HasExited){& taskkill.exe /T /F /PID $p.Id 2>&1 | Out-Null};if(!$p.WaitForExit(5000)){throw 'Isolated Host did not stop'};$p=$null
 }
 } finally {
  try {
-  if($p){$p.Refresh();if(!$p.HasExited){Stop-Process -Id $p.Id};if(!$p.WaitForExit(5000)){throw 'Isolated test process did not exit'}}
+  if($p){$p.Refresh();if(!$p.HasExited){& taskkill.exe /T /F /PID $p.Id 2>&1 | Out-Null};if(!$p.WaitForExit(5000)){throw 'Isolated test process did not exit'}}
  } finally {
   foreach($key in $saved.Keys){[Environment]::SetEnvironmentVariable($key,$saved[$key],'Process')}
  }

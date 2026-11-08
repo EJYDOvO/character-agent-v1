@@ -1,6 +1,6 @@
 // Isolated profile only; no live Profile, credentials, memory or QQ is copied.
 const fs=require('node:fs'),path=require('node:path'),{randomUUID}=require('node:crypto');
-const root=path.resolve(__dirname,'..'),home=path.join(root,'test-data','interaction-'+randomUUID()),dir=path.join(home,'profiles','interaction');
+const root=path.resolve(__dirname,'..'),home=require('./test-home.cjs').newHome('interaction'),dir=path.join(home,'profiles','interaction');
 fs.mkdirSync(dir,{recursive:true});
 const plugin=require('node:url').pathToFileURL(path.join(root,'packages/interaction-policy/index.mjs')).href;
 // Leave headroom for native startup/IO; the slow provider waits twice this limit.
@@ -28,4 +28,4 @@ fs.mkdirSync(packs);run(['pack','--pack-destination',packs],ioSource);
 run(['add','--offline','--ignore-scripts','--config.auto-install-peers=false','--node-linker=hoisted','--store-dir',path.join(home,'store'),'file:'+path.join(packs,ioPackage.name+'-'+ioPackage.version+'.tgz')],dir);
 const modelRows=require('./model-inputs.cjs').apply([{id:'llm-pi-ai',config:{providers:{'qq-qa-native-fixture':{api:'openai-completions',baseURL:'http://127.0.0.1:9/v1',models:[{id:'vision'},{id:'text-only'}]}}}}],[{provider:'qq-qa-native-fixture',model:'vision',input:['text','image']}]);
 fs.writeFileSync(dir+'/cordis.patch.yml',yaml.dump([{id:'session-title-llm',disabled:true},...modelRows,{insert:[{id:'agent-io',name:'dsh-agent-io',config:{}},preset('interaction-test',true),preset('interaction-off',false),control,creator,{id:'interaction-probe',name:path.join(root,'tests/interaction-host.mjs').replaceAll('\\','/'),config:{cwd:home,result,runId,qqFixture,version,hangOnModelFile:path.join(home,'hangon-model.json')}}]}],{schema,noRefs:true}));
-fs.writeFileSync(root+'/test-data/interaction-run.json',JSON.stringify({home,result,runId}));console.log(JSON.stringify({home,result,runId,productionCopied:false}));
+fs.mkdirSync(root+'/test-data',{recursive:true});fs.writeFileSync(root+'/test-data/interaction-run.json',JSON.stringify({home,result,runId}));console.log(JSON.stringify({home,result,runId,productionCopied:false}));

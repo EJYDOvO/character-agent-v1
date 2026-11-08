@@ -19,6 +19,6 @@ try{
   if(!(Test-Path -LiteralPath $run.result)){throw 'Lifecycle Host failed to report; inspect isolated logs'}
   $r=Get-Content -LiteralPath $run.result -Raw|ConvertFrom-Json;$r|ConvertTo-Json -Depth 10
   if(!$r.ok -or $r.runId -ne $run.runId -or $r.restart -ne [bool]$phase){throw 'Lifecycle assertions failed or stale result'}
-  $p.Refresh();if(!$p.HasExited){Stop-Process -Id $p.Id};$p.WaitForExit(5000)|Out-Null;$p=$null
+  $p.Refresh();if(!$p.HasExited){& taskkill.exe /T /F /PID $p.Id 2>&1 | Out-Null};$p.WaitForExit(5000)|Out-Null;$p=$null
  }
-}finally{try{if($p){$p.Refresh();if(!$p.HasExited){Stop-Process -Id $p.Id};$p.WaitForExit(5000)|Out-Null}}finally{foreach($key in $saved.Keys){[Environment]::SetEnvironmentVariable($key,$saved[$key],'Process')}}}
+}finally{try{if($p){$p.Refresh();if(!$p.HasExited){& taskkill.exe /T /F /PID $p.Id 2>&1 | Out-Null};$p.WaitForExit(5000)|Out-Null}}finally{foreach($key in $saved.Keys){[Environment]::SetEnvironmentVariable($key,$saved[$key],'Process')}}}

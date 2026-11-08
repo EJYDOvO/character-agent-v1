@@ -32,13 +32,13 @@ foreach($phase in 1,2){
  $report=Get-Content -LiteralPath $run.result -Raw | ConvertFrom-Json
  if($report.runId -ne $run.runId){throw 'Stale probe result'}
  $reports+=$report
- $p.Refresh();if(!$p.HasExited){Stop-Process -Id $p.Id};if(!$p.WaitForExit(5000)){throw 'Isolated test process did not exit'};$p=$null
+ $p.Refresh();if(!$p.HasExited){& taskkill.exe /T /F /PID $p.Id 2>&1 | Out-Null};if(!$p.WaitForExit(5000)){throw 'Isolated test process did not exit'};$p=$null
  if(!$report.ok){$reports | ConvertTo-Json -Depth 10;throw "Isolated role assertions failed in phase $phase"}
 }
 $reports | ConvertTo-Json -Depth 10
 } finally {
  try {
-  if($p){$p.Refresh();if(!$p.HasExited){Stop-Process -Id $p.Id};if(!$p.WaitForExit(5000)){throw 'Isolated test process did not exit'}}
+  if($p){$p.Refresh();if(!$p.HasExited){& taskkill.exe /T /F /PID $p.Id 2>&1 | Out-Null};if(!$p.WaitForExit(5000)){throw 'Isolated test process did not exit'}}
  } finally {
   foreach($key in $saved.Keys){[Environment]::SetEnvironmentVariable($key,$saved[$key],'Process')}
  }

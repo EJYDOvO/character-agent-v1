@@ -8,7 +8,7 @@ const project=path.resolve(__dirname,'..'),toolkit=path.resolve(process.env.DSH_
 const phase2=process.argv.indexOf('--phase2');
 if(phase2>=0){
  const home=path.resolve(process.argv[phase2+1]),file=home+'/profiles/inspector/cordis.patch.yml',yaml=require('js-yaml'),dialect=require('./deployment-plan.cjs').entryYaml(yaml);
- if(!home.startsWith(path.join(project,'test-data')+path.sep))throw Error('Restart phase only on a staged test-data Home');
+ if(!require('./test-home.cjs').isTestHome(home))throw Error('Restart phase only on a staged isolated test Home');
  const rows=dialect.load(fs.readFileSync(file,'utf8'));rows.find(r=>r.insert).insert.find(r=>r.id==='inspector-probe').config.phase=2;fs.writeFileSync(file,dialect.dump(rows,{noRefs:true}));
  process.exit(0);
 }
