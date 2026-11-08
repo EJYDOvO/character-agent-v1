@@ -6,7 +6,7 @@ class Expression{constructor(value){this.value=value;}}
 const schema=yaml.DEFAULT_SCHEMA.extend([new yaml.Type('tag:yaml.org,2002:js',{kind:'scalar',construct:v=>new Expression(v),instanceOf:Expression,represent:v=>v.value})]);
 (async()=>{
  const {workerPreset,configureWorkers,selectedWorkerIds}=await import('../packages/character-definition/workers.mjs');
- const home=path.join(root,'test-data','inspector-'+randomUUID()),dir=path.join(home,'profiles','inspector'),runId=randomUUID(),extras=process.argv.includes('--extras'),realModel=false,modules=process.argv.includes('--modules'),workerProbe=process.argv.includes('--workers');fs.mkdirSync(dir,{recursive:true});
+ const home=require('./test-home.cjs').newHome('inspector'),dir=path.join(home,'profiles','inspector'),runId=randomUUID(),extras=process.argv.includes('--extras'),realModel=false,modules=process.argv.includes('--modules'),workerProbe=process.argv.includes('--workers');fs.mkdirSync(dir,{recursive:true});
  if(modules&&(extras||realModel))throw Error('--modules uses an independent ordinary Agent fixture');
  const local=p=>require('node:url').pathToFileURL(path.join(root,p)).href;
  const archive=require('./host-archive.cjs').openArchive();const version=JSON.parse(archive.read('dsh/package.json')).version;
@@ -47,5 +47,5 @@ const schema=yaml.DEFAULT_SCHEMA.extend([new yaml.Type('tag:yaml.org,2002:js',{k
  const rows=[{id:'session-title-llm',disabled:true},{id:'llm-pi-ai',disabled:true},{insert:inserted}];
  inserted.at(-1).config.provenance=require('./audit-evidence.cjs')();
  fs.writeFileSync(dir+'/cordis.patch.yml',yaml.dump(rows,{schema,noRefs:true}));
- fs.writeFileSync(root+'/test-data/inspector-run.json',JSON.stringify({home,result:home+'/result.json',runId,extras}));console.log(JSON.stringify({home,runId,extras,qqOrMemoryCopied:false,realModel}));
+ fs.mkdirSync(root+'/test-data',{recursive:true});fs.writeFileSync(root+'/test-data/inspector-run.json',JSON.stringify({home,result:home+'/result.json',runId,extras}));console.log(JSON.stringify({home,runId,extras,qqOrMemoryCopied:false,realModel}));
 })().catch(e=>{console.error(e);process.exitCode=1;});
