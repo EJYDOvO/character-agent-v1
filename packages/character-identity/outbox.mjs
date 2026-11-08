@@ -15,7 +15,8 @@ import {createHash,randomUUID} from 'node:crypto';
 // A pending row older than this has neither been delivered nor settled; it is
 // reported for Owner attention (often held: unverified source or no Gateway).
 export const STALE_PENDING_MS=15*60_000;
-const KINDS=['scheduled_reminder','task_completed','task_failed','task_timeout','maintenance_result','configured_alert'];
+// task_activity: a non-terminal Long Task activity report; same at-most-once handoff, never a terminal result.
+const KINDS=['scheduled_reminder','task_completed','task_failed','task_timeout','task_activity','maintenance_result','configured_alert'];
 // One owner per state file in a process (HMR may overlap an old and a new
 // instance): a new owner recovers and pumps only after the previous one closed.
 const leases=globalThis[Symbol.for('dsh.character.outbox.v1')]??=new Map();

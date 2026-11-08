@@ -24,7 +24,7 @@ fs.writeFileSync(home+'/binding.json',JSON.stringify({appId:'fixture-app',ownerI
 const rows=[{id:'session-title-llm',disabled:true},{id:'llm-pi-ai',disabled:true},{id:'agent-default-model',config:{provider:'task-fixture',model:'fixture'}},{insert:[creator,
  {id:'identity',name:local('packages/character-identity/index.mjs'),config:{presetId:'qq-character',bindingFile:home+'/binding.json',stateFile:home+'/coordination.sqlite',memoryMode:'character'}},
  {id:'memory',name:local('packages/character-memory-core/index.mjs'),config:{database:home+'/memory.sqlite',autoCapture:false,consolidation:false}},
- {id:'long-tasks',name:local('tests/lifecycle-fixture.mjs'),config:{cwd:home,conversationModule:pathToFileURL(dir+'/node_modules/dsh-conversation-manager/index.mjs').href,conversationStateFile:home+'/conversations.json',allowTools:['task_fixture_read'],taskPlugins:[{id:'fixture-read',name:local('tests/task-fixture-tools.mjs')}]}},
+ {id:'long-tasks',name:local('tests/lifecycle-fixture.mjs'),config:{cwd:home,conversationModule:pathToFileURL(dir+'/node_modules/dsh-conversation-manager/index.mjs').href,conversationStateFile:home+'/conversations.json',allowTools:['task_fixture_read','task_fixture_slow'],activityReport:{firstSeconds:15,intervalSeconds:600},taskPlugins:[{id:'fixture-read',name:local('tests/task-fixture-tools.mjs')}]}},
  {id:'probe',name:local('tests/lifecycle-host.mjs'),config:{cwd:home,result:home+'/result.json',runId,qqFixture:qq,version,provenance,nativeSubagent}}
 ]}];
 fs.writeFileSync(dir+'/cordis.patch.yml',dialect.dump(rows,{noRefs:true}));

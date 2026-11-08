@@ -6,7 +6,7 @@
 
 | 范围 | 状态 |
 |---|---|
-| Character | 0.1.0-test.33（含可选角色模式），Long Tasks 0.1.0-test.3，Interaction 0.1.0-test.9 |
+| Character | 0.1.0-test.34（含可选角色模式），Long Tasks 0.1.0-test.4，Interaction 0.1.0-test.9 |
 | 配套 QQTK | I/O test.9、Manager test.5、Remote Ops 1.1.1-test.3、QQ0.5.2 / SDK1.0.5 |
 | 官方宿主目标 | DSH 0.2.2-rc.1 / Node 24 / Windows；源码不再支持 0.2.1 Schedule API |
 
@@ -16,6 +16,8 @@
 
 ## 已合并、未部署
 
+- test.34（C2 Lite，Character #22）：运行中的 Long Task 依据原生 `step/start`、`tool/call`、`tool/result` 事件，经同一 Outbox 发出低频活动汇报（`task_activity`，ID `long-task:<runId>:activity:<事件序号>`，与终态通知 ID 分开）。运行满 90 秒首报，之后至少间隔 5 分钟且只在有新活动时发送；每个 run 最多一次快速异常提醒（首报前的错误并入首报）。汇报以 Host 时钟的“截至 日期 时间（UTC±hh:mm）”开头并注明送达时任务可能已结束；只含步骤、调用与返回计数、工具名和等待状态，不含参数、结果、百分比或预计时间，不调用模型。未返回调用按调用 ID 跟踪（最多 20 个）：未挤出时报告精确数，挤出后只报告可证明的下界。活动计数与工具错误标记（`toolError` → `needs_review`）共用一条归属规则（本 run 的 turn、认领之后、带原生序号、未处理过）。每个 run 一个内存定时器，结束、取消、停用时清除；重启沿用原有结算，不重建定时器、不补发。终态状态机、终态通知、权限与 `allowTools` 不变。详见 [Long Tasks README](../packages/long-tasks/README.md)。
+- 原生门禁隔离（Character #23）：隔离 Home 建在仓库外的系统临时目录；运行器只等待门禁进程本身，单项超时 20 分钟；宿主按自己启动的进程树停止。lifecycle 中“未证明归属提醒的目标不被加载”改为统计被 Identity 放行的冷恢复（必须为 0，含被接受的对照），不再对注册表瞬时采样。
 - test.33（C0）：`long_task_list` 对每个 run 分开报告 `execution`、`goalVerification`（无独立验证器，结算后为 `unverified`）与 `delivery`（事件 ID、Outbox 状态、入队时间），并以 `deliveryAttention` 汇总全部 run 的 unknown/partial/not-sent/长时间 pending/unrecorded 投递；`character_notifications` 增加同样的 attention 视图。只读、无正文、不重发，不改 run 状态机与 Outbox Schema。Worker 评测增加执行期预算账本契约（尚无模型执行器）。原生门禁增加固定 Host 校验（版本、哈希、签名）与统一判定。
 - Memory 形成与 Worker 委派评测框架（Character #19/#20）：只有评分器与合成夹具，没有真实模型测量。
 - test.32：普通工具在派发时复核当前 Character 身份；配套 QQTK Identity & Access test.3 保留撤销后的 Session 主体归属并在派发时检查租约。增加注入对抗与可重复中英文检索评测，只修正排序归一化和 FTS 候选 SQL 物化，不变更 Schema、ACL 或遗忘规则。范围、收益与剩余限制见 [安全与召回回归](HARDENING-RECALL.md)。下文各版本验收数字保留为历史记录，不代表本轮生产部署。
@@ -25,11 +27,13 @@
 
 固定测试宿主见 [native-host-pin.json](evidence/native-host-pin.json)；`scripts/run-native-gates.ps1` 先校验宿主，再运行 lifecycle（含 Long Tasks）、workers、roles、schedule-restart 四项必需门禁。宿主缺失、版本或哈希不符、签名不符、门禁失败或未运行，都不判为通过。隔离 Home 建在系统临时目录下的 `dsh-character-gates`（可用 `DSH_CHARACTER_TEST_ROOT` 指定），必须位于任何 git 工作树之外：DSH workspace-changes 会在每轮结束时对 Session 工作目录所在仓库做快照，Home 放在项目内时，宿主在快照中途被停止会留下孤儿 `git add`，并因继承的句柄挂住运行器。运行器只等待各门禁进程本身（输出写文件，单项超时 20 分钟），残留子进程不再阻塞。GitHub Hosted CI 不含 DSH，只跑单元与安全审计；`native-host.yml` 需要专用 self-hosted Windows runner，在注册之前不会运行，也不是必需检查。
 
-最近一次本地运行（2026-11-08，C0 分支代码 `a859f77`，运行时工作树仅 `docs/STATUS.md` 未提交；本机 Windows，非 CI runner）：宿主校验通过（版本、三项哈希、Authenticode 签名有效），lifecycle、workers（两阶段各 9 项检查）、roles、schedule-restart 均通过。模型与 QQ 传输为合成夹具，Home 为全新隔离目录；它不证明真实 QQ 送达、真实模型质量或生产迁移。
+最近一次本地运行（2026-11-09，#22 与 #23 整合后的代码 `826abad`，干净工作区；本机 Windows，非 CI runner）：Character 单元 381/381、安全审计 35/35；`run-native-gates.ps1` 宿主校验通过（版本、三项哈希、Authenticode 签名有效），lifecycle 98 s、workers 23 s、roles 24 s、schedule-restart 22 s 全部通过，共 174 s，Home 位于仓库外，结束后无残留 git 进程。lifecycle 包含活动汇报检查（慢工具任务得到一条由原生事件生成的汇报，Outbox 为 `task_activity`/`sent`，其后是未改变的终态通知；短任务没有活动汇报）以及“未证明归属的目标 20 次冷恢复尝试、0 次被接受、无投递”。模型与 QQ 传输为合成夹具，不证明真实 QQ 送达、真实模型质量或生产迁移。
 
 ## 尚未验证
 
 真实 QQ Gateway 与补丁 SDK 在 0.2.2 的联网装配、手机送达与 Owner 阅读；真实模型的 Memory 形成质量、Worker 委派质量与成本；预算账本在真实 Provider 下的取消延迟；生产数据迁移；Mac/Linux 原生环境。其余限制：Mac/Linux 原生环境未验收；历史 Session 的 cwd/附件绝对路径可能需要人工审阅；旧非标准数据布局无自动导入保证。真实 QQ、已有提醒/通知以及私有业务数据迁移须在另行授权的停机流程验证。
+
+已知非阻断事项：未证明归属的提醒到期后，原生 Schedule 每次 drive 请求都会重试冷恢复目标，并被 Identity 拒绝（隔离 lifecycle 中每次运行约 20 次，每次 15–55 ms，无执行、无投递），只造成重复开销与警告日志；Home 位于 git 仓库内时，DSH workspace-changes 启动的 git（`add`、`rev-parse`）在宿主停止后可能成为孤儿并长时间不退出，原因未查明，隔离 Home 后不再触发。
 
 尚未实现/本轮不扩展：跨平台账号关联、多用户/群聊、完整 Approval Router、向量检索、细粒度任务 grants、旧 Task Memory 正式导入。后续工作优先现有安全回归及实机验收，然后真实 Worker/Memory/Long Tasks 质量评估；不把路线图视为已交付。
 

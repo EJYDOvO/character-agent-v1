@@ -117,3 +117,28 @@ test('Owner-authorized attention lists an uncertain delivery without text; forge
  f.makeAgent('stranger');assert.throws(()=>f.service.attention(f.service.forSession('stranger')));
  await f.service.notifyConversation(scope,{eventId:'long-task:visible',kind:'task_completed',text:'[长期任务] 私密结果正文'});assert.equal(sends,1,'unknown is never resent');
 }finally{f.dispose();}});
+test('Long Task activity reports use the same Outbox: own id beside the terminal one, idempotent, unknown never resent',async()=>{const f=fixture();const sends=[];try{f.runtime.notifications.send=async request=>{sends.push(request.text);return sends.length===1?{status:'unknown',reason:'timeout-or-network',parts:[{index:0,status:'unknown'}]}:{status:'sent',parts:[{index:0,status:'sent'}]};};f.service.attach(f.runtime);await f.runtime.manager.getOrCreate('c2c','owner','owner',{scope:'c2c',targetId:'owner'});
+ const scope=f.service.conversationScope(),activity={eventId:'long-task:run-1:activity:7',kind:'task_activity',text:'[长期任务] 检查\n任务尚未结束'};
+ assert.equal((await f.service.notifyConversation(scope,activity)).status,'unknown');
+ assert.equal((await f.service.notifyConversation(scope,activity)).status,'unknown','replay of the same report enqueues nothing new');
+ await assert.rejects(()=>f.service.notifyConversation(scope,{...activity,text:'changed'}),/id conflict/);
+ assert.equal((await f.service.notifyConversation(scope,{eventId:'long-task:run-1',kind:'task_completed',text:'[长期任务] 检查\n本轮执行结束'})).status,'sent','the terminal notification is independent of the activity row');
+ assert.equal(sends.length,2,'the uncertain activity report is never resent');
+ assert.deepEqual(f.service.attention(f.service.forSession('session')).map(r=>[r.id,r.kind,r.attention]),[['long-task:run-1:activity:7','task_activity','unknown']]);
+}finally{f.dispose();}});
+test('an activity report held in the Outbox is delivered later with its original observation-time text, once',async()=>{
+ const {createOutbox}=await import('../packages/character-identity/outbox.mjs'),{activityText}=await import('../packages/long-tasks/activity.mjs');
+ const db=new DatabaseSync(':memory:');db.exec("CREATE TABLE outbox(id TEXT PRIMARY KEY,kind TEXT NOT NULL,conversation TEXT NOT NULL,text TEXT NOT NULL,status TEXT NOT NULL,at TEXT NOT NULL);CREATE TABLE identity_state(key TEXT PRIMARY KEY,value TEXT NOT NULL);");
+ let clock=Date.parse('2030-01-01T00:01:30.000Z');const outbox=createOutbox({db,key:'delay-'+Math.random(),now:()=>clock});
+ const run={startedAt:'2030-01-01T00:00:00.000Z',activity:{seq:4,at:null,step:1,steps:1,calls:1,results:0,errors:0,open:[{callId:'c1',name:'web_fetch',at:'2030-01-01T00:00:10.000Z'}],recent:['web_fetch']}};
+ const text=activityText('检查',run,clock,{timeZone:'Asia/Shanghai'}),event={eventId:'long-task:r:activity:4',kind:'task_activity',text,conversation:'qq'};
+ outbox.enqueue(event);await outbox.pump(undefined);assert.equal(outbox.status(event.eventId),'pending','no Gateway: the report waits in the Outbox');
+ clock+=10*60_000;const delivered=[];
+ const notifier={async send(request){if(request.authorize({type:'direct',id:'owner'})!==true)return {status:'not-sent',reason:'unauthorized',stage:'before-platform',parts:[]};delivered.push(request.text);return {status:'sent',parts:[{index:0,status:'sent'}]};}};
+ const options={notifier,conversation:'qq',target:{type:'direct',id:'owner'},eligible:()=>true,authorize:()=>true};
+ await outbox.pump(options);await outbox.pump(options);
+ assert.deepEqual(delivered,[text],'delivered once, text unchanged');assert.equal(outbox.status(event.eventId),'sent');
+ assert.match(delivered[0],/截至 2030-01-01 08:01:30（UTC\+08:00）/u,'names the observation time, not the 08:11:30 send time');assert.doesNotMatch(delivered[0],/08:11:30/u);
+ assert.match(delivered[0],/送达时任务可能已经结束/u);
+ await outbox.close();db.close();
+});
