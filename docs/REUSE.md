@@ -93,7 +93,7 @@ test.9 审计修复保留契约 v1、Schema 3 和现有工具参数。Host 的 `
 
 保持四插件与 Core/Extras。Core 构建将 Tools 挂载为 `dsh-character-memory-tools/character.mjs`，继续提供原有九个 `character_*` 记忆/队列工具及 `character_notifications`。Character Identity 同时提供标准契约和旧服务名。直接引用旧 Tools 默认入口的外部 Profile，应改用这个专用入口；纯通用项目可设置 `toolPrefix: character, legacyQueueNames: true` 保留记忆工具名，但不会获得 QQ 通知或角色提示。
 
-私有 `private/build-config.json` 可配置 `definitionPath`、`presetId`、`dataDirectory`；环境变量 `DSH_CHARACTER_DEFINITION`、`DSH_CHARACTER_PRESET_ID`、`DSH_CHARACTER_DATA_DIR` 可覆盖。先阅读 `scripts/definition-source.cjs` 的解析规则。官方 Creator 内容或构建配置变化后 `ensure-build.cjs` 会重建；重建不是自动上线，必须复验。
+私有 `private/build-config.json` 可配置 `cardPath`（CCv3 角色卡：.json/.png/.yaml，默认 `characters/template/card.yaml`）、`rules.systemFile` / `rules.reminderFile`（角色规则与末尾提醒）、`userName`、`characterId`、`presetId`、`dataDirectory`；环境变量 `DSH_CHARACTER_CARD`、`DSH_CHARACTER_PRESET_ID`、`DSH_CHARACTER_DATA_DIR` 可覆盖。先阅读 `scripts/card-source.cjs` 的解析规则；旧的 `definitionPath` / `DSH_CHARACTER_DEFINITION` 会被拒绝。用 `node scripts/check-card.cjs <卡文件>` 在构建前检查角色卡，`node scripts/export-card.cjs <卡.yaml>` 导出标准 JSON。官方 Creator 内容或构建配置变化后 `ensure-build.cjs` 会重建；重建不是自动上线，必须复验。
 
 本机 `prepare-deploy.cjs` 是现有生产实例的维护适配器，只允许原有 Character ID、qq-character 路由与数据目录。其他项目自行装配 Profile；不要把这个适配器当成通用迁移器。
 

@@ -103,3 +103,16 @@ test('cardRevisions changes when the card or either rules file changes', () => {
   assert.notEqual(moved.rulesRevision, cardRevisions(settings).rulesRevision);
   assert.equal(cardRevisions({...settings, systemRulesPath: null, reminderPath: null}).rulesRevision.length, 64);
 });
+
+test('portable config maps card settings relative to the config file', () => {
+  const {cardBuildConfig} = require('../scripts/portable.cjs');
+  const dir = join(tmpdir(), 'portable-config');
+  assert.deepEqual(cardBuildConfig({card: 'my/card.png', rules: {system: 'my/rules.md', reminder: 'my/reminder.md'}, userName: '小林', characterId: 'test-a'}, dir), {
+    cardPath: join(dir, 'my', 'card.png'),
+    rules: {systemFile: join(dir, 'my', 'rules.md'), reminderFile: join(dir, 'my', 'reminder.md')},
+    userName: '小林',
+    characterId: 'test-a',
+  });
+  assert.deepEqual(cardBuildConfig({}, dir), {cardPath: join(root, 'characters', 'template', 'card.yaml'), rules: {}});
+  assert.throws(() => cardBuildConfig({definition: 'persona.yaml'}, dir), /"card"/);
+});
