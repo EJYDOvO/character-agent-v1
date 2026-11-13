@@ -1,5 +1,5 @@
 import {randomUUID} from 'node:crypto';
-import {changeSelector,instruction,nativeTiming,occurrences,runId,targetSession,timingSelector} from './state.mjs';
+import {changeSelector,instruction,nativeTiming,occurrences,ownsTarget,perRun,runId,taskTarget,timingSelector} from './state.mjs';
 import {FIRST_REPORT_MS,REPORT_INTERVAL_MS,activityText,emptyActivity,foldActivity,reportDue,reportMarker,unreported} from './activity.mjs';
 const terminal=new Set(['completed','failed','interrupted','cancelled','needs_review']);
 const text=m=>m?.content?.filter(b=>b.type==='text').map(b=>b.text).join('\n')??'';
@@ -26,7 +26,11 @@ function runView(identity,scope,run){
  return {...run,notification:status??run.notification,execution:run.status,goalVerification:settled?'unverified':'pending',delivery};
 }
 export class LongTasks {
- constructor(host,{presetId='long-task',allowTools=[],activity={},clock={}}={}){this.h=host;this.presetId=presetId;this.allowTools=allowTools;
+ constructor(host,{presetId='long-task',allowTools=[],activity={},clock={},sessionMode='per-run',cwd}={}){this.h=host;this.presetId=presetId;this.allowTools=allowTools;
+  // New tasks: one native Session per occurrence (`per-run`, default) or the
+  // historical fixed task root (`task-root`, explicit compatibility choice).
+  if(!['per-run','task-root'].includes(sessionMode))throw Error('Invalid task Session mode');
+  this.sessionMode=sessionMode;this.cwd=cwd;
   // Activity reports: one bounded timer per running run, in memory only. A
   // restart settles every running run (recover), so no timer is ever rebuilt.
   this.activity={firstMs:activity.firstMs??FIRST_REPORT_MS,intervalMs:activity.intervalMs??REPORT_INTERVAL_MS,timeZone:activity.timeZone};
@@ -34,20 +38,29 @@ export class LongTasks {
  serial(fn){const p=this.chain.then(()=>{if(this.closed)throw Error('Long tasks disabled');return fn();});this.chain=p.catch(()=>{});return p;}
  owner(agent){if(this.h.agents.get(agent?.id)!==agent)throw Error('Actual Host Agent required');const c=this.h.identity.forSession(agent.id);return this.h.identity.authorize(c,'write');}
  scoped(task,scope){if(!task||['principalId','characterId','projectId','conversationId'].some(k=>task.scope[k]!==scope[k]))throw Error('Task not found in authorized scope');return task;}
- async create(agent,args,signal,operationId){await this.ready;return this.serial(async()=>{
+ // options.sessionMode: Host-internal override (compatibility tests); the
+ // model tool never passes it.
+ async create(agent,args,signal,operationId,{sessionMode=this.sessionMode}={}){await this.ready;return this.serial(async()=>{
   const scope=this.owner(agent);
   signal?.throwIfAborted();this.h.identity.validateConversation(scope);
   if(typeof args.title!=='string'||!args.title.trim()||args.title.length>120||typeof args.prompt!=='string'||!args.prompt.trim()||args.prompt.length>8000)throw Error('Task title and bounded instruction required');
   const route={provider:agent.options.provider,model:agent.options.model};if(!route.provider||!route.model)throw Error('Explicit resolved task model required');
   const id='task-'+(operationId?runId(agent.id,String(operationId)):randomUUID()),timing=timingSelector(args);
   const existing=this.h.tasks.get(id);if(existing){this.scoped(existing,scope);if(existing.title!==args.title.trim()||existing.prompt!==args.prompt.trim()||JSON.stringify(existing.timing)!==JSON.stringify(timing))throw Error('Task operation id conflict');return existing;}
-  const task={id,sessionId:randomUUID(),presetId:this.presetId,title:args.title.trim(),prompt:args.prompt.trim(),timing,revision:1,state:'creating',scope:{principalId:scope.principalId,characterId:scope.characterId,projectId:scope.projectId,conversationId:scope.conversationId},route,createdAt:new Date().toISOString()};
+  if(!['per-run','task-root'].includes(sessionMode))throw Error('Invalid task Session mode');
+  // Per-run Sessions are created by native Schedule through the Host's Session
+  // creation provider. Without it the task is refused: never a silent fallback
+  // to a shared root or to the QQ Session.
+  if(sessionMode==='per-run'&&(typeof this.cwd!=='string'||!this.cwd||this.h.canCreateSessions?.()!==true))throw Error('This Host cannot create a Session per task run (native sessionController unavailable); long task not created');
+  const base={id,presetId:this.presetId,title:args.title.trim(),prompt:args.prompt.trim(),timing,revision:1,state:'creating',scope:{principalId:scope.principalId,characterId:scope.characterId,projectId:scope.projectId,conversationId:scope.conversationId},route,createdAt:new Date().toISOString()};
+  const task=sessionMode==='per-run'?{...base,delivery:'new',cwd:this.cwd}:{...base,sessionId:randomUUID()};
   await this.h.tasks.put(task.id,task);
   try{
-   const handle=await this.h.createRoot(task);if(!await this.h.flush(handle.agent.session))throw Error('Task root was not durably saved');
-   // Fixed target: the task's own independent root. The acting Owner Session is
-   // only the actor that DSH records as involved, never the delivery target.
-   const record=await this.h.schedule.create({title:task.title,prompt:instruction(task),timing:nativeTiming(timing),target:{kind:'session',sessionId:task.sessionId}},actorOf(agent),signal);
+   if(!perRun(task)){const handle=await this.h.createRoot(task);if(!await this.h.flush(handle.agent.session))throw Error('Task root was not durably saved');}
+   // The target is the task's own destination: a fresh task-Preset Session per
+   // occurrence, or the historical fixed root. The acting Owner Session is only
+   // the actor that DSH records as involved, never the delivery target.
+   const record=await this.h.schedule.create({title:task.title,prompt:instruction(task),timing:nativeTiming(timing),target:taskTarget(task)},actorOf(agent),signal);
    const next={...task,state:'active',scheduleId:record.id};await this.h.tasks.put(task.id,next);return next;
   }catch(error){await this.h.tasks.put(task.id,{...task,state:'failed',error:'create_incomplete'});throw error;}
  });}
@@ -55,7 +68,7 @@ export class LongTasks {
   const scope=this.owner(agent);
   const catalog=await this.h.schedule.catalog();
   const byTask=new Map();for(const [,run]of this.h.runs.entries()){const rows=byTask.get(run.taskId)??[];rows.push(run);byTask.set(run.taskId,rows);}
-  const state=(t,schedule)=>t.state!=='active'||!schedule?t.state:targetSession(schedule)!==t.sessionId?'schedule_mismatch':schedule.status==='ended'?'ended':schedule.status==='paused'?'paused':t.state;
+  const state=(t,schedule)=>t.state!=='active'||!schedule?t.state:!ownsTarget(t,schedule)?'schedule_mismatch':schedule.status==='ended'?'ended':schedule.status==='paused'?'paused':t.state;
   return [...this.h.tasks.entries()].map(([,t])=>t).filter(t=>['principalId','characterId','projectId','conversationId'].every(k=>t.scope[k]===scope[k])).map(t=>{const schedule=catalog.find(s=>s.id===t.scheduleId),all=(byTask.get(t.id)??[]).map(r=>runView(this.h.identity,t.scope,r)),runs=all.slice(-20);
    // Attention covers every run, not only the 20 shown: an older uncertain or
    // never-enqueued notification must stay visible. Ids, times and states only.
@@ -69,7 +82,7 @@ export class LongTasks {
   if((title!==undefined&&(typeof title!=='string'||!title.trim()||title.length>120))||(prompt!==undefined&&(typeof prompt!=='string'||!prompt.trim()||prompt.length>8000)))throw Error('Invalid replacement content');
   const selector=change===undefined?undefined:changeSelector(change);
   const current=await this.scheduleOf(task);
-  if(!current||current.status!=='active'||targetSession(current)!==task.sessionId)throw Error('Schedule ended; create a new task');
+  if(!current||current.status!=='active'||!ownsTarget(task,current))throw Error('Schedule ended; create a new task');
   const pending={...task,title:title?.trim()??task.title,prompt:prompt?.trim()??task.prompt,timing:selector??task.timing,revision:revision+1};
   await this.h.tasks.put(id,{...task,state:'updating',pending});
   // CAS on the observed row; a v1 row without updatedAt compares as null.
@@ -82,15 +95,37 @@ export class LongTasks {
   const task=this.scoped(this.h.tasks.get(id),scope);if(task.revision!==revision)throw Error('Task revision conflict');
   const cancelling={...task,state:'cancelling',revision:revision+1};await this.h.tasks.put(id,cancelling);
   await this.removeSchedule(task,actorOf(agent),signal);
-  this.disarm(task.sessionId);this.h.agents.get(task.sessionId)?.cancel({kind:'user'});
+  // Every running Session of this task: its root, or each per-run Session.
+  const sessions=new Set([...this.active].filter(([,run])=>run.taskId===task.id).map(([id])=>id));if(task.sessionId)sessions.add(task.sessionId);
+  for(const id of sessions){this.disarm(id);this.h.agents.get(id)?.cancel({kind:'user'});}
   const cancelled={...cancelling,state:'cancelled'};await this.h.tasks.put(id,cancelled);return cancelled;
  });}
- taskAgent(agent){if(this.closed)throw Error('Long tasks disabled');const task=[...this.h.tasks.entries()].map(([,t])=>t).find(t=>t.sessionId===agent?.id);if(!task||this.h.agents.get(agent.id)!==agent||this.h.presetOf(agent)!==task.presetId||agent.session.header.parentSession||['cancelled','cancelling','failed'].includes(task.state))throw Error('Trusted independent task root required');this.h.identity.validateConversation(task.scope);return task;}
+ // The task a Session is bound to: the running run's task, a historical task
+ // root, or the per-run task whose run (running or settled) owns this Session.
+ // Binding is established only by a persisted pre-step admission (admitRun).
+ boundTask(sessionId){
+  if(!sessionId)return undefined;
+  const run=this.active.get(sessionId);if(run)return this.h.tasks.get(run.taskId);
+  const tasks=[...this.h.tasks.entries()].map(([,t])=>t),root=tasks.find(t=>!perRun(t)&&t.sessionId===sessionId);if(root)return root;
+  for(const [,r]of this.h.runs.entries())if(r.sessionId===sessionId){const task=this.h.tasks.get(r.taskId);return perRun(task)?task:undefined;}
+  return undefined;
+ }
+ // Independent task Session: the actual Host Agent, composed with the task
+ // Preset, a root (no parent, not delegated), never an Owner or QQ Session.
+ trustedRoot(agent,presetId){return !!agent&&this.h.agents.get(agent.id)===agent&&this.h.presetOf(agent)===presetId&&!agent.session?.header?.parentSession&&!(agent.session?.header?.delegationDepth>0);}
+ taskAgent(agent){if(this.closed)throw Error('Long tasks disabled');const task=this.boundTask(agent?.id);if(!task||!this.trustedRoot(agent,task.presetId)||['cancelled','cancelling','failed'].includes(task.state))throw Error('Trusted independent task root required');this.h.identity.validateConversation(task.scope);return task;}
  async preStep(agent,event){await this.ready;return this.serial(async()=>{
+  if(this.closed)throw Error('Long tasks disabled');
+  // A Session native Schedule created for one occurrence is unbound until its
+  // run is admitted here.
+  if(!this.boundTask(agent?.id))return this.admitRun(agent,event);
   const task=this.taskAgent(agent),current=this.active.get(agent.id);
   // Same turn: a new occurrence cannot join the running one. A DSH 0.2.2 change
   // notice is not an occurrence; unsupported framing still rejects the step.
   if(current?.turn===event.turn){try{return occurrences(event.messages??[]).length===0;}catch{return false;}}
+  // One per-run Session executes exactly one run; a later turn there (a typed
+  // message, a duplicate delivery) grants nothing.
+  if(perRun(task))return false;
   if(task.state!=='active')return false;
   const receipts=occurrences(event.messages??[]);if(!receipts.length)return false;
   const unique=new Map(receipts.map(r=>[runId(task.id,r.occurrence_at),r]));
@@ -103,6 +138,41 @@ export class LongTasks {
   const run={id,taskId:task.id,sessionId:agent.id,status:'running',occurrenceAt:receipt.occurrence_at,turn:event.turn,startSeq:agent.session.seq??0,revision:task.revision,title:task.title,startedAt:new Date(this.clock.now()).toISOString(),toolError:false,activity:emptyActivity()};
   await this.h.runs.put(id,run);this.active.set(agent.id,run);this.arm(agent.id,run);return true;
  });}
+ /**
+  * Admit the first step of a Session that native Schedule created for one
+  * occurrence of a per-run task (target kind `new`). Runs inside the serial
+  * chain. Evidence, all required:
+  *  - the actual Host Agent, a root composed with the task Preset;
+  *  - exactly one Host Schedule receipt (producer kind `schedule`) whose
+  *    schedule id is a per-run task's own Schedule, with that task's current
+  *    instruction and an active task in the bound Conversation;
+  *  - a fresh native view in which that Schedule still delivers to a new
+  *    Session with the task Preset and directory; when the receipt is already
+  *    committed (lastDelivery of this message) it names this Session;
+  *  - no earlier run for this occurrence (Run ID = task id + occurrence).
+  * The run row is persisted before the step may proceed; nothing is inferred
+  * from prompts, titles or the Session name. Anything else is refused.
+  */
+ async admitRun(agent,event){
+  const refuse=()=>{throw Error('Trusted independent task root required');};
+  if(!this.trustedRoot(agent,this.presetId))refuse();
+  const receipts=occurrences(event.messages??[]);if(!receipts.length)refuse();
+  const unique=new Map(receipts.map(r=>[r.schedule_id+'\n'+r.occurrence_at,r]));
+  if(unique.size!==1)throw Error('Multiple occurrences require operator review');
+  const [receipt]=unique.values();
+  const task=[...this.h.tasks.entries()].map(([,t])=>t).find(t=>perRun(t)&&t.scheduleId===receipt.schedule_id);
+  if(!task||task.presetId!==this.presetId)refuse();
+  this.h.identity.validateConversation(task.scope);
+  if(task.state!=='active'||receipt.reminder_prompt!==instruction(task))return false;
+  const id=runId(task.id,receipt.occurrence_at);if(this.h.runs.get(id))return false;
+  const entry=await this.scheduleOf(task);
+  if(!entry||!ownsTarget(task,entry))return false;
+  const last=entry.lastDelivery;if(last?.messageId===receipt.messageId&&last.targetSessionId!==agent.id)return false;
+  // Re-read after the await: the task may have been cancelled or changed.
+  const now=this.h.tasks.get(task.id);if(this.closed||now?.state!=='active'||now.revision!==task.revision||this.h.runs.get(id)||this.boundTask(agent.id)||!this.trustedRoot(agent,task.presetId))return false;
+  const run={id,taskId:task.id,sessionId:agent.id,scheduleId:task.scheduleId,messageId:receipt.messageId,status:'running',occurrenceAt:receipt.occurrence_at,turn:event.turn,startSeq:agent.session.seq??0,revision:task.revision,title:task.title,startedAt:new Date(this.clock.now()).toISOString(),toolError:false,activity:emptyActivity()};
+  await this.h.runs.put(id,run);this.active.set(agent.id,run);this.arm(agent.id,run);return true;
+ }
  observe(session,event){return this.serial(async()=>{
   const run=this.active.get(session.header.id);if(!run)return;
   // One ownership rule for activity and execution state: foldActivity accepts
@@ -117,8 +187,11 @@ export class LongTasks {
    const events=typeof session.snapshotEvents==='function'?session.snapshotEvents():session.events??[];
    const messages=events.filter(e=>e.type==='assistant/message'&&(e.seq??0)>=run.startSeq).map(e=>e.data?.message??e.data),answer=text(messages.at(-1));
    const task=this.h.tasks.get(run.taskId),reason=event.data.reason?.kind;
-   const status=task.state==='cancelled'||task.state==='cancelling'?'cancelled':reason==='completed'?(run.toolError?'needs_review':'completed'):reason==='aborted'||reason==='interrupted'?'interrupted':'failed';
-   const settled={...run,status,reason:reason??'unknown',result:answer.slice(0,2200),endedAt:new Date().toISOString(),notification:'pending'};
+   // A turn that ended normally is not a verified goal. Without a usable final
+   // reply there is nothing to report as the result: it needs review as well.
+   const review=run.toolError?'tool_error':answer.trim()?undefined:'no_result';
+   const status=task.state==='cancelled'||task.state==='cancelling'?'cancelled':reason==='completed'?(review?'needs_review':'completed'):reason==='aborted'||reason==='interrupted'?'interrupted':'failed';
+   const settled={...run,status,...(status==='needs_review'?{review}:{}),reason:reason??'unknown',result:answer.slice(0,2200),endedAt:new Date().toISOString(),notification:'pending'};
    await this.h.runs.put(run.id,settled);this.active.delete(session.header.id);await this.notify(task,settled);
   }
  });}
@@ -151,7 +224,7 @@ export class LongTasks {
  async notify(task,run){
   if(!terminal.has(run.status))return;
   const kind=run.status==='completed'?'task_completed':'task_failed';
-  const labels={completed:'本轮执行结束（不等同于目标已独立验收）',needs_review:'执行结束，工具报告异常，待检查',failed:'执行失败',interrupted:'执行中断，未自动重放',cancelled:'已取消'};
+  const labels={completed:'本轮执行结束（不等同于目标已独立验收）',needs_review:run.review==='no_result'?'执行结束，但没有可用的最终回复，待检查':'执行结束，工具报告异常，待检查',failed:'执行失败',interrupted:'执行中断，未自动重放',cancelled:'已取消'};
   const result=await this.h.identity.notifyConversation(task.scope,{eventId:'long-task:'+run.id,kind,text:`[长期任务] ${run.title??task.title}\n${labels[run.status]}\n${run.result??''}`.slice(0,2900)});
   await this.h.runs.put(run.id,{...run,notification:result.status});
  }
@@ -165,8 +238,10 @@ export class LongTasks {
  }
  async reconcile(id){
   const task=this.h.tasks.get(id);this.h.identity.validateConversation(task.scope);
-  // Only rows whose fixed target is this task's own root can belong to it.
-  const records=(await this.h.schedule.catalog()).filter(s=>targetSession(s)===task.sessionId),match=records.find(s=>unbound(s.prompt)===instruction(task.pending??task));
+  // Only rows delivering to this task's own destination can belong to it: its
+  // fixed root, or (per-run) a new-Session target with this task's Preset,
+  // directory and instruction header.
+  const records=(await this.h.schedule.catalog()).filter(s=>ownsTarget(task,s)),match=records.find(s=>unbound(s.prompt)===instruction(task.pending??task));
   if(task.state==='updating'){
    if(match)await this.h.tasks.put(id,{...task.pending,state:'active',scheduleId:match.id});
    else if(records.some(s=>unbound(s.prompt)===instruction(task))) {const {pending,...old}=task;await this.h.tasks.put(id,{...old,state:'active'});}
@@ -183,7 +258,8 @@ export class LongTasks {
   for(const [,run]of this.h.runs.entries()){
    const task=this.h.tasks.get(run.taskId);if(!task)throw Error('Orphan task run');this.h.identity.validateConversation(task.scope);
    if(run.status==='running'){
-    const log=await this.h.load(task.sessionId),end=(log.events??[]).find(e=>e.type==='turn/end'&&e.data.turn===run.turn);
+    // The run's own Session: its per-run Session, or the historical task root.
+    const log=await this.h.load(run.sessionId),end=(log.events??[]).find(e=>e.type==='turn/end'&&e.data.turn===run.turn);
     const next={...run,status:end?.data.reason?.kind==='completed'?'needs_review':'interrupted',reason:'restart_recovery',endedAt:new Date().toISOString(),notification:'pending'};await this.h.runs.put(run.id,next);await this.notify(task,next);
    }else if(run.notification==='pending')await this.notify(task,run);
   }

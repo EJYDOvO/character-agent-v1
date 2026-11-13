@@ -18,3 +18,4 @@
 14. Iteration 08 不重算历史身份、路由或通知 ID。Adapter 纳入进程内 I/O 范围；旧发送绑定原注册实例。Character 使用显式 Host 生命周期参数，不通过 Remote Ops 挂接，也不增加统一 Identity 服务；Manager 仍唯一当前路由权威。
 15. scoped input reply 只回应已验证/认领的输入，五分钟有效并逐片复核准入；不创建 Session，不等价于稳定通知或 Memory capability。缺少可信输入时不能用旧 Sender 回退。
 16. Diagnostics v1 共享 I/O 实例的脱敏关联，但不统一日志器或新增数据库。诊断开关、异常和存储失败不能影响授权/发送；原生业务异常不会被诊断吞掉。发布仍需 Iteration 09 的授权、冷切换与手机验收。
+17. 需要 Agent 执行的定时任务只有一套 Task / Run 生命周期（Long Tasks），不为普通 Schedule 另建结果回传。新任务使用原生 Schedule `target:new`：每次 occurrence 由 Host `sessionController` 新建任务 Preset 的独立 Session，Run ID 只由任务 ID 与 occurrence 决定，Session 在 pre-step 认领时绑定到 run；缺少 Session 创建器时明确失败，不降级到共享根或 QQ 主会话。历史 `target:session` 任务原样兼容，不迁移。纯提醒仍走 Identity 的到期提醒轻量路径，不启动 Agent。结果与活动汇报都只经 Identity Outbox 发出，Interaction 的 schedule 来源过滤不放开。

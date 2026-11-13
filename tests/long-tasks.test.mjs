@@ -35,7 +35,9 @@ async function fixture(options){
  const identity={forSession(id){if(id!==owner.id)throw Error('Not QQ owner');return scope;},authorize:c=>c,validateConversation(s){assert.deepEqual({...s,sessionId:undefined},{...scope,sessionId:undefined});},async notifyConversation(s,event){this.validateConversation(s);const old=notified.get(event.eventId);if(old)assert.deepEqual(old,event);else notified.set(event.eventId,event);return {status:'sent'};},notificationStatus:()=>null};
  const schedule=nativeSchedule(schedules,()=>++sid);
  const host={tasks,runs,identity,schedule,agents,presetOf:a=>a.preset,flush:async()=>true,load:async id=>({events:logs.get(id)??[]}),async createRoot(t){const agent={id:t.sessionId,preset:t.presetId,session:{header:{id:t.sessionId},events:[]},cancel(){this.cancelled=true;}};agents.set(agent.id,agent);logs.set(agent.id,agent.session.events);return {agent};}};
- const service=new LongTasks(host,options);await service.recover();return {service,host,owner,scope,tasks,runs,schedules,agents,notified,logs};
+ // This suite is the compatibility suite for historical fixed-root tasks
+ // (target kind session); per-run tasks are covered in long-task-runs.test.mjs.
+ const service=new LongTasks(host,{sessionMode:'task-root',...options});await service.recover();return {service,host,owner,scope,tasks,runs,schedules,agents,notified,logs};
 }
 const args={title:'检查',prompt:'输出可核实的检查结果。',after_seconds:30};
 function receipt(task,at='2030-01-01T00:00:00.000Z',prompt=instruction(task)){return {id:'message-'+at,source:{kind:'schedule'},content:[{type:'text',text:'[SCHEDULE REMINDER]\nschedule_id_json: '+JSON.stringify(task.scheduleId)+'\noccurrence_at: '+at+'\nreminder_prompt_json: '+JSON.stringify(prompt)}]};}

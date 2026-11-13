@@ -1,7 +1,8 @@
 import {defineDomain,domainTable} from '@deepseek-ai/dsh-storage-domain';
 import {defineTool} from '@deepseek-ai/dsh-tools';
 import AgentPreset from '@deepseek-ai/dsh-agent-preset';
-import {readFileSync} from 'node:fs';
+import {readFileSync,statSync} from 'node:fs';
+import {isAbsolute} from 'node:path';
 import {LongTasks} from './service.mjs';
 import {recordSchema} from './state.mjs';
 export const name='character-long-tasks';
@@ -15,11 +16,18 @@ export async function apply(ctx,config={}){
  // Optional activity-report timing (seconds); defaults 90 s first report, 5 min interval.
  const report=config.activityReport??{},seconds=(v,max)=>v===undefined||(Number.isSafeInteger(v)&&v>=1&&v<=max);
  if(!report||typeof report!=='object'||Array.isArray(report)||Object.keys(report).some(k=>!['firstSeconds','intervalSeconds'].includes(k))||!seconds(report.firstSeconds,3600)||!seconds(report.intervalSeconds,86400))throw Error('Invalid activity report timing');
+ // New tasks run each occurrence in its own native Session (target kind new),
+ // created by the Host Session controller in this verified directory.
+ const sessionMode=config.sessionMode??'per-run',cwd=config.cwd??process.cwd();
+ if(!['per-run','task-root'].includes(sessionMode))throw Error('Invalid task Session mode');
+ // Absolute, and a directory when it exists (the Session controller creates a missing one).
+ let kind;try{kind=statSync(cwd,{throwIfNoEntry:false});}catch{kind=null;}
+ if(typeof cwd!=='string'||!isAbsolute(cwd)||kind===null||kind&&!kind.isDirectory())throw Error('Background task working directory must be an absolute directory path');
  if((await ctx.agentPresets.list()).some(p=>p.id===presetId))throw Error('Task Preset already registered');
  const domain=await ctx.storageDomain.open(defineDomain({name:config.domainName??'character_long_tasks',version:1,layout:'per-record',tables:{tasks:domainTable(recordSchema('task')),runs:domainTable(recordSchema('run'))}}));
  let service;const handles=new Set();
  try{
-  service=new LongTasks({tasks:domain.table('tasks'),runs:domain.table('runs'),identity:ctx.characterIdentity,schedule:ctx.schedule,agents:ctx.agents,presetOf:a=>ctx.agentPresets.composedPreset(a.ctx),flush:s=>ctx.sessions.flush(s),async load(id){const handle=await ctx.sessionPersistence.open(id,'read');try{return {meta:handle.header,events:(await handle.read()).events};}finally{await handle.close();}},async createRoot(task){const handle=await ctx.agents.create({sessionId:task.sessionId,meta:{agentPreset:presetId,cwd:config.cwd??process.cwd()},agentOptions:task.route,setup:async c=>{await ctx.agentPresets.mount(c,presetId);}});handles.add(handle);return handle;},warn:m=>ctx.logger.warn(m)},{presetId,allowTools,activity:{firstMs:report.firstSeconds&&report.firstSeconds*1000,intervalMs:report.intervalSeconds&&report.intervalSeconds*1000}});
+  service=new LongTasks({canCreateSessions:()=>ctx.get('sessionController')!==undefined,tasks:domain.table('tasks'),runs:domain.table('runs'),identity:ctx.characterIdentity,schedule:ctx.schedule,agents:ctx.agents,presetOf:a=>ctx.agentPresets.composedPreset(a.ctx),flush:s=>ctx.sessions.flush(s),async load(id){const handle=await ctx.sessionPersistence.open(id,'read');try{return {meta:handle.header,events:(await handle.read()).events};}finally{await handle.close();}},async createRoot(task){const handle=await ctx.agents.create({sessionId:task.sessionId,meta:{agentPreset:presetId,cwd},agentOptions:task.route,setup:async c=>{await ctx.agentPresets.mount(c,presetId);}});handles.add(handle);return handle;},warn:m=>ctx.logger.warn(m)},{presetId,allowTools,sessionMode,cwd,activity:{firstMs:report.firstSeconds&&report.firstSeconds*1000,intervalMs:report.intervalSeconds&&report.intervalSeconds*1000}});
   ctx.provide('longTasks',service);
   await ctx.plugin(AgentPreset,{id:presetId,name:'Independent background task',plugins:[
    {id:'task-role',name:new URL('./role.mjs',import.meta.url).href,config:{allowTools}},
@@ -30,7 +38,7 @@ export async function apply(ctx,config={}){
   const daily={type:'object',additionalProperties:false,properties:{time:string,timeZone:string}};
   const timing={at:{type:'string'},after_seconds:{type:'integer'},every_seconds:{type:'integer'},daily,weekly:{type:'object',additionalProperties:false,properties:{time:string,timeZone:string,weekdays:{type:'array',required:true,items:{type:'integer'}}}},cron:{type:'object',additionalProperties:false,properties:{expression:string,timeZone:string}}};
   function register(name,description,parameters,fn){ctx.tools.register(defineTool({name:'long_task_'+name,description,parameters,output:{schema:{type:'string'},render:(_a,value)=>[{type:'text',text:value}]},async execute(args,execution){return JSON.stringify(await fn(execution.agent,args,execution.signal,execution));}}));}
-  register('create','创建独立根 Session 的长期任务。必须指定一个原生时间规则；普通提醒使用 schedule_create。',{title:string,prompt:string,...timing},(a,args,s,exec)=>service.create(a,args,s,exec.callId));
+  register('create','创建需要到时由模型执行工作的后台任务（查询、检查、整理、总结等）：每次触发由原生 Schedule 新建一个独立 Session 执行一次 run，结束后按实际状态通知当前 QQ 会话。必须指定一个原生时间规则。只需到时提醒一句固定内容时使用 schedule_create。',{title:string,prompt:string,...timing},(a,args,s,exec)=>service.create(a,args,s,exec.callId));
   register('list','查看本 Owner/项目的长期任务、原生投递记录，以及每次运行分开的 execution、goalVerification 与 delivery（含 deliveryAttention 异常投递汇总），以及运行中轮次的 activity（步骤与工具调用计数、工具名，不含参数或结果）。',{},a=>service.list(a));
   register('update','按 revision 修改仍活跃任务的标题、指令或原生时间规则；已结束任务需新建。',{id:string,revision,title:{type:'string'},prompt:{type:'string'},change:{type:'object',additionalProperties:false,properties:{kind:{...string,enum:['at','every','daily','weekly','cron']},...timing}}},(a,args,s)=>service.update(a,args,s));
   register('cancel','停止未来触发并通过 DSH cancel 请求取消当前执行；已发生的工具副作用无法撤销。',{id:string,revision},(a,args,s)=>service.cancel(a,args,s));
