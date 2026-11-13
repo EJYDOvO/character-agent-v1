@@ -70,3 +70,8 @@ test('braces in the character name cannot reach the prompt', () => {
   assert(result.prefix.includes('## 角色：{x}\n{x}在这'));
   assert.deepEqual(result.downgraded, ['{{x}}']);
 });
+
+test('the character name heading is kept when description is empty', () => {
+  const result = renderCard(card({description: '', personality: '慵懒'}), {userName: '用户', rules: ''});
+  assert.equal(result.prefix, `${PREAMBLE}\n\n## 角色：宁栖\n\n## 性格\n慵懒\n\n## 场景\n用户是朋友`);
+});

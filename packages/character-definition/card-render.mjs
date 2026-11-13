@@ -83,7 +83,9 @@ export function renderCard(data, {userName, rules}) {
   const prefix = joinSections([
     parts.rules,
     PREAMBLE,
-    section(`## 角色：${displayName}`, parts.description),
+    // The name heading stays even without a description: it is often the only
+    // place the model learns its own name.
+    [`## 角色：${displayName}`, parts.description].filter(Boolean).join('\n'),
     section('## 性格', parts.personality),
     section('## 场景', parts.scenario),
   ]);
