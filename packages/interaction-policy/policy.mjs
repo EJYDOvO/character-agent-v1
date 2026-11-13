@@ -9,6 +9,11 @@ export function options(input={}) {
   if(!Number.isInteger(result.hangOnDraftMs)||result.hangOnDraftMs<0||result.hangOnDraftMs>=result.hangOnMs)throw Error('Invalid interaction option: hangOnDraftMs');
   if(typeof result.hangOnText!=='string'||!result.hangOnText.trim()||result.hangOnText.length>200)throw Error('Invalid hangOnText');
   if(!Number.isInteger(result.bubbleTargetChars)||result.bubbleTargetChars<100||result.bubbleTargetChars>1000)throw Error('Invalid bubbleTargetChars');
+  // Character card style reminder, appended to the hang-on draft prompt.
+  if(input.styleReminder!==undefined){
+    if(typeof input.styleReminder!=='string'||[...input.styleReminder].length>4000)throw Error('Invalid interaction option: styleReminder');
+    result.styleReminder=input.styleReminder;
+  }
   // Location of the optional hangon-model.json route; not a feature switch.
   if(input.hangOnModelFile!==undefined){
     if(typeof input.hangOnModelFile!=='string'||!/^(?:[A-Za-z]:[\\/]|\/|\\\\)/u.test(input.hangOnModelFile))throw Error('Invalid interaction option: hangOnModelFile');

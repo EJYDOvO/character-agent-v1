@@ -42,6 +42,7 @@ for(const mode of ['on','off']){
  assert.equal(manifest.characterPluginIds.includes('interaction-policy'),mode==='on');
  assert.equal(patch.includes('name: dsh-interaction-policy'),mode==='on');
  if(mode==='on')assert.match(patch,/interactionPolicy: true/);
+ assert.equal(patch.includes('styleReminder: Fixture reminder.'),mode==='on','Interaction gets the style reminder');
  assert(manifest.creatorPluginIds.every(id=>manifest.characterPluginIds.includes(id)));
  assert.equal(fs.readFileSync(extras,'utf8'),optional);
  configs.push({mode,creatorPluginsPreserved:true,extrasUnchanged:true,optionalEntry:mode==='on'});

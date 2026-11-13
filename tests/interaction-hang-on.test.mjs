@@ -185,3 +185,31 @@ test('incomplete, tool-calling or aborted model streams are rejected',async()=>{
  await assert.rejects(plugin({},{chunks:[{type:'finish',reason:{kind:'aborted'}}]}).draft(),/incomplete/);
  assert(hangOnPrompt('').startsWith('【等待提示】'));assert(hangOnPrompt('P').includes('不要描述进度'));
 });
+
+// Character card style reminder (deployment rules) and Persona size.
+test('hang-on prompt places the style reminder after the Persona', () => {
+ assert(hangOnPrompt('P', 'R').startsWith('P\n\nR\n\n【等待提示】'));
+ assert(hangOnPrompt('P').startsWith('P\n\n【等待提示】'));
+ assert(hangOnPrompt('', 'R').startsWith('R\n\n【等待提示】'));
+});
+
+test('dynamic drafts follow the configured style reminder', async () => {
+ const f = plugin({styleReminder: '用「嗯，」开头'});
+ await f.draft();
+ const system = f.calls.find(c => c[0] === 'stream')[1].system;
+ assert(system.includes('（后缀）\n\n用「嗯，」开头\n\n【等待提示】'), system);
+});
+
+test('a Persona of 20000 characters reaches the drafter untruncated', async () => {
+ const persona = '字'.repeat(20000);
+ const f = plugin({}, {persona});
+ await f.draft();
+ assert(f.calls.find(c => c[0] === 'stream')[1].system.includes(persona + '\n\n（后缀）'));
+});
+
+test('styleReminder option is validated and optional', () => {
+ assert.throws(() => options({styleReminder: 'x'.repeat(4001)}), /styleReminder/);
+ assert.throws(() => options({styleReminder: 3}), /styleReminder/);
+ assert.equal('styleReminder' in options({}), false);
+ assert.equal(options({styleReminder: '提醒'}).styleReminder, '提醒');
+});
