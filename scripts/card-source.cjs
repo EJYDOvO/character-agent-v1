@@ -10,6 +10,7 @@ const DEFAULT_CARD = 'characters/template/card.yaml';
 const DEFAULT_CHARACTER_ID = 'character-a';
 const DEFAULT_USER_NAME = '用户';
 const MAX_USER_NAME_CHARS = 32;
+const RULES_KEYS = ['systemFile', 'reminderFile'];
 
 function readConfig() {
   const file = process.env.DSH_CHARACTER_BUILD_CONFIG || path.join(root, 'private', 'build-config.json');
@@ -45,8 +46,13 @@ function cardSettings() {
   const characterId = config.characterId ?? DEFAULT_CHARACTER_ID;
   if (typeof characterId !== 'string' || !/^[a-z0-9-]{1,48}$/.test(characterId)) throw Error('Invalid characterId');
 
+  // A misnamed key must fail: silently building without the rules (or with the
+  // template card) would ship a character without its identity constraints.
+  if (Object.hasOwn(config, 'card')) throw Error('Unknown build config key "card": use cardPath');
   const rules = config.rules ?? {};
   if (typeof rules !== 'object' || Array.isArray(rules)) throw Error('Invalid rules: expected {systemFile, reminderFile}');
+  const unknownRules = Object.keys(rules).filter(key => !RULES_KEYS.includes(key));
+  if (unknownRules.length) throw Error(`Unknown rules key ${unknownRules.join(', ')}: expected systemFile and reminderFile`);
 
   return {
     characterId,

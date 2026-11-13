@@ -5,6 +5,10 @@ function toolkit(dir){assert(dir&&path.isAbsolute(dir),'Supply --qqtk with the p
 // Paths are relative to the portable config file.
 function cardBuildConfig(c,dir){
  if(c.definition!==undefined)throw Error('Portable config "definition" is no longer supported: the definition.yaml format was replaced by Character Card V3; set "card"');
+ // Build-config spellings here would silently drop the card or its rules.
+ if(c.cardPath!==undefined)throw Error('Unknown portable config key "cardPath": use "card"');
+ const unknownRules=Object.keys(c.rules??{}).filter(key=>!['system','reminder'].includes(key));
+ if(unknownRules.length)throw Error(`Unknown portable rules key ${unknownRules.join(', ')}: expected "system" and "reminder"`);
  const resolve=value=>value===undefined?undefined:path.resolve(dir,value);
  const rules={};if(c.rules?.system!==undefined)rules.systemFile=resolve(c.rules.system);if(c.rules?.reminder!==undefined)rules.reminderFile=resolve(c.rules.reminder);
  return {cardPath:c.card===undefined?path.join(root,'characters','template','card.yaml'):resolve(c.card),rules,...(c.userName!==undefined?{userName:c.userName}:{}),...(c.characterId!==undefined?{characterId:c.characterId}:{})};

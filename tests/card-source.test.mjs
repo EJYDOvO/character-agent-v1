@@ -116,3 +116,12 @@ test('portable config maps card settings relative to the config file', () => {
   assert.deepEqual(cardBuildConfig({}, dir), {cardPath: join(root, 'characters', 'template', 'card.yaml'), rules: {}});
   assert.throws(() => cardBuildConfig({definition: 'persona.yaml'}, dir), /"card"/);
 });
+
+test('misnamed card keys fail instead of silently dropping the card or rules', () => {
+  withConfig({card: 'x.yaml'}, {}, () => assert.throws(() => cardSettings(), /cardPath/));
+  withConfig({rules: {system: 'r.md'}}, {}, () => assert.throws(() => cardSettings(), /systemFile/));
+  withConfig({rules: {systemFile: 'r.md', reminder: 'm.md'}}, {}, () => assert.throws(() => cardSettings(), /reminderFile/));
+  const {cardBuildConfig} = require('../scripts/portable.cjs');
+  assert.throws(() => cardBuildConfig({cardPath: 'x.yaml'}, tmpdir()), /"card"/);
+  assert.throws(() => cardBuildConfig({rules: {systemFile: 'r.md'}}, tmpdir()), /"system"/);
+});
