@@ -25,8 +25,26 @@ export function changeSelector(change){
  if(SELECTORS[key]!==kind||kind==='after')throw Error('Timing change kind must match exactly one selector');
  return selector;
 }
-// Fixed destination of a DSH 0.2.2 catalog entry; Long Tasks only use `session`.
+// Fixed destination of a DSH 0.2.2 catalog entry (`session` target only).
 export const targetSession=entry=>entry?.target?.kind==='session'?entry.target.sessionId:undefined;
+// Two delivery modes share one Task/Run lifecycle. `per-run` (task.delivery
+// 'new', the default for new tasks): native Schedule creates a fresh Session
+// with the task Preset for every occurrence (target kind `new`), so each Run
+// has its own Session and no history. Historical tasks (no `delivery` field)
+// keep their fixed independent root (target kind `session`).
+export const perRun=task=>task?.delivery==='new';
+export const taskTarget=task=>perRun(task)?{kind:'new',create:{agentPreset:task.presetId,cwd:task.cwd}}:{kind:'session',sessionId:task.sessionId};
+/**
+ * Whether a native catalog entry still delivers to this task's own destination.
+ * A historical task owns the rows aimed at its root. A per-run task's `new`
+ * target names no Session, so the row must also carry this task's instruction
+ * header (written only by this plugin; the task id is unique).
+ */
+export function ownsTarget(task,entry){
+ if(!perRun(task))return targetSession(entry)===task.sessionId;
+ const t=entry?.target;
+ return t?.kind==='new'&&t.create?.agentPreset===task.presetId&&t.create?.cwd===task.cwd&&typeof entry.prompt==='string'&&entry.prompt.startsWith(`[LONG TASK ${task.id} REV `);
+}
 const CHANGE_NOTICE='[SCHEDULE CHANGE]\n';
 export function occurrences(messages){
  const result=[];
@@ -49,10 +67,34 @@ export function occurrences(messages){
 export function recordSchema(kind){return {parse(value){
  if(!value||typeof value!=='object'||Array.isArray(value))throw Error('Invalid '+kind+' record');
  const v=structuredClone(value);
- for(const key of kind==='task'?['id','sessionId','presetId','title','prompt','state']:['id','taskId','sessionId','status','occurrenceAt'])if(typeof v[key]!=='string'||!v[key])throw Error('Missing '+kind+'.'+key);
+ // A per-run task has no Session of its own: each run row names the Session
+ // native Schedule created for that occurrence.
+ for(const key of kind==='task'?['id',...(v.delivery==='new'?['cwd']:['sessionId']),'presetId','title','prompt','state']:['id','taskId','sessionId','status','occurrenceAt'])if(typeof v[key]!=='string'||!v[key])throw Error('Missing '+kind+'.'+key);
  if(kind==='task'){
+  if(v.delivery!==undefined&&v.delivery!=='new'||v.delivery==='new'&&v.sessionId!==undefined)throw Error('Invalid task delivery mode');
   if(!Number.isSafeInteger(v.revision)||v.revision<1||!v.scope||!v.route?.provider||!v.route?.model)throw Error('Invalid task authority metadata');
   if(!['creating','active','updating','cancelling','cancelled','failed','completed'].includes(v.state))throw Error('Invalid task state');
  }else if(!['running','completed','failed','interrupted','cancelled','needs_review'].includes(v.status))throw Error('Invalid task run status');
  return v;
 }};}
+// The revision named by a delivered instruction header of this task, or
+// undefined when the prompt is not this task's instruction.
+export function deliveredRevision(task,prompt){
+ const head=`[LONG TASK ${task.id} REV `;
+ if(typeof prompt!=='string'||!prompt.startsWith(head))return undefined;
+ const rest=prompt.slice(head.length),end=rest.indexOf(']\n'),rev=end>0?Number(rest.slice(0,end)):NaN;
+ return Number.isSafeInteger(rev)&&rev>=1&&String(rev)===rest.slice(0,end)?rev:undefined;
+}
+// Message ids still pending in a Session's durable inbox, folded from its
+// persisted agent/inbox/spliced events (dsh-agent-loop inbox projection).
+// undefined when the history cannot be folded.
+export function pendingMessageIds(events){
+ const lists={'next-turn':[],'next-step':[]};
+ for(const e of events??[]){
+  if(e?.type!=='agent/inbox/spliced')continue;
+  const d=e.data,list=lists[d?.target],removed=d?.removedCount??0;
+  if(!list||!Number.isSafeInteger(d.start)||d.start<0||d.start>list.length||!Number.isSafeInteger(removed)||removed<0||d.start+removed>list.length||!Array.isArray(d.inserted??[]))return undefined;
+  list.splice(d.start,removed,...(d.inserted??[]).map(m=>m?.id));
+ }
+ return new Set([...lists['next-turn'],...lists['next-step']]);
+}

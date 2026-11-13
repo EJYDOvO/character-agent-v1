@@ -74,32 +74,47 @@ export function apply(ctx,config){
     await manager.setModelOverride('c2c','fixture-owner',{provider:'task-fixture',model:'fixture'});
     assert.notEqual(record.sessionId,reminderSession);assert.equal(record.agent.session.header.parentSession,reminderSession);
     assert.throws(()=>ctx.memoryIdentity.authorize(retiredCapability,'read'));assert.throws(()=>ctx.characterIdentity.forSession(reminderSession));
+    // D (restart gate), part 1: native Schedule delivers, the DSH loop claims the
+    // receipt out of the inbox, the step is parked ahead of the long-task
+    // admission, the claim is flushed, then the Host is stopped.
+    const claimed=await ctx.longTasks.create(record.agent,{title:'Restart claimed',prompt:'Synthetic restart work.',after_seconds:1});
+    const held=await Promise.race([control.holdPreStep(claimed.scheduleId),sleep(30000).then(()=>null)]);assert(held,'the per-run delivery reached the pre-step');
+    const heldMessage=held.messages.find(m=>m.source?.kind==='schedule');assert(heldMessage);assert.equal(ctx.agentPresets.composedPreset(held.agent.ctx),'long-task');
+    for(let i=0;i<100&&(await ctx.schedule.view({id:claimed.scheduleId})).lastDelivery?.messageId!==heldMessage.id;i++)await sleep(50);
+    assert.equal((await ctx.schedule.view({id:claimed.scheduleId})).lastDelivery?.targetSessionId,held.agent.id,'native lastDelivery committed to the parked Session');
+    assert(![...held.agent.inbox.nextTurn,...held.agent.inbox.nextStep].some(m=>m.id===heldMessage.id),'the receipt is no longer pending in the inbox');
+    assert(await ctx.sessions.flush(held.agent.session),'claim persisted');
+    assert.equal((await ctx.longTasks.list(record.agent)).find(t=>t.id===claimed.id).runs.length,0,'no run admitted before the stop');
     const once=await ctx.longTasks.create(record.agent,{title:'Once',prompt:'Synthetic one-time work.',after_seconds:8});
     const error=await ctx.longTasks.create(record.agent,{title:'Tool-error',prompt:'read-tool-fixture',after_seconds:3600});
     const modified=await ctx.longTasks.update(record.agent,{id:error.id,revision:1,prompt:'read-tool-fixture updated',change:{kind:'at',at:new Date(Date.now()+10000).toISOString()}});assert.equal(modified.revision,2);
     const cancelled=await ctx.longTasks.create(record.agent,{title:'Cancelled',prompt:'must not execute',after_seconds:3600});await ctx.longTasks.cancel(record.agent,{id:cancelled.id,revision:1});
-    const periodic=await ctx.longTasks.create(record.agent,{title:'Periodic',prompt:'Synthetic recurring work.',every_seconds:60});
+    // Historical fixed-root task (target kind session), created the pre-C1 way, beside per-run tasks.
+    const periodic=await ctx.longTasks.create(record.agent,{title:'Periodic',prompt:'Synthetic recurring work.',every_seconds:60},undefined,undefined,{sessionMode:'task-root'});
+    const perRunTarget={kind:'new',create:{agentPreset:'long-task',cwd:config.cwd}};
+    for(const task of [once,error,cancelled])assert.equal(task.delivery,'new','new tasks default to one Session per run');
+    assert.equal(once.sessionId,undefined);assert.deepEqual((await ctx.schedule.view({id:once.scheduleId})).target,perRunTarget);
     // daily/weekly/cron through Long Tasks: native time_zone mapping, create, update, restart and one delivery.
     const due=Math.ceil((Date.now()+40000)/60000)*60000,at=new Date(due),clock=at.toISOString().slice(11,19),isoDay=(at.getUTCDay()+6)%7+1;
     const daily=await ctx.longTasks.create(record.agent,{title:'Daily',prompt:'Synthetic daily work.',daily:{time:'03:00:00',timeZone:'UTC'}});
     const weekly=await ctx.longTasks.create(record.agent,{title:'Weekly',prompt:'Synthetic weekly work.',weekly:{time:clock,timeZone:'UTC',weekdays:[isoDay]}});
     const cron=await ctx.longTasks.create(record.agent,{title:'Cron',prompt:'Synthetic cron work.',cron:{expression:'0 3 * * *',timeZone:'UTC'}});
-    for(const [task,kind] of [[daily,'daily'],[weekly,'weekly'],[cron,'cron']]){const row=await ctx.schedule.view({id:task.scheduleId});assert.equal(row.kind,kind);assert.equal(row.timeZone,'UTC');assert.deepEqual(row.target,{kind:'session',sessionId:task.sessionId});}
+    for(const [task,kind] of [[daily,'daily'],[weekly,'weekly'],[cron,'cron']]){const row=await ctx.schedule.view({id:task.scheduleId});assert.equal(row.kind,kind);assert.equal(row.timeZone,'UTC');assert.deepEqual(row.target,perRunTarget);}
     assert.equal((await ctx.longTasks.update(record.agent,{id:daily.id,revision:1,change:{kind:'daily',daily:{time:clock,timeZone:'UTC'}}})).revision,2);
     assert.equal((await ctx.longTasks.update(record.agent,{id:cron.id,revision:1,change:{kind:'cron',cron:{expression:`${at.getUTCMinutes()} ${at.getUTCHours()} * * *`,timeZone:'UTC'}}})).revision,2);
     await assert.rejects(ctx.longTasks.update(record.agent,{id:weekly.id,revision:1,change:{kind:'daily',weekly:{time:clock,timeZone:'UTC',weekdays:[isoDay]}}}),/kind must match/);
     for(const task of [daily,weekly,cron])assert.equal(Date.parse((await ctx.schedule.view({id:task.scheduleId})).scheduledAt),due,'Next occurrence at the updated clock time');
     const zonedTasks={daily:{id:daily.id,schedule:daily.scheduleId,period:86400000},weekly:{id:weekly.id,schedule:weekly.scheduleId,period:604800000},cron:{id:cron.id,schedule:cron.scheduleId,period:86400000}};
-    const taskAgent=ctx.agents.get(once.sessionId);assert(taskAgent);assert(!taskAgent.session.header.parentSession);assert.equal(ctx.agentPresets.composedPreset(taskAgent.ctx),'long-task');
+    const taskAgent=ctx.agents.get(periodic.sessionId);assert(taskAgent);assert(!taskAgent.session.header.parentSession);assert.equal(ctx.agentPresets.composedPreset(taskAgent.ctx),'long-task');
     assert.throws(()=>ctx.characterIdentity.forSession(taskAgent.id));assert.throws(()=>ctx.memoryIdentity.forSession(taskAgent.id));
     await assert.rejects(async()=>ctx.longTasks.create(taskAgent,{title:'forged',prompt:'x',after_seconds:1}));
     const ownerTools=ctx.tools.view(record.agent).visible;assert(ownerTools.has('long_task_create'));assert(ownerTools.has('schedule_create'));
     // DSH 0.2.2 Schedule tools are Host-wide; the Owner root must not reach a task root's Schedule through them.
-    const catalog=await ctx.schedule.catalog(),onceRow=catalog.find(r=>r.id===once.scheduleId);assert.deepEqual(onceRow.target,{kind:'session',sessionId:once.sessionId});assert(onceRow.involvedSessionIds.includes(record.sessionId),'Owner Session is the recorded actor');
+    const catalog=await ctx.schedule.catalog(),onceRow=catalog.find(r=>r.id===once.scheduleId);assert.deepEqual(onceRow.target,perRunTarget);assert(onceRow.involvedSessionIds.includes(record.sessionId),'Owner Session is the recorded actor');
     for(const [name,args] of [['schedule_edit',{id:once.scheduleId,action:'delete'}],['schedule_edit',{id:periodic.scheduleId,action:'update',target:'this_session'}],['schedule_view',{id:once.scheduleId}]]){
      const result=await callTool(ctx,record.agent,name,args,{signal:AbortSignal.timeout(5000)});assert(denied(result),name+' on a task root Schedule must be denied');}
     assert.deepEqual((await ctx.schedule.view({id:periodic.scheduleId})).target,{kind:'session',sessionId:periodic.sessionId});assert((await ctx.schedule.view({id:once.scheduleId})).target);
-    report.checks.push('Owner root cannot view, delete or retarget independent task Schedules through native tools');
+    report.checks.push('Owner root cannot view, delete or retarget per-run or fixed-root task Schedules through native tools');
     assert.deepEqual([...ctx.tools.view(taskAgent).visible.keys()].sort(),['task_fixture_read','task_fixture_slow']);
     assert((await ctx.skills.list({scope:record.agent,cwd:config.cwd})).some(s=>s.name==='long-tasks'));
     await ctx.sessions.flush(record.agent.session);
@@ -107,8 +122,16 @@ export function apply(ctx,config){
     // persisted native fork header is the only evidence for its ownership.
     const db=new DatabaseSync(config.cwd+'/coordination.sqlite');db.prepare('DELETE FROM qq_bindings WHERE session=?').run(reminderSession);db.close();
     const audit=await ctx.characterIdentity.auditSchedules();assert.equal(audit.rows.find(r=>r.id===oldReminder.id).binding,'verified_missing');
-    fs.writeFileSync(checkpoint,JSON.stringify({session:record.sessionId,reminderSession,unknownReminder:unknownReminder.id,unknownSession:unknownReminder.target.sessionId,unknownAt:unknownReminder.scheduledAt,lastUserAt:manager.modelResolver.prefs.getLifecycle(record.sessionKey).lastUserAt,fact:fact.id,oldReminder:oldReminder.id,historyReminder:historyReminder.id,moveReminder:moveReminder.id,raceReminder:raceReminder.id,onceSchedule:once.scheduleId,periodicSchedule:periodic.scheduleId,zonedTasks,zonedDue:due,once:once.id,error:error.id,periodic:periodic.id,cancelled:cancelled.id}));
-    report.checks.push('Actual native Schedule create/update/cancel; independent roots, tool allowlist, Memory/Owner ACL and Skill');
+    // D, part 2: native Schedule reserves the per-run Session id (pendingDelivery)
+    // and creates the Session, then activation is parked: nothing delivered.
+    // This holds the Schedule FIFO, so it is the last Schedule work of phase 0.
+    const reservedHold=control.holdResolve(),reserved=await ctx.longTasks.create(record.agent,{title:'Restart reserved',prompt:'Synthetic restart work.',after_seconds:1});
+    const reservedSession=await Promise.race([reservedHold,sleep(30000).then(()=>null)]);assert(reservedSession,'native Schedule reserved and created the run Session');
+    assert.equal(ctx.agentPresets.composedPreset(ctx.agents.get(reservedSession).ctx),'long-task');
+    const restartState={claimed:claimed.id,claimedSession:held.agent.id,claimedMessage:heldMessage.id,reserved:reserved.id,reservedSchedule:reserved.scheduleId,reservedSession};
+    report.checks.push('Restart gate staged: one per-run receipt claimed and flushed but never admitted; one per-run Session reserved and created but never delivered');
+    fs.writeFileSync(checkpoint,JSON.stringify({restartState,session:record.sessionId,reminderSession,unknownReminder:unknownReminder.id,unknownSession:unknownReminder.target.sessionId,unknownAt:unknownReminder.scheduledAt,lastUserAt:manager.modelResolver.prefs.getLifecycle(record.sessionKey).lastUserAt,fact:fact.id,oldReminder:oldReminder.id,historyReminder:historyReminder.id,moveReminder:moveReminder.id,raceReminder:raceReminder.id,onceSchedule:once.scheduleId,periodicSchedule:periodic.scheduleId,zonedTasks,zonedDue:due,once:once.id,error:error.id,periodic:periodic.id,cancelled:cancelled.id}));
+    report.checks.push('Actual native Schedule create/update/cancel; per-run new-Session targets and a historical fixed root, tool allowlist, Memory/Owner ACL and Skill');
    }else{
     const liveUnknown=await ctx.agents.create({sessionId:crypto.randomUUID(),agentOptions:{provider:'task-fixture',model:'fixture'},meta:{cwd:config.cwd,agentPreset:'qq-character'},setup:async c=>{await ctx.agentPresets.mount(c,'qq-character');}});
     const liveUnknownReminder=await ctx.schedule.create({title:'Unproven live fixture',prompt:'Must not consume a live unproven target.',timing:{kind:'after',after_seconds:1},target:{kind:'session',sessionId:liveUnknown.agent.id}});
@@ -120,16 +143,50 @@ export function apply(ctx,config){
     expire();assert.equal((await get('busy-input')).sessionId,first);record.lastActivity=0;manager.evictor.check();assert(manager.sessions.has(key));control.release();await record.agent.whenIdle();
     report.phase='idle-session-rotation';record=await get('after-busy');assert.notEqual(record.sessionId,first);
     expire();const concurrent=await Promise.all(Array.from({length:5},(_,i)=>get('parallel-'+i)));assert.equal(new Set(concurrent.map(r=>r.sessionId)).size,1);assert.notEqual(concurrent[0].sessionId,record.sessionId);record=concurrent[0];report.checks.push('12h user inactivity, busy/eviction protection, no fork and concurrent rotation');
-    const zoned=Object.entries(state.zonedTasks);let expected=7;
+    // C1: a per-run periodic task. The native run-now delivery is the first
+    // occurrence; the timed one follows after the 60 s new-Session floor. Each
+    // creates its own Session through the Host Session controller.
+    const twice=await ctx.longTasks.create(record.agent,{title:'Per-run periodic',prompt:'Synthetic per-run recurring work.',every_seconds:60});
+    assert.equal(twice.delivery,'new');const now=await ctx.schedule.run({id:twice.scheduleId});assert.equal(now.code,undefined,'native run-now admits the first occurrence: '+now.code);assert.equal(now.lastDelivery?.targetSessionId?.length>0,true);
+    const zoned=Object.entries(state.zonedTasks);let expected=11;
     for(const [kind,z] of zoned){const row=await ctx.schedule.view({id:z.schedule});assert.equal(row.kind,kind,'Restarted Host keeps the '+kind+' rule');assert.equal(row.timeZone,'UTC');assert(row.status==='active');}
     const deadline=Math.max(Date.now()+72000,state.zonedDue+30000);let tasks;
-    while(Date.now()<deadline){tasks=await ctx.longTasks.list(record.agent);if([state.once,state.error,state.periodic,...zoned.map(([,z])=>z.id)].every(id=>{const r=tasks.find(t=>t.id===id)?.runs[0];return r&&r.status!=='running'&&r.notification==='sent';})&&deliveries.some(d=>d.text.includes('Legacy reminder')))break;await sleep(150);}
+    const settledRuns=id=>(tasks.find(t=>t.id===id)?.runs??[]).filter(r=>r.status!=='running'&&r.notification==='sent');
+    while(Date.now()<deadline){tasks=await ctx.longTasks.list(record.agent);if([state.once,state.error,state.periodic,...zoned.map(([,z])=>z.id)].every(id=>settledRuns(id).length>0)&&settledRuns(twice.id).length>=2&&settledRuns(state.restartState.claimed).length>0&&settledRuns(state.restartState.reserved).length>0&&deliveries.some(d=>d.text.includes('Legacy reminder')))break;await sleep(150);}
     for(const id of [state.once,state.error,state.periodic])assert.equal(tasks.find(t=>t.id===id)?.runs.length,1,'Exactly one executed occurrence per task');
     assert.equal(tasks.find(t=>t.id===state.once).runs[0].status,'completed');assert.equal(tasks.find(t=>t.id===state.periodic).runs[0].status,'completed');assert.equal(tasks.find(t=>t.id===state.error).runs[0].status,'needs_review');assert(globalThis[Symbol.for('fixture.tasks.read.calls')]>0);
     for(const [kind,z] of zoned){const run=tasks.find(t=>t.id===z.id)?.runs;assert.equal(run?.length,1,'Exactly one '+kind+' occurrence');assert.equal(run[0].status,'completed');
      assert.equal(Date.parse((await ctx.schedule.view({id:z.schedule})).scheduledAt),state.zonedDue+z.period,kind+' advances to its next period');}
     report.checks.push('Long Tasks daily/weekly/cron: native time_zone rules created, updated, kept across restart, delivered once, advanced one period');
-    assert.equal(tasks.find(t=>t.id===state.cancelled).runs.length,0);assert.equal(deliveries.length,expected,'Six results plus one legacy reminder');assert(deliveries.every(d=>d.target.targetId==='fixture-owner'));
+    {// Per-run Sessions in the real Host: created by native Schedule through the Session controller.
+     const runs=tasks.find(t=>t.id===twice.id).runs;assert.equal(runs.length,2,'exactly two occurrences of the per-run periodic task');
+     assert(runs.every(r=>r.status==='completed'),'both runs settled independently: '+runs.map(r=>r.status));assert.notEqual(runs[0].id,runs[1].id);
+     const sessions=runs.map(r=>r.sessionId);assert.equal(new Set(sessions).size,2,'each occurrence ran in its own Session');
+     const qq=new Set([record.sessionId,state.session,state.reminderSession]);
+     for(const id of [...sessions,tasks.find(t=>t.id===state.once).runs[0].sessionId,tasks.find(t=>t.id===state.error).runs[0].sessionId]){
+      const a=ctx.agents.get(id);assert(a,'per-run Session is a live Host Agent');assert(!qq.has(id),'never a QQ Session');
+      assert.equal(ctx.agentPresets.composedPreset(a.ctx),'long-task');assert(!a.session.header.parentSession);assert.equal(a.session.header.cwd,config.cwd);
+      assert.throws(()=>ctx.characterIdentity.forSession(id));assert.throws(()=>ctx.memoryIdentity.forSession(id));
+      assert.deepEqual([...ctx.tools.view(a).visible.keys()].sort(),['task_fixture_read','task_fixture_slow'],'only the task allowlist');
+      const log=JSON.stringify(a.session.snapshotEvents());assert(!log.includes('OLD_QQ_HISTORY_FIXTURE'),'no QQ chat history');
+      assert.equal(a.session.snapshotEvents().filter(e=>e.type==='user/message'&&(e.data?.message??e.data)?.source?.kind==='schedule').length,1,'one occurrence per Session, no earlier run history');}
+     const row=await ctx.schedule.view({id:twice.scheduleId});assert.equal(row.target.kind,'new');assert(sessions.includes(row.lastDelivery.targetSessionId),'native lastDelivery names the run Session');
+     assert.equal(deliveries.filter(d=>d.text.startsWith('[长期任务] Per-run periodic')).length,2,'one result notification per run');
+     await ctx.longTasks.cancel(record.agent,{id:twice.id,revision:1});
+     report.checks.push('C1 per-run Sessions: native target new creates a fresh long-task Session per occurrence (run-now + timed), two Runs settle and notify independently; no QQ history, Memory identity or extra tools');}
+    assert.equal(tasks.find(t=>t.id===state.cancelled).runs.length,0);{// D after a real Host restart.
+     const rs=state.restartState,claimedRuns=tasks.find(t=>t.id===rs.claimed).runs,reservedRuns=tasks.find(t=>t.id===rs.reserved).runs;
+     assert.equal(claimedRuns.length,1,'the claimed receipt is settled exactly once');const [c]=claimedRuns;
+     assert.deepEqual([c.status,c.executed,c.reason,c.sessionId,c.messageId],['interrupted',false,'restart_unclaimed',rs.claimedSession,rs.claimedMessage]);
+     const claimedLog=(await (async()=>{const h=await ctx.get('sessionPersistence').open(rs.claimedSession,'read');try{return (await h.read()).events;}finally{await h.close();}})());
+     assert(!claimedLog.some(e=>['step/start','assistant/message','tool/call'].includes(e.type)),'the claimed occurrence never executed a step');
+     const claimedNotes=deliveries.filter(d=>d.text.startsWith('[长期任务] Restart claimed'));assert.equal(claimedNotes.length,1);assert.match(claimedNotes[0].text,/未执行：Host 重启前已投递但尚未开始执行，未自动补跑/u);
+     assert.equal(reservedRuns.length,1,'the reserved occurrence executes exactly once after the restart');const [r]=reservedRuns;
+     assert.equal(r.status,'completed');assert.equal(r.sessionId,rs.reservedSession,'native Schedule reused the reserved Session id (pendingDelivery)');
+     const reservedNotes=deliveries.filter(d=>d.text.startsWith('[长期任务] Restart reserved'));assert.equal(reservedNotes.length,1);assert.match(reservedNotes[0].text,/本轮执行结束/u);
+     const row=await ctx.schedule.view({id:rs.reservedSchedule});assert.equal(row.lastDelivery.targetSessionId,rs.reservedSession);
+     report.checks.push('Real Host restart: a per-run receipt claimed but not admitted before the stop is settled once as interrupted and unexecuted (no step ran) with one notification; a reserved but undelivered per-run Session is delivered after the restart under the same Session id and executes exactly once');}
+    assert.equal(deliveries.length,expected,'Ten results plus one legacy reminder');assert(deliveries.every(d=>d.target.targetId==='fixture-owner'));
     assert(!deliveries.some(d=>d.text.includes('尚未观察到本轮结束事件')),'Short tasks send no activity report');
     const old=ctx.agents.get(state.reminderSession);assert(old,'Official Schedule cold-resumed its original Session');assert(count(resumes.accepted,state.reminderSession)>=1,'Accepted resumes are observed (control for the unproven-target check)');assert.equal(ctx.characterIdentity.route(ctx.characterIdentity.forSession(record.sessionId)).session,record.sessionId);
     assert.throws(()=>ctx.characterIdentity.forSession(old.id));assert.throws(()=>ctx.memoryIdentity.forSession(old.id));await assert.rejects(()=>ctx.longTasks.create(old,{title:'bypass',prompt:'no',after_seconds:1}));
@@ -169,7 +226,7 @@ export function apply(ctx,config){
     assert.equal(await ctx.schedule.edit({id:state.raceReminder,action:'delete'},record.sessionId).then(x=>x.deleted),true);
     for(const id of [state.historyReminder,state.moveReminder]){r=await tool('schedule_edit',{id,action:'delete'});assert(!denied(r),why(r));assert.equal(value(r).deleted,true);assert.equal((await ctx.schedule.view({id})).code,'schedule_not_found');}
     report.checks.push('After restart and rotation the Owner views, updates, moves and deletes earlier Owner reminders; task-root, unproven, retargeted and stale-revision writes are refused');
-    const once=tasks.find(t=>t.id===state.once),agent=ctx.agents.get(once.sessionId),before=once.runs.length,delivery=agent.session.snapshotEvents().find(e=>e.type==='user/message'&&(e.data?.message??e.data)?.source?.kind==='schedule'),duplicate=delivery?.data?.message??delivery?.data;
+    const once=tasks.find(t=>t.id===state.once),agent=ctx.agents.get(once.runs[0].sessionId),before=once.runs.length,delivery=agent.session.snapshotEvents().find(e=>e.type==='user/message'&&(e.data?.message??e.data)?.source?.kind==='schedule'),duplicate=delivery?.data?.message??delivery?.data;
     assert(duplicate);agent.followup(duplicate);await agent.whenIdle();await sleep(100);assert.equal((await ctx.longTasks.list(record.agent)).find(t=>t.id===state.once).runs.length,before);assert.equal(deliveries.length,expected);
     await ctx.longTasks.cancel(record.agent,{id:state.periodic,revision:tasks.find(t=>t.id===state.periodic).revision});
     // C2 Lite: a task whose one tool call outlasts the first-report window gets
@@ -183,7 +240,25 @@ export function apply(ctx,config){
     assert.match(slowTexts[0],/尚未观察到本轮结束事件[\s\S]*处于第 1 个执行步骤；发起 1 次工具调用（工具 task_fixture_slow）[\s\S]*正在等待工具 task_fixture_slow 返回/u);
     assert.equal(slowRun.report.count,1);assert(slowRun.report.eventId.startsWith('long-task:'+slowRun.id+':activity:'));assert.equal(slowRun.activity.calls,1);assert.equal(slowRun.activity.results,1);assert.deepEqual(slowRun.activity.open,[]);
     {const db=new DatabaseSync(config.cwd+'/coordination.sqlite');try{assert.deepEqual({...db.prepare('SELECT kind,status FROM outbox WHERE id=?').get(slowRun.report.eventId)},{kind:'task_activity',status:'sent'});}finally{db.close();}}
-    expected+=2;report.checks.push('Long Task activity: native step/tool events give one report after the first window through the same Outbox, beside the unchanged terminal notification; short tasks send none');
+    expected+=2;
+    {// A on the real Host: a delivered per-run receipt reaches the long-task
+     // admission only after the task was updated (revision 2) or cancelled.
+     const race=async(title,change,timing)=>{const task=await ctx.longTasks.create(record.agent,{title,prompt:'Synthetic race work.',...timing});
+      const parked=control.holdPreStep(task.scheduleId,{release:true});if(timing.every_seconds)void ctx.schedule.run({id:task.scheduleId});
+      const held=await Promise.race([parked,sleep(30000).then(()=>null)]);assert(held,title+' delivered');
+      const msg=held.messages.find(m=>m.source?.kind==='schedule');for(let i=0;i<100&&(await ctx.schedule.view({id:task.scheduleId})).lastDelivery?.messageId!==msg.id;i++)await sleep(50);assert.equal((await ctx.schedule.view({id:task.scheduleId})).lastDelivery?.targetSessionId,held.agent.id,title+' committed before the change');
+      await change(task);held.release();let run;const until=Date.now()+20000;
+      while(Date.now()<until){run=(await ctx.longTasks.list(record.agent)).find(t=>t.id===task.id)?.runs[0];if(run?.notification==='sent')break;await sleep(100);}
+      assert(run,title+' is in the ledger');assert.equal(run.executed,false);assert.equal(run.sessionId,held.agent.id);
+      assert(!held.agent.session.snapshotEvents().some(e=>['step/start','assistant/message','tool/call'].includes(e.type)),title+' never executed a step');
+      const notes=deliveries.filter(d=>d.text.startsWith('[长期任务] '+title));assert.equal(notes.length,1,title+' notified once');return {run,text:notes[0].text};};
+     let raced;const updated=await race('Race update',async t=>{raced=await ctx.longTasks.update(record.agent,{id:t.id,revision:1,prompt:'Synthetic race work v2.'});},{every_seconds:60});
+     await ctx.longTasks.cancel(record.agent,{id:raced.id,revision:raced.revision});
+     assert.equal(updated.run.status,'needs_review');assert.equal(updated.run.review,'stale_revision');assert.equal(updated.run.revision,1);assert.match(updated.text,/未执行：投递的是旧版本指令/u);
+     const cancelled=await race('Race cancel',t=>ctx.longTasks.cancel(record.agent,{id:t.id,revision:1}),{after_seconds:1});
+     assert.equal(cancelled.run.status,'cancelled');assert.match(cancelled.text,/已取消（本次触发尚未开始执行）/u);
+     expected+=2;report.checks.push('Real Host race: a delivered per-run receipt admitted only after an update or a cancel is settled once as needs_review(stale_revision) / cancelled, unexecuted, never lost');}
+    report.checks.push('Long Task activity: native step/tool events give one report after the first window through the same Outbox, beside the unchanged terminal notification; short tasks send none');
     const llmCalls=globalThis[Symbol.for('fixture.tasks.llm.calls')],oldReads=globalThis[Symbol.for('fixture.tasks.read.calls')];
     old.followup(createUserMessage({source:{kind:'user'},content:[{type:'text',text:'read-tool-fixture'}]}));await old.whenIdle();await sleep(100);
     assert.equal(globalThis[Symbol.for('fixture.tasks.llm.calls')],llmCalls,'Retired root must not call the model');
@@ -194,7 +269,7 @@ export function apply(ctx,config){
     const reads=globalThis[Symbol.for('fixture.tasks.read.calls')];
     agent.followup(createUserMessage({source:{kind:'user'},content:[{type:'text',text:'read-tool-fixture'}]}));await agent.whenIdle();assert.equal(globalThis[Symbol.for('fixture.tasks.read.calls')],reads);
     const tools=ctx.tools;assert(tools.checkGuards({agent,name:'late_scoped_tool'}),'Late scoped tools cannot bypass the allowlist');
-    report.checks.push('Cold task Sessions, native periodic execution, result-vs-delivery ledger, tool-error review, stable outbox and replay rejection');
+    report.checks.push('Per-run and cold fixed-root task Sessions, native periodic execution, result-vs-delivery ledger, tool-error review, stable outbox and replay rejection (a finished run Session admits nothing more)');
     report.checks.push('Old Session Schedule survives main rotation and cold restore without hijacking current QQ route');
     report.checks.push('Actual plugin disposal removes service and keeps retained root execution gates fail-closed');
     const previousService=ctx.get('conversationManager'),previousManager=manager,oldRecord=record,oldId=record.sessionId;
