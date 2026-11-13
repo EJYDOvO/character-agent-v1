@@ -57,6 +57,22 @@ export function readCardFile(file, {parseYaml}) {
 }
 
 /**
+ * Reads a deployment rules text file (UTF-8, BOM and CRLF tolerated).
+ * @param {string} file
+ * @returns {string} trimmed text with LF line endings
+ */
+export function readRulesFile(file) {
+  let bytes;
+  try {
+    bytes = readFileSync(file);
+  } catch (error) {
+    throw new CardError(`无法读取规则文件：${file}（${error.code ?? error.message}）`);
+  }
+  if (bytes.length > MB) throw new CardError(`规则文件超过 1 MB：${file}`);
+  return decodeUtf8(bytes, file).replace(/\r\n?/g, '\n').trim();
+}
+
+/**
  * Returns the card JSON text stored in a PNG `tEXt` chunk, preferring `ccv3`.
  * Chunk CRCs are not checked: a damaged image is still a readable card.
  * @param {Buffer} bytes
