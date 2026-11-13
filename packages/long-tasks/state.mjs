@@ -77,3 +77,24 @@ export function recordSchema(kind){return {parse(value){
  }else if(!['running','completed','failed','interrupted','cancelled','needs_review'].includes(v.status))throw Error('Invalid task run status');
  return v;
 }};}
+// The revision named by a delivered instruction header of this task, or
+// undefined when the prompt is not this task's instruction.
+export function deliveredRevision(task,prompt){
+ const head=`[LONG TASK ${task.id} REV `;
+ if(typeof prompt!=='string'||!prompt.startsWith(head))return undefined;
+ const rest=prompt.slice(head.length),end=rest.indexOf(']\n'),rev=end>0?Number(rest.slice(0,end)):NaN;
+ return Number.isSafeInteger(rev)&&rev>=1&&String(rev)===rest.slice(0,end)?rev:undefined;
+}
+// Message ids still pending in a Session's durable inbox, folded from its
+// persisted agent/inbox/spliced events (dsh-agent-loop inbox projection).
+// undefined when the history cannot be folded.
+export function pendingMessageIds(events){
+ const lists={'next-turn':[],'next-step':[]};
+ for(const e of events??[]){
+  if(e?.type!=='agent/inbox/spliced')continue;
+  const d=e.data,list=lists[d?.target],removed=d?.removedCount??0;
+  if(!list||!Number.isSafeInteger(d.start)||d.start<0||d.start>list.length||!Number.isSafeInteger(removed)||removed<0||d.start+removed>list.length||!Array.isArray(d.inserted??[]))return undefined;
+  list.splice(d.start,removed,...(d.inserted??[]).map(m=>m?.id));
+ }
+ return new Set([...lists['next-turn'],...lists['next-step']]);
+}

@@ -9,6 +9,7 @@ description: 管理独立 Session 的长期工作，并区分提醒到期、指�
 - 停机期间错过多个周期时，恢复后只执行最近一期，不逐期补跑。
 - 时间包含明确时区；不确定用户时间含义时先澄清。不要自行增加主动闲聊或工具权限。
 - 每次触发由 Host 新建一个独立 Session 执行一个 run，各 run 之间不共享聊天历史；也没有主 QQ 聊天历史、QQ 身份或 Memory 授权。需要延续上一次结果的周期任务，要把所需信息写进任务指令或由工具读取，不能依赖上一轮的对话。结果由 Host 在 run 结束后按实际状态通知当前 QQ 会话，不要自行补发。默认无工具；需要的受限工具必须由 Host 同时声明 taskPlugins 和 allowTools，不能通过任务文字授权，也不能借用主 QQ 审批。
+- run 带 `executed: false` 表示这次触发已投递但没有执行（任务已修改为新版本、已取消、无法核实、超出 Host 的任务 Session 预算，或 Host 重启前尚未开始）；如实告诉用户没有执行及原因，不要说成完成或失败的执行，也不要自行补跑。需要重做时由用户决定新建任务或等待下一次触发。
 - 查询使用 `long_task_list`。原生 Schedule 的 lastDelivery 仅表示写入收件箱；run 的 completed 表示 Agent 本轮结束，不是独立的业务目标验收。failed、interrupted、needs_review、unknown 通知均需如实说明。
 - 每个 run 有三个独立事实：`execution`（Agent 本轮如何结算）、`goalVerification`（当前没有独立验证器，结算后始终为 `unverified`，模型自述不算证据）、`delivery`（通知事件 ID、Outbox 状态与入队时间）。`sent` 只表示平台 API 接受，不代表用户已读；`unknown` 可能已送达，不会也不应重发；`partial`、`not-sent`、长时间 `pending`（stale-pending）与 `unrecorded` 都要向 Owner 明确报告。`deliveryAttention` 汇总所有 run 中的异常投递，包括不在最近 20 条里的。不要自行补发通知。
 - 运行较久的任务会由 Host 自动发送低频活动汇报（`[长期任务]` 开头、写明“截至某时刻”的消息），它只反映那一时刻观察到的步骤与工具活动，送达时任务可能已经结束，也不是进度或完成情况；不要据此宣称目标已完成，也不要自行补发或模仿这类汇报。`long_task_list` 中运行中的 run 带有 `activity`（计数与工具名）。

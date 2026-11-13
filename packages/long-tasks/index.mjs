@@ -23,11 +23,15 @@ export async function apply(ctx,config={}){
  // Absolute, and a directory when it exists (the Session controller creates a missing one).
  let kind;try{kind=statSync(cwd,{throwIfNoEntry:false});}catch{kind=null;}
  if(typeof cwd!=='string'||!isAbsolute(cwd)||kind===null||kind&&!kind.isDirectory())throw Error('Background task working directory must be an absolute directory path');
+ // Per-run Sessions one Host process may bind before further occurrences are
+ // settled unexecuted (DSH 0.2.2-rc.1 cannot release them; see README).
+ const runSessionBudget=config.runSessionBudget??1000;
+ if(!Number.isSafeInteger(runSessionBudget)||runSessionBudget<1||runSessionBudget>1000000)throw Error('Invalid run Session budget');
  if((await ctx.agentPresets.list()).some(p=>p.id===presetId))throw Error('Task Preset already registered');
  const domain=await ctx.storageDomain.open(defineDomain({name:config.domainName??'character_long_tasks',version:1,layout:'per-record',tables:{tasks:domainTable(recordSchema('task')),runs:domainTable(recordSchema('run'))}}));
  let service;const handles=new Set();
  try{
-  service=new LongTasks({canCreateSessions:()=>ctx.get('sessionController')!==undefined,tasks:domain.table('tasks'),runs:domain.table('runs'),identity:ctx.characterIdentity,schedule:ctx.schedule,agents:ctx.agents,presetOf:a=>ctx.agentPresets.composedPreset(a.ctx),flush:s=>ctx.sessions.flush(s),async load(id){const handle=await ctx.sessionPersistence.open(id,'read');try{return {meta:handle.header,events:(await handle.read()).events};}finally{await handle.close();}},async createRoot(task){const handle=await ctx.agents.create({sessionId:task.sessionId,meta:{agentPreset:presetId,cwd},agentOptions:task.route,setup:async c=>{await ctx.agentPresets.mount(c,presetId);}});handles.add(handle);return handle;},warn:m=>ctx.logger.warn(m)},{presetId,allowTools,sessionMode,cwd,activity:{firstMs:report.firstSeconds&&report.firstSeconds*1000,intervalMs:report.intervalSeconds&&report.intervalSeconds*1000}});
+  service=new LongTasks({startedAt:performance.timeOrigin,canCreateSessions:()=>ctx.get('sessionController')!==undefined,tasks:domain.table('tasks'),runs:domain.table('runs'),identity:ctx.characterIdentity,schedule:ctx.schedule,agents:ctx.agents,presetOf:a=>ctx.agentPresets.composedPreset(a.ctx),flush:s=>ctx.sessions.flush(s),async load(id){const handle=await ctx.sessionPersistence.open(id,'read');try{return {meta:handle.header,events:(await handle.read()).events};}finally{await handle.close();}},async createRoot(task){const handle=await ctx.agents.create({sessionId:task.sessionId,meta:{agentPreset:presetId,cwd},agentOptions:task.route,setup:async c=>{await ctx.agentPresets.mount(c,presetId);}});handles.add(handle);return handle;},warn:m=>ctx.logger.warn(m)},{presetId,allowTools,sessionMode,cwd,runSessionBudget,activity:{firstMs:report.firstSeconds&&report.firstSeconds*1000,intervalMs:report.intervalSeconds&&report.intervalSeconds*1000}});
   ctx.provide('longTasks',service);
   await ctx.plugin(AgentPreset,{id:presetId,name:'Independent background task',plugins:[
    {id:'task-role',name:new URL('./role.mjs',import.meta.url).href,config:{allowTools}},

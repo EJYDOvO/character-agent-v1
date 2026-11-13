@@ -24,7 +24,9 @@ function nativeSchedule(rows,controller){
    const at=tick(),record={id:'schedule-'+(++sid),kind:request.timing.kind,title:request.title,prompt:request.prompt,scheduledAt:new Date(Date.now()+3600000).toISOString()};
    rows.set(record.id,{record,target:structuredClone(request.target),involved:[...new Set([actor,request.target.sessionId].filter(Boolean))],status:'active',createdAt:at,updatedAt:at});return entry(rows.get(record.id));},
   async catalog(){return [...rows.values()].map(entry);},
-  async view({id}){const r=rows.get(id);return r?entry(r):{id,code:'schedule_not_found'};},
+  async view({id}){const r=rows.get(id);if(r?.viewError)throw Error('view unavailable');return r?entry(r):{id,code:'schedule_not_found'};},
+  // dsh-schedule deliveryHistoryPage: newest first, receipt fields plus the delivered prompt.
+  async history({id,limit}){const r=rows.get(id);if(!r)return {id,code:'schedule_not_found'};return {id,records:[...(r.history??[])].reverse().slice(0,limit),earlierRecordsUnavailable:false,earlierRecordsPruned:false};},
   async edit(request,actor){calls.push(['edit',structuredClone(request),actor]);const r=rows.get(request.id);if(!r)return {id:request.id,code:'schedule_not_found'};
    if(request.expectedUpdatedAt!==undefined&&request.expectedUpdatedAt!==(r.updatedAt??null))return {id:request.id,code:'schedule_conflict'};
    if(request.action==='delete'){rows.delete(request.id);return {id:request.id,deleted:true};}
@@ -37,14 +39,16 @@ function nativeSchedule(rows,controller){
    if(r.target.kind==='new'){const reserved=sessionId??'session-run-'+(++mid);agent=await controller().create({sessionId:reserved,...r.target.create});}
    else agent=controller().get(r.target.sessionId);
    const message=receiptMessage('message-'+(++mid),id,at,r.record.prompt);
-   if(commit)r.lastDelivery={scheduledAt:at,deliveredAt:tick(),messageId:message.id,targetSessionId:agent.id};
+   // agent.followup: the receipt waits in the durable next-turn inbox (an inbox splice).
+   agent.inbox.nextTurn.push(message);agent.session.events.push({type:'agent/inbox/spliced',seq:agent.session.events.length,data:{target:'next-turn',start:agent.inbox.nextTurn.length-1,inserted:[message]}});
+   if(commit){r.lastDelivery={scheduledAt:at,deliveredAt:tick(),messageId:message.id,targetSessionId:agent.id};(r.history??=[]).push({...r.lastDelivery,prompt:r.record.prompt});}
    return {agent,message};
   }};
 }
 async function fixture(options={},{controller=true}={}){
  const scope={principalId:'owner',characterId:'fixture',projectId:'project',conversationId:'stable-qq'},owner={id:'owner-session',preset:'qq-character',session:{header:{id:'owner-session'}},options:{provider:'fixture',model:'fixture'}};
  const agents=new Map([[owner.id,owner]]),tasks=table(),runs=table(),schedules=new Map(),logs=new Map(),notified=new Map(),sent=[],created=[];let status='sent';
- const makeAgent=(id,preset,header={})=>{const agent={id,preset,session:{header:{id,...header},events:[],seq:0},cancel(reason){this.cancelled=reason;}};agents.set(id,agent);logs.set(id,agent.session.events);return agent;};
+ const makeAgent=(id,preset,header={})=>{const agent={id,preset,status:'idle',inbox:{nextTurn:[],nextStep:[]},session:{header:{id,...header},events:[],seq:0},cancel(reason){this.cancelled=reason;}};agents.set(id,agent);logs.set(id,agent.session.events);return agent;};
  // Session controller: creates a root Session with the requested Preset (DSH composeAgent + mount).
  const sessionController={async create({sessionId,agentPreset,cwd}){created.push({sessionId,agentPreset,cwd});return agents.get(sessionId)??makeAgent(sessionId,agentPreset,{cwd});},get:id=>agents.get(id)};
  const identity={forSession(id){if(id!==owner.id)throw Error('Not QQ owner');return scope;},authorize:c=>c,
@@ -52,17 +56,19 @@ async function fixture(options={},{controller=true}={}){
   async notifyConversation(s,event){this.validateConversation(s);if(!event.eventId.startsWith('long-task:'))throw Error('Stable task event id required');sent.push(event);if(!notified.has(event.eventId))notified.set(event.eventId,event);return {status};},notificationStatus:()=>null};
  let available=controller;
  const schedule=nativeSchedule(schedules,()=>available?sessionController:undefined);
- const host={tasks,runs,identity,schedule,agents,canCreateSessions:()=>available,presetOf:a=>a.preset,flush:async()=>true,load:async id=>({events:logs.get(id)??[]}),
+ const host={startedAt:Date.parse('2000-01-01T00:00:00.000Z'),tasks,runs,identity,schedule,agents,canCreateSessions:()=>available,presetOf:a=>a.preset,flush:async()=>true,load:async id=>({events:logs.get(id)??[]}),
   async createRoot(t){return {agent:makeAgent(t.sessionId,t.presetId)};}};
  const service=new LongTasks(host,{cwd:CWD,...options});await service.recover();
  return {service,host,owner,scope,tasks,runs,schedules,agents,notified,sent,created,makeAgent,setStatus:v=>status=v,setController:v=>available=v,
-  restart:async(extra={})=>{await service.close().catch(()=>{});const next=new LongTasks(host,{cwd:CWD,...options,...extra});await next.recover();return next;}};
+  // restart({startedAt}) models a new Host process: deliveries before startedAt belong to the previous one.
+  restart:async(extra={},{startedAt}={})=>{await service.close().catch(()=>{});if(startedAt!==undefined)host.startedAt=startedAt;const next=new LongTasks(host,{cwd:CWD,...options,...extra});await next.recover();return next;}};
 }
 const once={title:'检查',prompt:'输出可核实的检查结果。',after_seconds:30};
 const periodic={title:'新闻',prompt:'查询今日新闻并总结。',every_seconds:3600};
 const T0='2030-01-01T00:00:00.000Z',T1='2030-01-01T01:00:00.000Z';
 let turnSeq=100;
-async function start(f,task,at,service=f.service,opts){const d=await f.host.schedule.deliver(task.scheduleId,at,opts),turn=++turnSeq;d.agent.session.seq=d.agent.session.events.length;return {...d,turn,admitted:await service.preStep(d.agent,{turn,messages:[d.message]}),id:runId(task.id,at)};}
+function claim(agent){const messages=agent.inbox.nextTurn.splice(0,1);if(messages.length)agent.session.events.push({type:'agent/inbox/spliced',seq:agent.session.events.length,data:{target:'next-turn',start:0,removedCount:1,inserted:[]}});return messages;}
+async function start(f,task,at,service=f.service,opts){const d=await f.host.schedule.deliver(task.scheduleId,at,opts),turn=++turnSeq,messages=claim(d.agent);d.agent.session.seq=d.agent.session.events.length;return {...d,turn,admitted:await service.preStep(d.agent,{turn,messages}),id:runId(task.id,at)};}
 async function emit(f,r,type,data,service=f.service){const event={type,seq:r.agent.session.events.length,data:{turn:r.turn,...data}};r.agent.session.events.push(event);await service.observe(r.agent.session,event);return event;}
 async function end(f,r,{reason='completed',answer='已核实：3 条结果。'}={},service=f.service){if(answer!==null)r.agent.session.events.push({type:'assistant/message',seq:r.agent.session.events.length,data:{message:{content:[{type:'text',text:answer}]}}});return emit(f,r,'turn/end',{reason:{kind:reason}},service);}
 const finals=f=>f.sent.filter(e=>e.kind!=='task_activity');
@@ -88,7 +94,7 @@ test('periodic task: two occurrences, two Sessions, two independently settled Ru
  const f=await fixture(),task=await f.service.create(f.owner,periodic);
  const a=await start(f,task,T0);await emit(f,a,'tool/result',{step:1,message:{role:'tool',toolCallId:'x',source:{kind:'tool',callId:'x'},content:[{type:'text',text:'{"ok":false}'}]}});await end(f,a,{answer:'部分查询失败。'});
  const b=await start(f,task,T1);assert.equal(b.admitted,true);assert.notEqual(a.agent.id,b.agent.id,'each occurrence has its own Session');
- assert.equal(b.agent.session.events.length,0,'the second Run starts without the first Run\'s history');await end(f,b,{answer:'今日 5 条新闻。'});
+ assert.deepEqual(b.agent.session.events.filter(e=>e.type!=='agent/inbox/spliced'),[],'the second Run starts without the first Run\'s history');await end(f,b,{answer:'今日 5 条新闻。'});
  const ra=f.runs.get(a.id),rb=f.runs.get(b.id);assert.notEqual(ra.id,rb.id);
  assert.deepEqual([ra.status,rb.status],['needs_review','completed'],'an earlier tool error stays with its own Run');
  assert.deepEqual([ra.sessionId,rb.sessionId],[a.agent.id,b.agent.id]);
@@ -246,4 +252,124 @@ test('per-run update keeps the new-Session target; creation interrupted after th
  const other=await f.service.create(f.owner,once);await f.service.create(f.owner,{...once,title:'第三'});
  await f.tasks.put(other.id,{...f.tasks.get(other.id),state:'creating',scheduleId:undefined});await f.restart();
  assert.equal(f.tasks.get(other.id).state,'active');assert.equal(f.tasks.get(other.id).scheduleId,other.scheduleId,'matched by its own instruction among several new-Session rows');
+});
+
+// ---- PR #24 execution-boundary audit -------------------------------------
+// dsh-agent-loop preStep() claims the receipt out of the durable inbox before
+// the agent/pre-step waterfall runs; a rejected step does not return it, and
+// native Schedule re-wakes only a receipt still pending in the inbox. Every
+// trusted delivery the pre-step does not execute therefore needs its own
+// ledger row and notification, or the occurrence is lost without a trace.
+const unexecuted=(f,id)=>{const run=f.runs.get(id);assert(run,'the consumed delivery has a ledger row');assert.equal(run.executed,false,'never marked as executed');return run;};
+test('A: a delivery of revision 1 that reaches pre-step after an update to revision 2 is settled, never executed or lost',async()=>{
+ const f=await fixture(),task=await f.service.create(f.owner,periodic);
+ const d=await f.host.schedule.deliver(task.scheduleId,T0),messages=claim(d.agent);
+ const v2=await f.service.update(f.owner,{id:task.id,revision:1,prompt:'查询新闻并只总结三条。'});assert.equal(v2.revision,2);
+ assert.equal(await f.service.preStep(d.agent,{turn:1,messages}),false,'the stale instruction is not executed');
+ const run=unexecuted(f,runId(task.id,T0));assert.equal(run.status,'needs_review');assert.equal(run.review,'stale_revision');assert.equal(run.sessionId,d.agent.id);assert.equal(run.revision,1,'the revision that was delivered');
+ const note=f.notified.get('long-task:'+run.id);assert.equal(note.kind,'task_failed');assert.match(note.text,/未执行：投递的是旧版本指令/u);
+ assert(!f.service.active.has(d.agent.id),'no active run: the role tool guard grants nothing');
+ assert.equal(await f.service.preStep(d.agent,{turn:2,messages}),false);assert.equal(finals(f).length,1,'one notification');
+ const next=await start(f,v2,T1);assert.equal(next.admitted,true,'the next occurrence runs revision 2');
+});
+test('A: a delivered occurrence whose task is cancelled before pre-step stays unexecuted and is recorded as cancelled',async()=>{
+ const f=await fixture(),task=await f.service.create(f.owner,once);
+ const d=await f.host.schedule.deliver(task.scheduleId,T0),messages=claim(d.agent);
+ await f.service.cancel(f.owner,{id:task.id,revision:1});
+ assert.equal(await f.service.preStep(d.agent,{turn:1,messages}),false,'cancellation is not bypassed by an unclaimed Session');
+ const run=unexecuted(f,runId(task.id,T0));assert.equal(run.status,'cancelled');assert.match(f.notified.get('long-task:'+run.id).text,/已取消（本次触发尚未开始执行）/u);
+});
+test('A: an occurrence that cannot be verified against native Schedule is not executed and not lost',async()=>{
+ const f=await fixture(),task=await f.service.create(f.owner,once),d=await f.host.schedule.deliver(task.scheduleId,T0),messages=claim(d.agent);
+ f.schedules.get(task.scheduleId).viewError=true;
+ assert.equal(await f.service.preStep(d.agent,{turn:1,messages}),false);
+ const run=unexecuted(f,runId(task.id,T0));assert.equal(run.status,'needs_review');assert.equal(run.review,'unverified_delivery');assert.match(f.notified.get('long-task:'+run.id).text,/未执行：无法核实这次投递/u);
+});
+test('A: forged or foreign framing still creates no ledger row and no notification',async()=>{
+ const f=await fixture(),task=await f.service.create(f.owner,periodic),d=await f.host.schedule.deliver(task.scheduleId,T0);claim(d.agent);
+ for(const prompt of [instruction({...task,revision:5}),'[LONG TASK task-other REV 1]\nx','no header'])
+  assert.equal(await f.service.preStep(d.agent,{turn:++turnSeq,messages:[receiptMessage('m-'+turnSeq,task.scheduleId,T0,prompt)]}),false);
+ assert.equal(f.runs.entries().length,0);assert.equal(f.sent.length,0);
+});
+test('A: historical fixed-root tasks settle a stale-revision delivery the same way',async()=>{
+ const f=await fixture(),task=await f.service.create(f.owner,periodic,undefined,undefined,{sessionMode:'task-root'}),root=f.agents.get(task.sessionId);
+ const stale=receiptMessage('legacy-stale',task.scheduleId,T0,instruction(task));
+ const v2=await f.service.update(f.owner,{id:task.id,revision:1,prompt:'新版'});
+ assert.equal(await f.service.preStep(root,{turn:1,messages:[stale]}),false);
+ const run=unexecuted(f,runId(task.id,T0));assert.equal(run.review,'stale_revision');assert.equal(run.sessionId,task.sessionId);
+ assert.equal(await f.service.preStep(root,{turn:2,messages:[receiptMessage('legacy-ok',task.scheduleId,T1,instruction(v2))]}),true,'the shared root still runs later occurrences');
+});
+
+test('B: the per-process run-Session budget refuses execution explicitly, notifying once per task',async()=>{
+ const f=await fixture({runSessionBudget:2}),task=await f.service.create(f.owner,{...periodic,every_seconds:60}),other=await f.service.create(f.owner,{...periodic,title:'其他',every_seconds:60});
+ const a=await start(f,task,T0);assert.equal(a.admitted,true);
+ const b=await start(f,task,T1);assert.equal(b.admitted,true,'an active and a running Session count; two fit');
+ await end(f,a);
+ const T2='2030-01-01T02:00:00.000Z',T3='2030-01-01T03:00:00.000Z';
+ const c=await start(f,task,T2);assert.equal(c.admitted,false,'settled Sessions stay resident and still count');
+ let run=unexecuted(f,c.id);assert.equal(run.review,'session_budget');assert.match(f.notified.get('long-task:'+c.id).text,/任务 Session 已达上限/u);
+ const d=await start(f,task,T3);assert.equal(d.admitted,false);run=unexecuted(f,d.id);assert.equal(run.notification,'suppressed','later refusals of the same task are recorded, not re-notified');
+ const e=await start(f,other,T0);assert.equal(e.admitted,false);assert.equal(unexecuted(f,e.id).review,'session_budget');assert(f.notified.has('long-task:'+e.id),'another task gets its own notice');
+ const [listed]=(await f.service.list(f.owner)).filter(t=>t.id===task.id);assert(listed.deliveryAttention.some(r=>r.runId===d.id),'a suppressed notice stays visible as delivery attention');
+ f.agents.delete(a.agent.id);assert.equal((await start(f,task,'2030-01-01T03:30:00.000Z')).admitted,false,'refused Sessions are resident too');
+ for(const r of [b,c,d,e])f.agents.delete(r.agent.id);for(const [id] of f.agents)if(id.startsWith('session-run-'))f.agents.delete(id);
+ const g=await start(f,task,'2030-01-01T04:00:00.000Z');assert.equal(g.admitted,true,'Sessions the Host no longer holds free their slots');
+ const unclaimed=await f.host.schedule.deliver(task.scheduleId,'2030-01-01T05:00:00.000Z');assert(f.agents.has(unclaimed.agent.id));
+ const restarted=await f.restart({runSessionBudget:2});const h=await start(f,task,'2030-01-01T06:00:00.000Z',restarted);assert.equal(h.admitted,true,'a new Host process starts with an empty budget');
+});
+
+test('C: overlapping runs of one periodic task stay independent; cancel reaches every running Session and every unclaimed delivery',async()=>{
+ const f=await fixture(),task=await f.service.create(f.owner,{...periodic,every_seconds:60});
+ const a=await start(f,task,T0),b=await start(f,task,T1);assert(a.admitted&&b.admitted,'native new targets hold no execution slot: both run');
+ for(const r of [a,b])await emit(f,r,'tool/call',{step:1,callId:'same-call-id',name:'write_file'});
+ await emit(f,a,'tool/result',{step:1,message:{role:'tool',toolCallId:'same-call-id',source:{kind:'tool',callId:'same-call-id'},content:[],isError:true}});
+ assert.equal(f.runs.get(b.id).toolError,false,'a tool error of Run A does not mark Run B');
+ const late=await f.host.schedule.deliver(task.scheduleId,'2030-01-01T02:00:00.000Z'),lateMessages=claim(late.agent);
+ await f.service.cancel(f.owner,{id:task.id,revision:1});
+ assert.deepEqual([a.agent.cancelled,b.agent.cancelled],[{kind:'user'},{kind:'user'}],'both running Sessions receive native cancel');
+ await end(f,a,{reason:'aborted'});await end(f,b,{reason:'aborted'});
+ assert.deepEqual([f.runs.get(a.id).status,f.runs.get(b.id).status],['cancelled','cancelled']);
+ assert.equal(await f.service.preStep(late.agent,{turn:1,messages:lateMessages}),false);assert.equal(unexecuted(f,runId(task.id,'2030-01-01T02:00:00.000Z')).status,'cancelled');
+ assert.equal(finals(f).length,3);assert.equal(new Set(finals(f).map(e=>e.eventId)).size,3);
+});
+test('C: one overlapping run fails while the other completes; each settles and notifies alone',async()=>{
+ const f=await fixture(),task=await f.service.create(f.owner,{...periodic,every_seconds:60});
+ const a=await start(f,task,T0),b=await start(f,task,T1);
+ await end(f,b,{answer:'第二轮完成。'});await end(f,a,{reason:'error'});
+ assert.deepEqual([f.runs.get(a.id).status,f.runs.get(b.id).status],['failed','completed']);
+ assert.match(f.notified.get('long-task:'+a.id).text,/执行失败/u);assert.match(f.notified.get('long-task:'+b.id).text,/第二轮完成/u);
+});
+
+test('D: a delivery claimed before a Host restart but never admitted is settled once as unexecuted',async()=>{
+ const f=await fixture(),task=await f.service.create(f.owner,periodic);
+ const d=await f.host.schedule.deliver(task.scheduleId,T0);claim(d.agent);f.agents.delete(d.agent.id);// the Host died inside the pre-step
+ const restarted=await f.restart({}, {startedAt:Date.parse('2031-01-01T00:00:00.000Z')});
+ const run=unexecuted(f,runId(task.id,T0));assert.equal(run.status,'interrupted');assert.equal(run.reason,'restart_unclaimed');assert.equal(run.sessionId,d.agent.id);
+ assert.match(f.notified.get('long-task:'+run.id).text,/未执行：Host 重启前已投递但尚未开始执行，未自动补跑/u);
+ await f.restart({}, {startedAt:Date.parse('2032-01-01T00:00:00.000Z')});assert.equal(finals(f).length,1,'a later restart does not notify again');
+ assert.equal(await restarted.preStep(d.agent,{turn:1,messages:[d.message]}).catch(()=>false),false);
+});
+test('D: a delivery still pending in the inbox is left to the native re-wake and admitted exactly once',async()=>{
+ const f=await fixture(),task=await f.service.create(f.owner,periodic);
+ const d=await f.host.schedule.deliver(task.scheduleId,T0);f.agents.delete(d.agent.id);// stopped before the turn claimed it
+ const restarted=await f.restart({}, {startedAt:Date.parse('2031-01-01T00:00:00.000Z')});
+ assert.equal(f.runs.entries().length,0,'not settled: native recovery re-wakes the latest pending receipt');
+ f.agents.set(d.agent.id,d.agent);const messages=claim(d.agent);
+ assert.equal(await restarted.preStep(d.agent,{turn:1,messages}),true);const r={...d,turn:1,id:runId(task.id,T0)};await end(f,r,{},restarted);
+ assert.equal(f.runs.get(r.id).status,'completed');assert.equal(finals(f).length,1);
+ await f.restart({}, {startedAt:Date.parse('2032-01-01T00:00:00.000Z')});assert.equal(finals(f).length,1,'nothing to settle once a run exists');
+});
+test('D: deliveries of this Host process and live in-flight turns are never settled by recovery',async()=>{
+ const f=await fixture(),task=await f.service.create(f.owner,periodic);
+ const live=await f.host.schedule.deliver(task.scheduleId,T0);claim(live.agent);live.agent.status='running';
+ await f.restart({}, {startedAt:Date.parse('2031-01-01T00:00:00.000Z')});assert.equal(f.runs.entries().length,0,'a live turn holding the receipt is still on its way to pre-step');
+ const fresh=await f.host.schedule.deliver(task.scheduleId,T1);claim(fresh.agent);live.agent.status='idle';
+ await f.restart({}, {startedAt:Date.parse('2000-01-01T00:00:00.000Z')});assert.equal(f.runs.entries().length,0,'deliveries after the process start belong to this process');
+});
+test('D: an older pending delivery that native recovery will not re-wake is settled, the latest is left alone',async()=>{
+ const f=await fixture(),task=await f.service.create(f.owner,{...periodic,every_seconds:60});
+ const older=await f.host.schedule.deliver(task.scheduleId,T0),latest=await f.host.schedule.deliver(task.scheduleId,T1);
+ f.agents.delete(older.agent.id);f.agents.delete(latest.agent.id);
+ await f.restart({}, {startedAt:Date.parse('2031-01-01T00:00:00.000Z')});
+ assert.equal(unexecuted(f,runId(task.id,T0)).reason,'restart_unclaimed');assert.equal(f.runs.get(runId(task.id,T1)),undefined);
 });

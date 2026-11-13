@@ -6,7 +6,7 @@
 
 | 范围 | 状态 |
 |---|---|
-| Character | 0.1.0-test.35（含可选角色模式），Long Tasks 0.1.0-test.5，Interaction 0.1.0-test.9 |
+| Character | 0.1.0-test.36（含可选角色模式），Long Tasks 0.1.0-test.6，Interaction 0.1.0-test.9 |
 | 配套 QQTK | I/O test.9、Manager test.5、Remote Ops 1.1.1-test.3、QQ0.5.2 / SDK1.0.5 |
 | 官方宿主目标 | DSH 0.2.2-rc.1 / Node 24 / Windows；源码不再支持 0.2.1 Schedule API |
 
@@ -16,6 +16,7 @@
 
 ## 已合并、未部署
 
+- test.36（C1 执行边界审计修复，PR #24 同一分支）：DSH agent-loop 在 `agent/pre-step` 之前就把投递从持久收件箱取出，被拒绝的投递不会放回。修复前，已投递但在认领前遇到任务修改（旧版本指令）、取消或无法读取原生计划的 occurrence 会被消耗而不留 run、也不通知；Host 在取出后、认领前停止的 occurrence 重启后同样无痕丢失（真实 Host 门禁在修复前确实失败）。现在这些可信投递一律以 `executed:false` 的终态 run 结算并经 Outbox 通知（`stale_revision`/`cancelled`/`unverified_delivery`/`task_unavailable`/重启后的 `restart_unclaimed`），从不执行旧版本指令、不补跑、不标 completed；伪造帧仍直接拒绝。新增每 Host 进程 `runSessionBudget`（默认 1000）限制可执行的 per-run Session 数（0.2.2-rc.1 无公开 API 释放 Session；实测每个最小 Session 约 50–70 KB 堆），超出的 occurrence 结算为 `session_budget` 并每任务通知一次。Session→任务索引避免 pre-step 线性扫描账本。同一周期任务的并行 run 保持默认允许（原生 `new` 目标不占执行槽），身份、状态、通知与取消已测试独立。生产 2026-11-13 已部署的是 test.35（本分支早先提交），不含这些修复。
 - test.35（C1 统一执行层）：需要 Agent 执行的定时任务只走 Long Tasks 一套 Task / Run 生命周期，不为普通 Schedule 另建结果回传。新任务使用原生 Schedule `target:{kind:'new',create:{agentPreset:long-task,cwd}}`：每次 occurrence 由 Host `sessionController` 新建任务 Preset 的独立 Session，Run ID 仍为任务 ID + occurrence；pre-step 认领时凭原生投递帧、任务自己的计划 ID 与当前指令、实时 `view()`（已提交时 `lastDelivery.targetSessionId` 必须是该 Session）把 Session 绑定到一个 run，先写账本再执行，之后该 Session 不再接受任何回合。最终结果复用既有 `turn/end` 结算与 Outbox（`long-task:<runId>`），活动汇报不变；正常结束但没有可用最终回复改为 `needs_review`。Host 缺少 Session 创建器时创建明确失败，不降级。历史 `target:session` 根 Session 任务原样执行、修改、取消、恢复，可与新任务共存；`sessionMode: task-root` 为显式兼容选项。纯提醒仍是 `schedule_create` + Identity 到期提醒，不启动 Agent；Skill 与工具说明写明选择规则。已知限制：0.2.2-rc.1 无公开 API 卸载 per-run Session（保持加载至 Host 重启）；原生 `new` 目标不占执行槽，同一周期任务的相邻 run 可并行。详见 [Long Tasks README](../packages/long-tasks/README.md)。
 - test.34（C2 Lite，Character #22）：运行中的 Long Task 依据原生 `step/start`、`tool/call`、`tool/result` 事件，经同一 Outbox 发出低频活动汇报（`task_activity`，ID `long-task:<runId>:activity:<事件序号>`，与终态通知 ID 分开）。运行满 90 秒首报，之后至少间隔 5 分钟且只在有新活动时发送；每个 run 最多一次快速异常提醒（首报前的错误并入首报）。汇报以 Host 时钟的“截至 日期 时间（UTC±hh:mm）”开头并注明送达时任务可能已结束；只含步骤、调用与返回计数、工具名和等待状态，不含参数、结果、百分比或预计时间，不调用模型。未返回调用按调用 ID 跟踪（最多 20 个）：未挤出时报告精确数，挤出后只报告可证明的下界。活动计数与工具错误标记（`toolError` → `needs_review`）共用一条归属规则（本 run 的 turn、认领之后、带原生序号、未处理过）。每个 run 一个内存定时器，结束、取消、停用时清除；重启沿用原有结算，不重建定时器、不补发。终态状态机、终态通知、权限与 `allowTools` 不变。详见 [Long Tasks README](../packages/long-tasks/README.md)。
 - 原生门禁隔离（Character #23）：隔离 Home 建在仓库外的系统临时目录；运行器只等待门禁进程本身，单项超时 20 分钟；宿主按自己启动的进程树停止。lifecycle 中“未证明归属提醒的目标不被加载”改为统计被 Identity 放行的冷恢复（必须为 0，含被接受的对照），不再对注册表瞬时采样。

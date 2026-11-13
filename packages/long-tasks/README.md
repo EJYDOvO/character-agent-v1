@@ -15,6 +15,8 @@
     taskPlugins: []
     # 可选：任务 Session 的工作目录（绝对路径；存在时必须是目录），默认 Host 进程目录
     # cwd: D:/DSH/task-workspace
+    # 可选：每个 Host 进程最多绑定的 per-run Session 数（默认 1000，见“已知限制”）
+    # runSessionBudget: 1000
 ```
 
 依赖可信 `characterIdentity` 和原生 `schedule/storageDomain/agentPresets/agents/sessions/sessionPersistence/tools/skills`。创建新任务还需要 Host 提供原生 `sessionController`（DSH Desktop / Web 组合自带），由它为每次触发创建 Session；缺少时创建会明确失败。不能在同一 Profile 再声明第二个实例或同名任务 Preset。默认不开放工具，也没有主 QQ Session、Memory 或审批代理权限。
@@ -63,14 +65,31 @@ Session ID 由 Schedule 在投递时生成，Character 不预先创建，也不�
 
 取消会删除未来触发，并对该任务每个运行中的 run Session 请求原生 cancel。Host 缺少 `sessionController`（无法创建 Session）时 `long_task_create` 明确报错且不写入任何计划，**不会**降级到共享根 Session 或 QQ 主会话。
 
+### 已投递但未执行的 occurrence
+
+DSH agent-loop 在调用 `agent/pre-step` **之前**就用 `inbox.claim()` 把投递从持久收件箱中取出（写入 `agent/inbox/spliced`），pre-step 拒绝时不会放回；原生 Schedule 重启后也只会重新唤醒“最近一次、仍在收件箱中”的投递。因此每一个可信投递（帧来自 Host Schedule、计划 ID 属于本任务、指令头是本任务曾有的版本、原生 view 与 lastDelivery 一致）要么执行，要么在账本中留下终态 run 并通知，不会无痕消失：
+
+| 情形 | run 结算 | 通知 |
+|---|---|---|
+| 投递是旧版本指令（投递后任务被修改，再进入 pre-step） | `needs_review`，`review: stale_revision`，`executed: false`，`revision` 为投递时版本 | “未执行：投递的是旧版本指令” |
+| 投递后、认领前任务被取消 | `cancelled`，`executed: false` | “已取消（本次触发尚未开始执行）” |
+| 无法读取原生计划核实投递 | `needs_review`，`review: unverified_delivery` | “未执行：无法核实这次投递” |
+| 任务处于其他不可执行状态 | `needs_review`，`review: task_unavailable` | “未执行：任务当前不可执行” |
+| 本进程任务 Session 超出预算（见下） | `needs_review`，`review: session_budget` | 每任务每个 Host 进程一次，其余记为 `notification: suppressed`，在 `deliveryAttention` 中可见 |
+| Host 重启前已被取走、尚未认领（重启恢复时发现） | `interrupted`，`reason: restart_unclaimed` | “未执行：Host 重启前已投递但尚未开始执行，未自动补跑” |
+
+这些 run 从不标为 `completed`，也不会补跑：同一 occurrence 的 Run ID 已被占用，绑定的 Session 不再接受回合。旧版本指令不会被执行（修改即撤销旧指令的执行资格），取消也不会被未认领的 Session 绕过。伪造或不属于本任务的帧（未知计划 ID、其他任务或高于当前版本的指令头、lastDelivery 指向别的 Session）仍直接拒绝，不写账本、不通知。
+
+重启恢复（`settleOrphans`）只看 per-run 任务最近 20 条原生投递（`schedule.history`）中、**早于本 Host 进程启动**（`performance.timeOrigin`）且没有 run 的那些：若 Session 正在运行一轮（可能正等待认领）或是仍在收件箱中的最近一次投递（原生会重新唤醒），保持不动；否则按上表结算一次。本进程内的投递从不被恢复逻辑结算。插件在同一进程内停用后再启用期间被消耗的投递不在此范围内（停用期间执行守卫本就拒绝执行）。
+
 ### 历史任务兼容
 
-此前创建的任务（记录中没有 `delivery` 字段，计划为 `target:{kind:'session'}`，预先创建的独立根 Session）不迁移，继续按原方式执行、修改、取消和重启恢复：同一根 Session 承载其所有周期，`taskAgent`、工具守卫、认领、活动汇报与通知都与新任务共用同一代码路径。两种任务可以共存。配置 `sessionMode: task-root` 可以让新任务也使用旧方式（仅用于没有 Session 创建器的 Host，属于显式选择）；默认 `per-run`。
+此前创建的任务（记录中没有 `delivery` 字段，计划为 `target:{kind:'session'}`，预先创建的独立根 Session）不迁移，继续按原方式执行、修改、取消和重启恢复：同一根 Session 承载其所有周期，`taskAgent`、工具守卫、认领、活动汇报与通知都与新任务共用同一代码路径；旧版本指令的投递同样结算为 `stale_revision`。两种任务可以共存。配置 `sessionMode: task-root` 可以让新任务也使用旧方式（仅用于没有 Session 创建器的 Host，属于显式选择）；默认 `per-run`。
 
 ### 已知限制
 
-- DSH 0.2.2-rc.1 的 `sessionController` 没有卸载或释放 Session 的公开 API，Agent 句柄只属于创建者。每个 run 的 Session 在 Host 进程内保持加载直到 Host 重启（与 Web 界面里原生 `new` 目标计划的行为相同）；高频周期任务会累积内存中的空闲 Agent。原生对 `new` 目标设有 60 秒最小投递间隔（`newSessionIntervalSeconds`）。
-- 原生 `new` 目标不占用执行槽：周期间隔短于单次执行时间时，同一任务的相邻两个 run 可以在各自 Session 中并行。它们是不同的 run，分别认领、汇报和通知；历史根 Session 任务则在同一 Session 中排队。工具副作用不能并行的任务应选择足够长的间隔。
+- DSH 0.2.2-rc.1 的 `sessionController`、`agents` 与 `workspaceRegistry` 都没有卸载或释放 Session 的公开 API：Agent 句柄只属于创建者，归档（archive）只是禁止执行的显示集合，不卸载。每个 run 的 Session 在 Host 进程内保持加载直到 Host 重启（与 Web 界面里原生 `new` 目标计划相同）。隔离 Host 实测：每个最小任务 Session（一轮、无工具）约常驻 50–70 KB 堆；真实 run 的历史更大。60 秒周期每天约 1440 个 Session，至少约 100 MB/天。为此每个 Host 进程最多绑定 `runSessionBudget`（默认 1000，可配置 1–1000000）个 per-run Session（运行中、已结算、未执行结算的都计入；Host 已不再持有的不计入；历史根 Session 任务不计入）。达到上限后新的 occurrence 不执行，按上表记为 `session_budget` 并通知一次；重启 Host 后计数清零。原生仍会为这些 occurrence 创建 Session（无法在 Character 层阻止），所以预算只限制执行，不限制 Session 创建。原生对 `new` 目标设有 60 秒最小投递间隔（`newSessionIntervalSeconds`）。
+- 原生 `new` 目标不占用执行槽（`runNow`/定时投递对 `new` 目标的 held 集为空）：周期间隔短于单次执行时间时，同一任务的相邻两个 run 会在各自 Session 中并行。它们是不同的 run，分别认领、汇报、结算和通知；工具错误只标记所属 run；取消对该任务所有运行中的 run Session 请求原生 cancel，尚未认领的已投递 Session 结算为 cancelled。历史根 Session 任务则在同一 Session 中排队。本版本不提供 overlapPolicy：工具副作用不能并行的任务应选择明显长于单次执行时间的间隔（默认任务没有工具，不受影响）。
 - 新 Session 会按 `cwd` 加入已注册的 Workspace，并以“任务标题 · 时间”命名，因此会出现在 DSH 会话列表中。
 
 ## 持久化、通知与恢复
@@ -108,4 +127,4 @@ Schedule `lastDelivery` 只证明指令写入任务收件箱。插件在原生 p
 
 ## 隔离验证
 
-`npm test` 覆盖身份、CAS、认领/去重、工具错误、恢复、通知边界与活动汇报（节流、去重、取消、重启、并发、周期轮次、投递失败）。`tests/long-tasks.test.mjs` 是历史根 Session 任务的兼容套件；`tests/long-task-runs.test.mjs` 按 0.2.2-rc.1 的 `new` 目标投递顺序（预留 ID → Session 创建器 → 投递 → 提交 lastDelivery）模拟 per-run Session，覆盖一次性/周期、提交前后认领、重复与批量投递、乱序事件、各类终态、重启、并发、越权 Session、无 Session 创建器的 Host 以及新旧任务共存。设置 DSH_INSTALL_ROOT 后运行 `scripts/run-lifecycle.ps1`，使用合成数据、确定性模型和假 Sender，验证两个真实 Host 进程（第二阶段把首次窗口设为 15 秒，并加入一个 20 秒的慢工具任务，检查原生事件生成的活动汇报与 Outbox 行）、停机逾期、原生周期到期、per-run Session（原生 run-now 加一次定时触发，两个 run 在两个由 Host 创建的 Session 中各自结算和通知）、历史根 Session 任务、最小工具权限、Memory 拒绝、旧提醒恢复和主路由保持。不连接 QQ，不证明真实模型任务质量或手机送达。
+`npm test` 覆盖身份、CAS、认领/去重、工具错误、恢复、通知边界与活动汇报（节流、去重、取消、重启、并发、周期轮次、投递失败）。`tests/long-tasks.test.mjs` 是历史根 Session 任务的兼容套件；`tests/long-task-runs.test.mjs` 按 0.2.2-rc.1 的 `new` 目标投递顺序（预留 ID → Session 创建器 → 投递 → 提交 lastDelivery）模拟 per-run Session，覆盖一次性/周期、提交前后认领、重复与批量投递、乱序事件、各类终态、重启、并发、越权 Session、无 Session 创建器的 Host、新旧任务共存，以及审计补充的修改/取消竞态、无法核实的投递、Session 预算、同一任务并行 run 与重启前已取走未认领的投递。设置 DSH_INSTALL_ROOT 后运行 `scripts/run-lifecycle.ps1`，使用合成数据、确定性模型和假 Sender，验证两个真实 Host 进程（第二阶段把首次窗口设为 15 秒，并加入一个 20 秒的慢工具任务，检查原生事件生成的活动汇报与 Outbox 行）、停机逾期、原生周期到期、per-run Session（原生 run-now 加一次定时触发，两个 run 在两个由 Host 创建的 Session 中各自结算和通知）、历史根 Session 任务、真实 Host 上的修改/取消竞态（夹具在 role 认领前暂停已取走的投递，修改或取消后放行）、真实重启恢复（一个已取走并落盘但未认领的投递在重启后结算一次且未执行任何步骤；一个已预留 pendingDelivery 并创建 Session 但未投递的 occurrence 在重启后用同一 Session ID 投递并只执行一次）、最小工具权限、Memory 拒绝、旧提醒恢复和主路由保持。不连接 QQ，不证明真实模型任务质量或手机送达。

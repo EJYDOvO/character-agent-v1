@@ -1,5 +1,5 @@
 import {randomUUID} from 'node:crypto';
-import {changeSelector,instruction,nativeTiming,occurrences,ownsTarget,perRun,runId,taskTarget,timingSelector} from './state.mjs';
+import {changeSelector,deliveredRevision,instruction,nativeTiming,occurrences,ownsTarget,pendingMessageIds,perRun,runId,taskTarget,timingSelector} from './state.mjs';
 import {FIRST_REPORT_MS,REPORT_INTERVAL_MS,activityText,emptyActivity,foldActivity,reportDue,reportMarker,unreported} from './activity.mjs';
 const terminal=new Set(['completed','failed','interrupted','cancelled','needs_review']);
 const text=m=>m?.content?.filter(b=>b.type==='text').map(b=>b.text).join('\n')??'';
@@ -9,6 +9,12 @@ const unbound=prompt=>typeof prompt==='string'?prompt.replace(/\n\[HOST BINDING 
 const stopped=task=>!task||['cancelled','cancelling','failed'].includes(task.state);
 const missed=result=>!result||typeof result!=='object'||'code' in result;
 const actorOf=agent=>agent?.session?.id??agent?.id;
+// Per-run Sessions bound in one Host process before new occurrences are refused (see residentCount).
+export const RUN_SESSION_BUDGET=1000;
+// Newest native deliveries of a per-run task checked for an unexecuted receipt after a restart.
+const ORPHAN_SCAN=20;
+// Why a consumed, trusted delivery did not execute (run.executed === false).
+const UNEXECUTED={stale_revision:'未执行：投递的是旧版本指令（任务已修改），待检查',unverified_delivery:'未执行：无法核实这次投递，待检查',task_unavailable:'未执行：任务当前不可执行，待检查',restart_unclaimed:'未执行：Host 重启前已投递但尚未开始执行，未自动补跑'};
 // Three separate facts per run, derived for display; stored rows are unchanged.
 // execution: how the Agent turn settled. goalVerification: no independent
 // verifier exists, so a settled run is never reported as goal-achieved.
@@ -26,7 +32,9 @@ function runView(identity,scope,run){
  return {...run,notification:status??run.notification,execution:run.status,goalVerification:settled?'unverified':'pending',delivery};
 }
 export class LongTasks {
- constructor(host,{presetId='long-task',allowTools=[],activity={},clock={},sessionMode='per-run',cwd}={}){this.h=host;this.presetId=presetId;this.allowTools=allowTools;
+ constructor(host,{presetId='long-task',allowTools=[],activity={},clock={},sessionMode='per-run',cwd,runSessionBudget=RUN_SESSION_BUDGET}={}){this.h=host;this.presetId=presetId;this.allowTools=allowTools;
+  if(!Number.isSafeInteger(runSessionBudget)||runSessionBudget<1)throw Error('Invalid run Session budget');
+  this.runSessionBudget=runSessionBudget;this.resident=new Set();this.budgetNotified=new Set();
   // New tasks: one native Session per occurrence (`per-run`, default) or the
   // historical fixed task root (`task-root`, explicit compatibility choice).
   if(!['per-run','task-root'].includes(sessionMode))throw Error('Invalid task Session mode');
@@ -102,18 +110,25 @@ export class LongTasks {
  });}
  // The task a Session is bound to: the running run's task, a historical task
  // root, or the per-run task whose run (running or settled) owns this Session.
- // Binding is established only by a persisted pre-step admission (admitRun).
+ // Binding is established only by a persisted pre-step decision (admitRun or
+ // settleUnexecuted). Session -> task is indexed in memory so a pre-step does
+ // not scan the whole, ever-growing run ledger.
  boundTask(sessionId){
   if(!sessionId)return undefined;
   const run=this.active.get(sessionId);if(run)return this.h.tasks.get(run.taskId);
   const tasks=[...this.h.tasks.entries()].map(([,t])=>t),root=tasks.find(t=>!perRun(t)&&t.sessionId===sessionId);if(root)return root;
-  for(const [,r]of this.h.runs.entries())if(r.sessionId===sessionId){const task=this.h.tasks.get(r.taskId);return perRun(task)?task:undefined;}
-  return undefined;
+  const taskId=this.sessionIndex().get(sessionId),task=taskId&&this.h.tasks.get(taskId);
+  return perRun(task)?task:undefined;
  }
+ sessionIndex(){if(!this.index){this.index=new Map();for(const [,r]of this.h.runs.entries())this.index.set(r.sessionId,r.taskId);}return this.index;}
+ async putNewRun(run){await this.h.runs.put(run.id,run);this.sessionIndex().set(run.sessionId,run.taskId);if(perRun(this.h.tasks.get(run.taskId)))this.resident.add(run.sessionId);}
  // Independent task Session: the actual Host Agent, composed with the task
  // Preset, a root (no parent, not delegated), never an Owner or QQ Session.
  trustedRoot(agent,presetId){return !!agent&&this.h.agents.get(agent.id)===agent&&this.h.presetOf(agent)===presetId&&!agent.session?.header?.parentSession&&!(agent.session?.header?.delegationDepth>0);}
  taskAgent(agent){if(this.closed)throw Error('Long tasks disabled');const task=this.boundTask(agent?.id);if(!task||!this.trustedRoot(agent,task.presetId)||['cancelled','cancelling','failed'].includes(task.state))throw Error('Trusted independent task root required');this.h.identity.validateConversation(task.scope);return task;}
+ // Per-run Sessions this Host process bound and still holds. DSH 0.2.2-rc.1
+ // offers no public way to release them, so they stay resident until restart.
+ residentCount(){for(const id of this.resident)if(!this.h.agents.get(id))this.resident.delete(id);return this.resident.size;}
  async preStep(agent,event){await this.ready;return this.serial(async()=>{
   if(this.closed)throw Error('Long tasks disabled');
   // A Session native Schedule created for one occurrence is unbound until its
@@ -133,25 +148,38 @@ export class LongTasks {
   if(unique.size!==1)throw Error('Multiple occurrences require operator review');
   const [id,receipt]=[...unique][0];
   const admittedPrompt=unbound(receipt.reminder_prompt);
-  if(receipt.schedule_id!==task.scheduleId||admittedPrompt!==instruction(task))return false;
+  if(receipt.schedule_id!==task.scheduleId)return false;
   if(this.h.runs.get(id))return false;
+  if(admittedPrompt!==instruction(task)){
+   // The native receipt of an earlier revision of this task, consumed by the
+   // turn: settle it, never execute the superseded instruction.
+   const rev=deliveredRevision(task,admittedPrompt);
+   if(rev!==undefined&&rev<task.revision)await this.settleUnexecuted(task,{sessionId:agent.id,messageId:receipt.messageId,occurrenceAt:receipt.occurrence_at,revision:rev},{status:'needs_review',review:'stale_revision'});
+   return false;
+  }
   const run={id,taskId:task.id,sessionId:agent.id,status:'running',occurrenceAt:receipt.occurrence_at,turn:event.turn,startSeq:agent.session.seq??0,revision:task.revision,title:task.title,startedAt:new Date(this.clock.now()).toISOString(),toolError:false,activity:emptyActivity()};
-  await this.h.runs.put(id,run);this.active.set(agent.id,run);this.arm(agent.id,run);return true;
+  await this.putNewRun(run);this.active.set(agent.id,run);this.arm(agent.id,run);return true;
  });}
  /**
   * Admit the first step of a Session that native Schedule created for one
   * occurrence of a per-run task (target kind `new`). Runs inside the serial
-  * chain. Evidence, all required:
-  *  - the actual Host Agent, a root composed with the task Preset;
-  *  - exactly one Host Schedule receipt (producer kind `schedule`) whose
-  *    schedule id is a per-run task's own Schedule, with that task's current
-  *    instruction and an active task in the bound Conversation;
-  *  - a fresh native view in which that Schedule still delivers to a new
-  *    Session with the task Preset and directory; when the receipt is already
-  *    committed (lastDelivery of this message) it names this Session;
-  *  - no earlier run for this occurrence (Run ID = task id + occurrence).
-  * The run row is persisted before the step may proceed; nothing is inferred
-  * from prompts, titles or the Session name. Anything else is refused.
+  * chain. The DSH agent loop has already claimed the receipt out of the
+  * Session's durable inbox, and a rejected step does not return it, so every
+  * trusted receipt is either executed or settled here; none is dropped.
+  *
+  * Trust (all required, else refused with no ledger row): the actual Host
+  * Agent, a root composed with the task Preset; exactly one Host Schedule
+  * receipt (producer kind `schedule`) naming a per-run task's own Schedule,
+  * with that task's instruction header at a revision it has had; a native view
+  * in which that Schedule still delivers to a new task-Preset Session in the
+  * task directory, and whose lastDelivery, when it is this message, names this
+  * Session.
+  *
+  * Execution additionally needs the current revision of an active task, no
+  * earlier run of this occurrence, and room in the resident-Session budget.
+  * A trusted receipt that fails only these is settled unexecuted (cancelled /
+  * needs_review) and notified. The run row is persisted before the step may
+  * proceed.
   */
  async admitRun(agent,event){
   const refuse=()=>{throw Error('Trusted independent task root required');};
@@ -163,15 +191,43 @@ export class LongTasks {
   const task=[...this.h.tasks.entries()].map(([,t])=>t).find(t=>perRun(t)&&t.scheduleId===receipt.schedule_id);
   if(!task||task.presetId!==this.presetId)refuse();
   this.h.identity.validateConversation(task.scope);
-  if(task.state!=='active'||receipt.reminder_prompt!==instruction(task))return false;
+  const rev=deliveredRevision(task,receipt.reminder_prompt);
+  if(rev===undefined||rev>task.revision||rev===task.revision&&receipt.reminder_prompt!==instruction(task))return false;
   const id=runId(task.id,receipt.occurrence_at);if(this.h.runs.get(id))return false;
-  const entry=await this.scheduleOf(task);
-  if(!entry||!ownsTarget(task,entry))return false;
-  const last=entry.lastDelivery;if(last?.messageId===receipt.messageId&&last.targetSessionId!==agent.id)return false;
+  const delivery={sessionId:agent.id,messageId:receipt.messageId,occurrenceAt:receipt.occurrence_at,revision:rev};
+  let entry;try{entry=await this.scheduleOf(task);}catch{entry=null;}
   // Re-read after the await: the task may have been cancelled or changed.
-  const now=this.h.tasks.get(task.id);if(this.closed||now?.state!=='active'||now.revision!==task.revision||this.h.runs.get(id)||this.boundTask(agent.id)||!this.trustedRoot(agent,task.presetId))return false;
+  const now=this.h.tasks.get(task.id);
+  if(this.closed||this.h.runs.get(id)||this.boundTask(agent.id)||!this.trustedRoot(agent,task.presetId))return false;
+  const stopped=['cancelled','cancelling'].includes(now?.state);
+  if(entry===null)return this.settleUnexecuted(now,delivery,stopped?{status:'cancelled'}:{status:'needs_review',review:'unverified_delivery'}).then(()=>false);
+  if(entry===undefined&&!stopped)return this.settleUnexecuted(now,delivery,{status:'needs_review',review:'unverified_delivery'}).then(()=>false);
+  if(entry){
+   if(!ownsTarget(now,entry))return false;
+   const last=entry.lastDelivery;if(last?.messageId===receipt.messageId&&last.targetSessionId!==agent.id)return false;
+  }
+  if(stopped)return this.settleUnexecuted(now,delivery,{status:'cancelled'}).then(()=>false);
+  if(now.state!=='active')return this.settleUnexecuted(now,delivery,{status:'needs_review',review:'task_unavailable'}).then(()=>false);
+  if(rev<now.revision||receipt.reminder_prompt!==instruction(now))return this.settleUnexecuted(now,delivery,{status:'needs_review',review:'stale_revision'}).then(()=>false);
+  if(this.residentCount()>=this.runSessionBudget)return this.settleUnexecuted(now,delivery,{status:'needs_review',review:'session_budget'}).then(()=>false);
   const run={id,taskId:task.id,sessionId:agent.id,scheduleId:task.scheduleId,messageId:receipt.messageId,status:'running',occurrenceAt:receipt.occurrence_at,turn:event.turn,startSeq:agent.session.seq??0,revision:task.revision,title:task.title,startedAt:new Date(this.clock.now()).toISOString(),toolError:false,activity:emptyActivity()};
-  await this.h.runs.put(id,run);this.active.set(agent.id,run);this.arm(agent.id,run);return true;
+  await this.putNewRun(run);this.active.set(agent.id,run);this.arm(agent.id,run);return true;
+ }
+ /**
+  * Record a trusted delivery that was consumed but not executed as a terminal
+  * run (executed:false), bind its Session, and notify through the Outbox. It
+  * is never `completed`, never re-delivered, and its occurrence cannot run
+  * later (same Run ID). A budget refusal is notified once per task per Host
+  * process; later ones are recorded with notification 'suppressed' and stay
+  * visible as delivery attention.
+  */
+ async settleUnexecuted(task,{sessionId,messageId,occurrenceAt,revision},{status,review,reason}){
+  const id=runId(task.id,occurrenceAt);if(this.h.runs.get(id))return;
+  const at=new Date(this.clock.now()).toISOString();
+  const quiet=review==='session_budget'&&this.budgetNotified.has(task.id);if(review==='session_budget')this.budgetNotified.add(task.id);
+  const run={id,taskId:task.id,sessionId,...(task.scheduleId?{scheduleId:task.scheduleId}:{}),...(messageId?{messageId}:{}),status,...(review?{review}:{}),executed:false,reason:reason??review??'cancelled_before_start',occurrenceAt,revision:revision??task.revision,title:task.title,endedAt:at,result:'',notification:quiet?'suppressed':'pending'};
+  await this.putNewRun(run);
+  if(!quiet)await this.notify(task,run);
  }
  observe(session,event){return this.serial(async()=>{
   const run=this.active.get(session.header.id);if(!run)return;
@@ -224,8 +280,9 @@ export class LongTasks {
  async notify(task,run){
   if(!terminal.has(run.status))return;
   const kind=run.status==='completed'?'task_completed':'task_failed';
+  const unexecuted=run.executed!==false?undefined:run.status==='cancelled'?'已取消（本次触发尚未开始执行）':run.review==='session_budget'?`未执行：本次 Host 运行中的任务 Session 已达上限（${this.runSessionBudget}），Host 重启前本任务后续触发都不会执行，也不再逐次通知`:UNEXECUTED[run.review??run.reason]??'未执行，待检查';
   const labels={completed:'本轮执行结束（不等同于目标已独立验收）',needs_review:run.review==='no_result'?'执行结束，但没有可用的最终回复，待检查':'执行结束，工具报告异常，待检查',failed:'执行失败',interrupted:'执行中断，未自动重放',cancelled:'已取消'};
-  const result=await this.h.identity.notifyConversation(task.scope,{eventId:'long-task:'+run.id,kind,text:`[长期任务] ${run.title??task.title}\n${labels[run.status]}\n${run.result??''}`.slice(0,2900)});
+  const result=await this.h.identity.notifyConversation(task.scope,{eventId:'long-task:'+run.id,kind,text:`[长期任务] ${run.title??task.title}\n${unexecuted??labels[run.status]}\n${run.result??''}`.slice(0,2900)});
   await this.h.runs.put(run.id,{...run,notification:result.status});
  }
  // DSH 0.2.2 view(): the entry, or a miss with `code`.
@@ -263,9 +320,37 @@ export class LongTasks {
     const next={...run,status:end?.data.reason?.kind==='completed'?'needs_review':'interrupted',reason:'restart_recovery',endedAt:new Date().toISOString(),notification:'pending'};await this.h.runs.put(run.id,next);await this.notify(task,next);
    }else if(run.notification==='pending')await this.notify(task,run);
   }
+  for(const [,task]of this.h.tasks.entries())if(perRun(task)&&task.scheduleId)await this.settleOrphans(task);
   // Overdue work: DSH 0.2.2 Schedule resumes due tasks itself (latest-only
   // catch-up, restored-inbox recovery). The occurrence ledger above still
   // rejects any repeat execution; no rebind, timer or replay queue here.
  });recovery.then(this.resolveReady,this.rejectReady);return recovery;}
+ /**
+  * After a restart: a per-run delivery of the previous Host process with no
+  * run was consumed without a pre-step decision (the turn claimed the receipt,
+  * then the Host stopped before admission). Native Schedule re-wakes only the
+  * latest receipt still pending in its inbox, so that one is left alone; any
+  * other is settled as interrupted and unexecuted, once (same Run ID). Live
+  * turns and deliveries of this process are never touched.
+  */
+ async settleOrphans(task){
+  const started=this.h.startedAt;if(!Number.isFinite(started)||typeof this.h.schedule.history!=='function')return;
+  let page;try{page=await this.h.schedule.history({id:task.scheduleId,limit:ORPHAN_SCAN});}catch{this.h.warn?.('Long task delivery history unavailable; unexecuted receipts are not reconciled');return;}
+  if(!Array.isArray(page?.records))return;
+  for(const [i,rec] of page.records.entries()){
+   if(typeof rec?.targetSessionId!=='string'||!(Date.parse(rec.deliveredAt)<started)||this.h.runs.get(runId(task.id,rec.scheduledAt)))continue;
+   if(await this.receiptPending(rec,i===0))continue;
+   await this.settleUnexecuted(task,{sessionId:rec.targetSessionId,messageId:rec.messageId,occurrenceAt:rec.scheduledAt,revision:deliveredRevision(task,rec.prompt)},{status:'interrupted',reason:'restart_unclaimed'});
+  }
+ }
+ // Whether a delivery may still be executed: a live turn holds it, or it is
+ // the latest receipt and still pending (native re-wakes it).
+ async receiptPending(rec,latest){
+  const agent=this.h.agents.get(rec.targetSessionId);
+  if(agent){if(agent.status!=='idle')return true;return latest&&[...(agent.inbox?.nextTurn??[]),...(agent.inbox?.nextStep??[])].some(m=>m?.id===rec.messageId);}
+  let pending;try{pending=pendingMessageIds((await this.h.load(rec.targetSessionId)).events);}catch{pending=undefined;}
+  if(pending===undefined){this.h.warn?.('Long task receipt state unreadable; left for inspection');return true;}
+  return latest&&pending.has(rec.messageId);
+ }
  async close(){this.closed=true;for(const id of [...this.timers.keys()])this.disarm(id);this.rejectReady(Error('Long tasks disabled'));await this.chain;this.active.clear();}
 }
