@@ -41,6 +41,8 @@ test('template card builds clean', () => {
   assert(build.prefix.startsWith('【说话规则】'));
   assert(build.suffix.startsWith('## 对话示例'));
   assert(build.tokens.total < WARN_TOKENS);
+  // Template files hold example content only; authoring guidance lives in card.yaml comments.
+  assert(!/留空|模板|（每轮/.test(build.reminder), build.reminder);
 });
 
 test('rules files are cleaned and every part is counted', () => {
