@@ -1,7 +1,8 @@
 {
   "runtimeRoot": "<OFFICIAL_DSH_RUNTIME_DIRECTORY>",
   "profileName": "character",
-  "definition": "<PRIVATE_PERSONA_YAML>",
+  "card": "<PRIVATE_CHARACTER_CARD_V3>",
+  "rules": {"system": "<PRIVATE_RULES_MD>", "reminder": "<PRIVATE_REMINDER_MD>"},
   "dataDirectory": "character",
   "projectId": "personal",
   "memoryMode": "off",

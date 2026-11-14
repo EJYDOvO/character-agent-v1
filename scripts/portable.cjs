@@ -1,17 +1,37 @@
 const fs=require('node:fs'),path=require('node:path'),cp=require('node:child_process'),assert=require('node:assert/strict');
 const root=path.resolve(__dirname,'..');
 function toolkit(dir){assert(dir&&path.isAbsolute(dir),'Supply --qqtk with the public QQTK clone path');const p=JSON.parse(fs.readFileSync(path.join(dir,'package.json')));assert.equal(p.name,'harness-qq-toolkit');return require(path.join(dir,'scripts/portable.cjs'));}
+// Card keys of the portable config, as build-config keys (see card-source.cjs).
+// Paths are relative to the portable config file.
+function cardBuildConfig(c,dir){
+ if(c.definition!==undefined)throw Error('Portable config "definition" is no longer supported: the definition.yaml format was replaced by Character Card V3; set "card"');
+ // Build-config spellings here would silently drop the card or its rules.
+ if(c.cardPath!==undefined)throw Error('Unknown portable config key "cardPath": use "card"');
+ const unknownRules=Object.keys(c.rules??{}).filter(key=>!['system','reminder'].includes(key));
+ if(unknownRules.length)throw Error(`Unknown portable rules key ${unknownRules.join(', ')}: expected "system" and "reminder"`);
+ const resolve=value=>value===undefined?undefined:path.resolve(dir,value);
+ const rules={};if(c.rules?.system!==undefined)rules.systemFile=resolve(c.rules.system);if(c.rules?.reminder!==undefined)rules.reminderFile=resolve(c.rules.reminder);
+ return {cardPath:c.card===undefined?path.join(root,'characters','template','card.yaml'):resolve(c.card),rules,...(c.userName!==undefined?{userName:c.userName}:{}),...(c.characterId!==undefined?{characterId:c.characterId}:{})};
+}
+// What a private build/pack step printed that the person must see: card
+// warnings always, and on failure the error's first line (not its stack).
+function buildStepReport(script,result){
+ const lines=String(result.stderr??'').split(/\r?\n/),warnings=lines.filter(line=>line.startsWith('角色卡警告：'));
+ if(result.status===0)return {warnings,failure:null};
+ const error=result.error?.message??lines.find(line=>line.trim()&&!warnings.includes(line)&&!/^\s+at /.test(line))?.replace(/^\w*Error: /,'');
+ return {warnings,failure:`Private Character ${script} failed; no running Profile was modified${error?': '+error:' (exit '+result.status+')'}`};
+}
 function prepare(file,home,qqtk){
  const q=toolkit(qqtk),c=q.config(file),rt=q.runtime(c);assert(!path.resolve(home).startsWith(root+path.sep)&&path.resolve(home)!==root,'Home must be outside Character source');q.freshHome(home);const rel=c.dataDirectory||'character',data=path.resolve(home,rel);assert(data.startsWith(path.resolve(home)+path.sep),'Character dataDirectory must be inside its separate DSH_HOME');
- const definition=path.resolve(path.dirname(file),c.definition||path.join(root,'characters/character-a/definition.yaml'));assert(fs.existsSync(definition),'Persona definition is missing');
+ const card=cardBuildConfig(c,path.dirname(file));assert(fs.existsSync(card.cardPath),'Character card is missing');
  // Optional roles: explicit public Persona file; extra admitted private accounts only with roles.
  const {roleSettings,roleConfig}=require('./role-settings.cjs'),roles=c.roles?.enabled===true?roleSettings({...c.roles,publicPersonaFile:c.roles.publicPersona&&path.resolve(path.dirname(file),c.roles.publicPersona)}):undefined;
  const allow=c.qq.allow??[];assert(Array.isArray(allow)&&allow.every(id=>typeof id==='string'&&id&&!id.includes('<')&&id!=='*'&&id!==c.qq.ownerId),'qq.allow lists explicit other private accounts');
  assert(roles||!allow.length,'Admitting other accounts requires roles.enabled');
- const build={definitionPath:definition,dataDirectory:data,presetId:c.characterPresetId||(roles?'character':'qq-character'),...(roles?{roles}:{}),interaction:c.interaction||{enabled:false},specialistWorkers:c.specialistWorkers||[],communityWorkerPresets:c.communityWorkerPresets||[]};
+ const build={...card,dataDirectory:data,presetId:c.characterPresetId||(roles?'character':'qq-character'),...(roles?{roles}:{}),interaction:c.interaction||{enabled:false},specialistWorkers:c.specialistWorkers||[],communityWorkerPresets:c.communityWorkerPresets||[]};
  const buildFile=home+'/build-config.private.json';fs.writeFileSync(buildFile,JSON.stringify(build,null,2),{mode:0o600});
  const env={...process.env,DSH_INSTALL_ROOT:home,DSH_HOME:home,DSH_CHARACTER_HOST_ROOT:rt.root,DSH_RESOURCES_DIR:rt.resources,DSH_QQTK_PROJECT:qqtk,DSH_CHARACTER_BUILD_CONFIG:buildFile};
- for(const script of ['build','pack']){const result=cp.spawnSync(process.execPath,[root+'/scripts/'+script+'.cjs'],{cwd:root,env,stdio:'pipe',windowsHide:true});assert.equal(result.status,0,'Private Character build/pack failed; no running Profile was modified');}
+ for(const script of ['build','pack']){const report=buildStepReport(script,cp.spawnSync(process.execPath,[root+'/scripts/'+script+'.cjs'],{cwd:root,env,stdio:'pipe',encoding:'utf8',windowsHide:true}));for(const warning of report.warnings)console.error(warning);if(report.failure)throw Error(report.failure);}
  const source=JSON.parse(fs.readFileSync(root+'/artifacts/package-source.json')),selected=new Set(['dsh-character-core','dsh-character-identity','dsh-character-memory-core','dsh-character-memory-tools','dsh-character-qq-adapter']);
  if(c.extras||c.longTasks)selected.add('dsh-character-extras');if(c.longTasks)selected.add('dsh-character-long-tasks');if(c.interaction?.enabled)selected.add('dsh-interaction-policy');if(c.inspector?.enabled)selected.add('dsh-memory-inspector');
  const own=source.artifacts.filter(p=>selected.has(p.name)).map(p=>({...p,file:root+'/artifacts/packages/'+p.filename})),artifacts=[...q.pack(home+'/packages'),...own];
@@ -27,4 +47,4 @@ function prepare(file,home,qqtk){
  return q.writeProfile({c,home,kind:'character',artifacts,rows,bundles:['dsh-character-core',...(selected.has('dsh-character-extras')?['dsh-character-extras']:[])],marker:{dataDirectory:path.relative(home,data).replaceAll('\\','/'),characterVersion:JSON.parse(fs.readFileSync(root+'/package.json')).version}});
 }
 if(require.main===module){const args=process.argv.slice(2),flag=k=>{const i=args.indexOf('--'+k);return i<0?undefined:args[i+1];};(async()=>{const command=args[0],home=flag('home')&&path.resolve(flag('home')),q=toolkit(path.resolve(flag('qqtk')||process.env.DSH_QQTK_PROJECT||''));let result;if(command==='prepare')result=prepare(path.resolve(flag('config')),home,q.root);else if(command==='install')result=q.install(home,{offline:args.includes('--offline')});else if(command==='verify')result=q.verify(home);else if(command==='start')result=q.start(home,{noOpen:!args.includes('--open')});else if(command==='backup')result=q.backup(home,path.resolve(flag('out')));else if(command==='restore')result=q.restore(home,path.resolve(flag('backup')));else throw Error('Commands: prepare, install, verify, start, backup, restore');console.log(JSON.stringify(result));})().catch(e=>{console.error(e.message);process.exitCode=1;});}
-module.exports={prepare,toolkit};
+module.exports={prepare,toolkit,cardBuildConfig,buildStepReport};

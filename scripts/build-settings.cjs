@@ -1,4 +1,7 @@
 const fs=require('node:fs'),path=require('node:path');
+// The card settings travel in two parts: characterId for deploy checks and
+// card for loadCard().
+function cardBuildSettings(){const {characterId,...card}=require('./card-source.cjs').cardSettings();return {characterId,card};}
 module.exports=()=>{
  const root=path.resolve(__dirname,'..'),file=process.env.DSH_CHARACTER_BUILD_CONFIG||path.join(root,'private','build-config.json');
  const local=fs.existsSync(file)?JSON.parse(fs.readFileSync(file,'utf8').replace(/^\uFEFF/,'')):{};
@@ -15,5 +18,5 @@ module.exports=()=>{
  const specialistWorkers=local.specialistWorkers??[];
  if(!Array.isArray(specialistWorkers)||specialistWorkers.some(id=>id!=='worker-review')||new Set(specialistWorkers).size!==specialistWorkers.length)throw Error('Unsupported specialistWorkers');
  const communityWorkerPresets=require('../packages/character-memory-tools/worker-policy.mjs').communityWorkers(local.communityWorkerPresets??[],{characterPresetId:presetId});
- return {presetId,dataDirectory:path.normalize(dataDirectory).replaceAll('\\','/'),definitionPath:require('./definition-source.cjs')(),specialistWorkers,communityWorkerPresets,...(interaction?{interaction}: {}),...(roles?{roles}:{})};
+ return {presetId,dataDirectory:path.normalize(dataDirectory).replaceAll('\\','/'),...cardBuildSettings(),specialistWorkers,communityWorkerPresets,...(interaction?{interaction}: {}),...(roles?{roles}:{})};
 };
