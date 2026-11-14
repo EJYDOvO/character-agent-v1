@@ -210,8 +210,8 @@
 - 警告打印到控制台，并写入 `artifacts/build-manifest.json`。
 - 触发情况：
   - 渲染后超过 3000 token；
-  - `system_prompt` 或 PHI 非空：已忽略，并显示前 60 个字；
-  - `character_book` 非空：第二期才生效，显示条目数；
+  - `system_prompt` 或 PHI 非空：已忽略，并显示前 60 个字（不是文本时按 JSON 显示，不报错）；
+  - `character_book` 非空：第二期才生效，显示条目数；格式不正确时也只警告（第一期不读它）；
   - 有宏被降级：列出是哪些宏。
 - 被忽略的开场白和元数据不发警告。
 

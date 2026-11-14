@@ -6,7 +6,8 @@
 |---|---|
 | runtimeRoot/resourcesDirectory/runtimeExecutable | 官方发行目录；只读官方 Creator/SDK |
 | profileName / dataDirectory | 新 Home 中的独立 Profile 与 Character 数据目录 |
-| definition / characterPresetId / projectId | Persona YAML、真实 Preset 与固定项目作用域 |
+| card / rules.system / rules.reminder / userName | CCv3 角色卡（.json/.png/.yaml，默认模板卡）、角色规则、末尾提醒与对用户的称呼；路径相对配置文件。旧的 `definition` 键会被拒绝 |
+| characterId / characterPresetId / projectId | 记忆作用域的角色 ID、真实 Preset 与固定项目作用域 |
 | model | provider/id/API/URL/input 与凭据变量名 |
 | qq | 唯一账号、Owner、凭据变量名与是否启用连接；`allow` 为额外准入的私聊账号，仅在 roles 开启时允许 |
 | roles | 可选角色模式（默认关闭）：`publicPersona` 审阅过的公开 Persona 文件、`legacyOwnerPreset` 旧 Owner Preset id；见 [Identity & Access](IDENTITY-ACCESS.md) |
