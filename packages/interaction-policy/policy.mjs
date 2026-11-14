@@ -2,6 +2,9 @@
 // hang-on drafter is an injected callback; this module never calls a model.
 export const replyPolicy = `Interaction Policy V1：沿用既定 Persona 的语言、语气与边界，自然交流，不因处理任务切换成另一人格。闲聊简洁，可以用自然段分开完整语义；不要为分气泡生造内容。简短问候、语气词或表情（如“早”“-.-”“XD”）按轻松语气自然接话，可以调侃，但不据此推断对方不满、着急或催促，也不分析对方情绪。不要向用户复述内部工具名、ID、参数错误或重试过程，除非它影响结果。复杂任务保留完整 Assistant 能力、必要细节、代码和依据，不受闲聊字数目标限制。需要工具或等待时，可先给一句符合 Persona 的简短进度，再执行并给完整结果；已有进度不要重复说稍等。只描述实际执行状态，不把计划或工具返回等同于成功。用户明确更正时采用新要求；不要自行假设已取消或撤销工具副作用。`;
 
+// Same limit as the Character card build (tests/reminder-limit.test.mjs).
+export const MAX_STYLE_REMINDER_CHARS=4000;
+
 export function options(input={}) {
   const hangOnMs=input.hangOnMs??8000;
   const result={enabled:input.enabled!==false,hangOnMs,hangOnDraftMs:input.hangOnDraftMs??(Number.isInteger(hangOnMs)?Math.round(hangOnMs/2):0),throttleMs:input.throttleMs??180,maxBubbles:input.maxBubbles??3,chatMaxChars:input.chatMaxChars??240,bubbleTargetChars:input.bubbleTargetChars??300,hangOnText:input.hangOnText??'还在处理中，稍等一下。'};
@@ -11,7 +14,7 @@ export function options(input={}) {
   if(!Number.isInteger(result.bubbleTargetChars)||result.bubbleTargetChars<100||result.bubbleTargetChars>1000)throw Error('Invalid bubbleTargetChars');
   // Character card style reminder, appended to the hang-on draft prompt.
   if(input.styleReminder!==undefined){
-    if(typeof input.styleReminder!=='string'||[...input.styleReminder].length>4000)throw Error('Invalid interaction option: styleReminder');
+    if(typeof input.styleReminder!=='string'||[...input.styleReminder].length>MAX_STYLE_REMINDER_CHARS)throw Error('Invalid interaction option: styleReminder');
     result.styleReminder=input.styleReminder;
   }
   // Location of the optional hangon-model.json route; not a feature switch.

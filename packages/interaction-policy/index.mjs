@@ -15,7 +15,7 @@ const JUDGE_PHASES={text:'正在生成回复',tool:'正在执行工具',"waiting
 export function hangOnModel(file,read=readFileSync){
  if(!file)return null;
  let raw;try{raw=read(file,'utf8');}catch(error){if(error?.code==='ENOENT')return null;throw Error('hangon-model.json unreadable');}
- const value=JSON.parse(raw.replace(/^﻿/u,''));
+ const value=JSON.parse(raw.replace(/^\uFEFF/u,''));
  const keys=value&&typeof value==='object'&&!Array.isArray(value)?Object.keys(value).sort():[];
  if(keys.join()!=='model,provider'||[value.provider,value.model].some(v=>typeof v!=='string'||!v.trim()||v.length>200))throw Error('hangon-model.json must contain only provider and model');
  return {provider:value.provider,model:value.model};

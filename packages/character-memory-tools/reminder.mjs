@@ -7,7 +7,7 @@
 // The text is deployment-authored, so prompt interpolation is disabled.
 export const REMINDER_CONTEXT = 'character:reminder';
 const REMINDER_ORDER = 95;
-const MAX_REMINDER_CHARS = 4000;
+export const MAX_REMINDER_CHARS = 4000;
 
 /**
  * @param {{effect: Function, systemPrompt: {context: Function}}} ctx
