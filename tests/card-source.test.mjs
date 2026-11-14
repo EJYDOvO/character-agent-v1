@@ -6,7 +6,7 @@ import {tmpdir} from 'node:os';
 import {join, resolve} from 'node:path';
 
 const require = createRequire(import.meta.url);
-const {cardSettings, cardRevisions} = require('../scripts/card-source.cjs');
+const {cardSettings, cardRevisions, revisionsOf} = require('../scripts/card-source.cjs');
 const root = resolve(import.meta.dirname, '..');
 const ENV = ['DSH_CHARACTER_BUILD_CONFIG', 'DSH_CHARACTER_CARD', 'DSH_CHARACTER_DEFINITION'];
 
@@ -14,7 +14,7 @@ const ENV = ['DSH_CHARACTER_BUILD_CONFIG', 'DSH_CHARACTER_CARD', 'DSH_CHARACTER_
 function withConfig(config, env, fn) {
   const saved = Object.fromEntries(ENV.map(name => [name, process.env[name]]));
   const file = join(mkdtempSync(join(tmpdir(), 'card-source-')), 'build-config.json');
-  writeFileSync(file, '﻿' + JSON.stringify(config));
+  writeFileSync(file, '\uFEFF' + JSON.stringify(config));
   for (const name of ENV) delete process.env[name];
   Object.assign(process.env, {DSH_CHARACTER_BUILD_CONFIG: file}, env);
   try {
@@ -33,9 +33,18 @@ test('defaults to the template card', () => withConfig({}, {}, () => {
     cardPath: join(root, 'characters', 'template', 'card.yaml'),
     systemRulesPath: null,
     reminderPath: null,
-    userName: '用户',
   });
 }));
+
+// loadCard validates it, so check-card and the build apply the same rule.
+test('userName is passed to the card build as configured', () => {
+  withConfig({userName: '{{x}}'}, {}, () => assert.equal(cardSettings().userName, '{{x}}'));
+});
+
+test('interaction.styleReminder is rejected: the reminder comes from rules.reminderFile', () => {
+  withConfig({interaction: {enabled: true, styleReminder: '短句'}}, {}, () => assert.throws(() => cardSettings(), /rules\.reminderFile/));
+  withConfig({interaction: {enabled: true}}, {}, () => assert.doesNotThrow(() => cardSettings()));
+});
 
 test('config keys resolve against the repository root; env overrides the card', () => {
   const config = {characterId: 'test-a', cardPath: 'private/a/card.json', userName: '小林', rules: {systemFile: 'private/a/rules.md', reminderFile: 'private/a/reminder.md'}};
@@ -60,11 +69,6 @@ test('the old definition keys are rejected with a pointer to cardPath', () => {
 test('invalid values are rejected', () => {
   for (const config of [
     {characterId: 'Bad Id'},
-    {userName: ''},
-    {userName: '  '},
-    {userName: 'x'.repeat(33)},
-    {userName: '{{user}}'},
-    {userName: 'a\nb'},
     {cardPath: 3},
     {rules: 'rules.md'},
     {rules: {systemFile: 5}},
@@ -124,4 +128,13 @@ test('misnamed card keys fail instead of silently dropping the card or rules', (
   const {cardBuildConfig} = require('../scripts/portable.cjs');
   assert.throws(() => cardBuildConfig({cardPath: 'x.yaml'}, tmpdir()), /"card"/);
   assert.throws(() => cardBuildConfig({rules: {systemFile: 'r.md'}}, tmpdir()), /"system"/);
+});
+
+test('revisionsOf fingerprints bytes exactly as cardRevisions fingerprints files', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'card-rev-bytes-'));
+  const settings = {cardPath: join(dir, 'card.json'), systemRulesPath: join(dir, 'rules.md'), reminderPath: null};
+  writeFileSync(settings.cardPath, '{"a":1}');
+  writeFileSync(settings.systemRulesPath, '规则');
+  const inputs = {card: Buffer.from('{"a":1}'), systemRules: Buffer.from('规则'), reminder: null};
+  assert.deepEqual(revisionsOf(inputs), cardRevisions(settings));
 });

@@ -1,10 +1,11 @@
 // Exports a YAML-written card as standard CCv3 JSON (for SillyTavern etc.).
 // The YAML already has the CCv3 structure, so this is a syntax conversion of
-// the whole parsed object, after the same validation a build applies.
+// the whole parsed object. Only the card structure is checked (as the build
+// checks it); size limits and rules files are not: use check-card for those.
 //   node scripts/export-card.cjs <card.yaml> [<out.json>]
 const fs = require('node:fs');
 const path = require('node:path');
-const yaml = require('js-yaml');
+const {parseCardYaml} = require('./card-yaml.cjs');
 
 const USAGE = '用法：node scripts/export-card.cjs <卡文件.yaml> [<输出.json>]';
 
@@ -22,8 +23,7 @@ async function main() {
   const {normalizeCard} = await import('../packages/character-definition/card-normalize.mjs');
   const file = path.resolve(input);
   try {
-    // JSON schema: only JSON-representable values, so the export is lossless.
-    const {raw} = readCardFile(file, {parseYaml: text => yaml.load(text, {schema: yaml.JSON_SCHEMA})});
+    const {raw} = readCardFile(file, {parseYaml: parseCardYaml});
     normalizeCard(raw, file);
     const json = JSON.stringify(raw, null, 2) + '\n';
     if (output) fs.writeFileSync(path.resolve(output), json);

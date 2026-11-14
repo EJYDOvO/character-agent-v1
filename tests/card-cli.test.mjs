@@ -66,3 +66,25 @@ test('export-card refuses non-YAML input and invalid cards', () => {
   assert.equal(result.status, 1);
   assert.match(result.stderr, /不能全为空/);
 });
+
+test('check-card, export-card and the build read YAML the same way', () => {
+  const card = join(tempDir(), 'dated.yaml');
+  writeFileSync(card, 'spec: chara_card_v3\nspec_version: "3.0"\ndata:\n  name: 丁\n  nickname: 2024-01-01\n  description: 丁是测试角色\n');
+  const checked = run('check-card.cjs', [card]);
+  assert.equal(checked.status, 0, checked.stderr);
+  assert.match(checked.stdout, /角色：2024-01-01/);
+  const exported = run('export-card.cjs', [card]);
+  assert.equal(exported.status, 0, exported.stderr);
+  assert.equal(JSON.parse(exported.stdout).data.nickname, '2024-01-01');
+  for (const script of ['build.cjs', 'check-card.cjs', 'export-card.cjs']) {
+    const source = readFileSync(join(root, 'scripts', script), 'utf8');
+    assert.match(source, /require\('\.\/card-yaml\.cjs'\)/, script + ' uses the shared card YAML parser');
+    assert.doesNotMatch(source, /parseYaml:\s*\w+\s*=>/, script + ' passes no YAML parser of its own');
+  }
+});
+
+test('check-card validates --user-name like the build', () => {
+  const result = run('check-card.cjs', [cardFile({}), '--user-name', '{{x}}']);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /角色卡检查失败：userName 无效/);
+});

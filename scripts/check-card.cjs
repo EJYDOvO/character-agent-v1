@@ -2,7 +2,7 @@
 // which warnings or errors a build would report. Reads no deployment config.
 //   node scripts/check-card.cjs <card> [--rules <file>] [--reminder <file>] [--user-name <name>]
 const path = require('node:path');
-const yaml = require('js-yaml');
+const {parseCardYaml} = require('./card-yaml.cjs');
 
 const USAGE = '用法：node scripts/check-card.cjs <卡文件> [--rules <规则文件>] [--reminder <末尾提醒文件>] [--user-name <用户称呼>]';
 const FLAGS = {'--rules': 'systemRulesPath', '--reminder': 'reminderPath', '--user-name': 'userName'};
@@ -43,7 +43,7 @@ async function main() {
   }
   const card = await import('../packages/character-definition/card.mjs');
   try {
-    const build = card.loadCard({...options, parseYaml: text => yaml.load(text)});
+    const build = card.loadCard({...options, parseYaml: parseCardYaml});
     console.log(report(build, card));
     return 0;
   } catch (error) {
