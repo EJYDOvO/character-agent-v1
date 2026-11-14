@@ -58,6 +58,9 @@ export function splitExamples(mesExample) {
  * @param {import('./card-normalize.mjs').CardData} data
  * @param {{userName: string, rules: string}} options rules is deployment
  *   text placed first in the prefix; it is not macro-substituted.
+ * @returns {{displayName: string, prefix: string, suffix: string,
+ *   parts: Record<string, string>, downgraded: string[]}} displayName is the
+ *   name the prompt uses (nickname or name, brace-safe).
  */
 export function renderCard(data, {userName, rules}) {
   const downgraded = [];
@@ -90,7 +93,7 @@ export function renderCard(data, {userName, rules}) {
     section('## 场景', parts.scenario),
   ]);
   const suffix = section(EXAMPLES_HEADING, parts.examples);
-  return {prefix, suffix, parts, downgraded};
+  return {displayName, prefix, suffix, parts, downgraded};
 }
 
 function section(heading, body) {

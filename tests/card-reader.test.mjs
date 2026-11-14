@@ -5,7 +5,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import yaml from 'js-yaml';
 import {estimatePromptTokens} from '../packages/character-definition/card-tokens.mjs';
-import {readCardFile, extractPngCardText, CardError} from '../packages/character-definition/card-reader.mjs';
+import {readCardFile, readRulesFile, extractPngCardText, CardError} from '../packages/character-definition/card-reader.mjs';
 
 const V3 = {spec: 'chara_card_v3', spec_version: '3.0', data: {name: 'A', description: 'd'}};
 const V2 = {spec: 'chara_card_v2', spec_version: '2.0', data: {name: 'B', description: 'd'}};
@@ -51,13 +51,13 @@ test('estimatePromptTokens uses DeepSeek ratios', () => {
 });
 
 test('readCardFile reads json and yaml and strips BOM', () => {
-  const json = tempFile('card.json', '﻿' + JSON.stringify(V3));
+  const json = tempFile('card.json', '\uFEFF' + JSON.stringify(V3));
   const fromJson = readCardFile(json, options);
   assert.equal(fromJson.format, 'json');
   assert.equal(fromJson.raw.spec, 'chara_card_v3');
   assert(Buffer.isBuffer(fromJson.bytes));
 
-  const yml = tempFile('card.YAML', '﻿' + yaml.dump(V3));
+  const yml = tempFile('card.YAML', '\uFEFF' + yaml.dump(V3));
   const fromYaml = readCardFile(yml, options);
   assert.equal(fromYaml.format, 'yaml');
   assert.equal(fromYaml.raw.data.name, 'A');
@@ -109,3 +109,28 @@ test('truncated PNG chunk is rejected', () => {
   const file = tempFile('cut.png', full.subarray(0, 20));
   assertCardError(() => readCardFile(file, options), /不是有效的 PNG/, file);
 });
+
+test('PNG card keywords match regardless of case', () => {
+  assert.equal(JSON.parse(extractPngCardText(png([['Chara', V2]]))).data.name, 'B');
+  assert.equal(JSON.parse(extractPngCardText(png([['chara', V2], ['CCV3', V3]]))).spec, 'chara_card_v3');
+});
+
+test('PNG structure errors are CardErrors even when called directly', () => {
+  for (const bytes of [Buffer.from('nope'), png([['ccv3', V3]]).subarray(0, 20), png([['Comment', {}]])]) {
+    assert.throws(() => extractPngCardText(bytes), CardError);
+  }
+});
+
+test('readRulesFile returns the cleaned text and the bytes it read', () => {
+  const content = '\uFEFF 甲\r\n';
+  const file = tempFile('rules.md', content);
+  const {text, bytes} = readRulesFile(file);
+  assert.equal(text, '甲');
+  assert.deepEqual(bytes, Buffer.from(content));
+});
+
+test('a rules file that is not UTF-8 is reported as a rules file', () => {
+  const file = tempFile('rules.md', Buffer.from([0xff, 0xfe, 0xfd]));
+  assertCardError(() => readRulesFile(file), /^规则文件不是有效的 UTF-8 文本/, file);
+});
+

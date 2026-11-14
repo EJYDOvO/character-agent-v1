@@ -22,7 +22,7 @@ test('keeps exactly the prompt-relevant fields', () => {
   }), 'f');
   assert.deepEqual(data, {
     name: 'A', nickname: 'a', description: 'd', personality: 'p', scenario: 's', mes_example: 'm',
-    system_prompt: 'sp', post_history_instructions: 'phi', bookEntryCount: 0,
+    system_prompt: 'sp', post_history_instructions: 'phi', bookEntryCount: 0, bookMalformed: false,
   });
 });
 
@@ -51,11 +51,25 @@ test('rejects bad input, naming the field and file', () => {
   rejects({spec: 'chara_card_v3', spec_version: '3.0'}, /data/);
   rejects(v3({description: 'd'}), /name/);
   rejects(v3({name: '  ', description: 'd'}), /name/);
-  rejects(v3({name: 'A', description: 5}), /description/);
-  rejects(v3({name: 'A', description: 'd', mes_example: {}}), /mes_example/);
-  rejects(v3({name: 'A', description: 'd', character_book: {entries: 'x'}}), /character_book/);
+  rejects(v3({name: 'A', description: 5}), /字段 description 必须是文本（实际为数字）/);
+  rejects(v3({name: 123, description: 'd'}), /字段 name 必须是文本（实际为数字）/);
+  rejects({name: true, description: 'd'}, /字段 name 必须是文本（实际为布尔值）/);
+  rejects(v3({name: 'A', description: 'd', mes_example: {}}), /字段 mes_example 必须是文本（实际为对象）/);
+  rejects(v3({name: 'A', description: 'd', personality: ['p']}), /字段 personality 必须是文本（实际为列表）/);
   rejects(v3({name: 'A'}), /description、personality、scenario 不能全为空/);
   rejects(v3({name: 'A', description: '  ', personality: '\n'}), /不能全为空/);
   rejects([], /角色卡/);
   rejects('text', /角色卡/);
+});
+
+test('fields the deployment ignores never fail the card', () => {
+  const {data} = normalizeCard(v3({
+    name: 'A', description: 'd', system_prompt: ['x'], post_history_instructions: 5, character_book: {entries: 'x'},
+  }), 'f');
+  assert.equal(data.system_prompt, '["x"]');
+  assert.equal(data.post_history_instructions, '5');
+  assert.equal(data.bookEntryCount, 0);
+  assert.equal(data.bookMalformed, true);
+  assert.equal(normalizeCard(v3({name: 'A', description: 'd', character_book: 'book'}), 'f').data.bookMalformed, true);
+  assert.equal(normalizeCard(v3({name: 'A', description: 'd', character_book: {entries: [{}]}}), 'f').data.bookMalformed, false);
 });

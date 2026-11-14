@@ -3,17 +3,20 @@
 // (greetings, metadata, assets, extensions) are dropped here, not validated.
 import {CardError} from './card-error.mjs';
 
-const TEXT_FIELDS = [
-  'nickname', 'description', 'personality', 'scenario', 'mes_example',
-  'system_prompt', 'post_history_instructions',
-];
+const RENDERED_FIELDS = ['nickname', 'description', 'personality', 'scenario', 'mes_example'];
+// Ignored with a warning (see card.mjs), so any value is accepted: a card
+// must not fail over a field that never reaches the prompt.
+const IGNORED_FIELDS = ['system_prompt', 'post_history_instructions'];
 const PERSONA_FIELDS = ['description', 'personality', 'scenario'];
 
 /**
  * @typedef {{name: string, nickname: string, description: string,
  *   personality: string, scenario: string, mes_example: string,
  *   system_prompt: string, post_history_instructions: string,
- *   bookEntryCount: number}} CardData
+ *   bookEntryCount: number, bookMalformed: boolean}} CardData
+ *   The two ignored fields hold their value as text (non-text values as
+ *   JSON) for the warning preview. The lorebook is not used yet: only its
+ *   entry count is kept, and a malformed one is flagged instead of rejected.
  *
  * @param {unknown} raw parsed card file
  * @param {string} file used in error messages
@@ -23,12 +26,13 @@ export function normalizeCard(raw, file) {
   if (!isObject(raw)) throw new CardError(`角色卡内容必须是对象：${file}`);
   const {spec, source} = detectSpec(raw, file);
 
-  const name = source.name;
-  if (typeof name !== 'string' || !name.trim()) throw new CardError(`角色卡缺少 name：${file}`);
+  const name = textField(source, 'name', file);
+  if (!name.trim()) throw new CardError(`角色卡缺少 name：${file}`);
 
   const data = {name: name.trim()};
-  for (const field of TEXT_FIELDS) data[field] = textField(source, field, file);
-  data.bookEntryCount = bookEntryCount(source.character_book, file);
+  for (const field of RENDERED_FIELDS) data[field] = textField(source, field, file);
+  for (const field of IGNORED_FIELDS) data[field] = previewText(source[field]);
+  Object.assign(data, lorebook(source.character_book));
 
   if (PERSONA_FIELDS.every(field => !data[field].trim())) {
     throw new CardError(`角色卡的 description、personality、scenario 不能全为空：${file}`);
@@ -39,7 +43,7 @@ export function normalizeCard(raw, file) {
 function detectSpec(raw, file) {
   if (raw.spec === undefined) {
     // V1 cards keep their fields at the top level and carry no spec marker.
-    if (typeof raw.name === 'string') return {spec: 'v1', source: raw};
+    if (raw.name !== undefined) return {spec: 'v1', source: raw};
     throw new CardError(`无法识别的角色卡（没有 spec，也不是 V1 格式）：${file}`);
   }
   if (raw.spec === 'chara_card_v3') {
@@ -60,16 +64,28 @@ function dataObject(raw, file) {
 function textField(source, field, file) {
   const value = source[field];
   if (value === undefined || value === null) return '';
-  if (typeof value !== 'string') throw new CardError(`角色卡字段 ${field} 必须是文本：${file}`);
+  if (typeof value !== 'string') {
+    throw new CardError(`角色卡字段 ${field} 必须是文本（实际为${typeName(value)}）：${file}`);
+  }
   return value;
 }
 
-function bookEntryCount(book, file) {
-  if (book === undefined || book === null) return 0;
+function previewText(value) {
+  if (value === undefined || value === null) return '';
+  return typeof value === 'string' ? value : JSON.stringify(value);
+}
+
+function lorebook(book) {
+  if (book === undefined || book === null) return {bookEntryCount: 0, bookMalformed: false};
   if (!isObject(book) || (book.entries !== undefined && !Array.isArray(book.entries))) {
-    throw new CardError(`角色卡字段 character_book 格式不正确：${file}`);
+    return {bookEntryCount: 0, bookMalformed: true};
   }
-  return book.entries?.length ?? 0;
+  return {bookEntryCount: book.entries?.length ?? 0, bookMalformed: false};
+}
+
+function typeName(value) {
+  if (Array.isArray(value)) return '列表';
+  return {number: '数字', boolean: '布尔值', object: '对象'}[typeof value] ?? typeof value;
 }
 
 function isObject(value) {

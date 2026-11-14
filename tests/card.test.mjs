@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync, writeFileSync} from 'node:fs';
+import {mkdtempSync, readFileSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import yaml from 'js-yaml';
@@ -48,8 +48,8 @@ test('template card builds clean', () => {
 test('rules files are cleaned and every part is counted', () => {
   const build = loadCard({
     cardPath: cardFile({}),
-    systemRulesPath: textFile('﻿  甲\r\n乙  \r\n'),
-    reminderPath: textFile('﻿提醒\r\n', 'reminder.md'),
+    systemRulesPath: textFile('\uFEFF  甲\r\n乙  \r\n'),
+    reminderPath: textFile('\uFEFF提醒\r\n', 'reminder.md'),
     userName: '你',
     parseYaml,
   });
@@ -118,4 +118,59 @@ test('rules files must not contain macros and must exist', () => {
 test('reminder longer than the runtime limit fails at build time', () => {
   const reminder = textFile('a'.repeat(4001), 'reminder.md');
   assert.throws(() => loadCard({cardPath: cardFile({}), reminderPath: reminder, parseYaml}), /末尾提醒超过 4000 字/);
+});
+
+test('userName is validated and trimmed for every caller', () => {
+  const build = loadCard({cardPath: cardFile({scenario: '{{user}}来了'}), userName: ' 小林 ', parseYaml});
+  assert(build.prefix.endsWith('小林来了'));
+  for (const userName of ['', '  ', 'x'.repeat(33), '{{x}}', 'a}b', 'a\nb', 5]) {
+    assert.throws(() => loadCard({cardPath: cardFile({}), userName, parseYaml}),
+      error => error instanceof CardError && /userName/.test(error.message), JSON.stringify(userName));
+  }
+});
+
+test('the reported name is the rendered display name', () => {
+  assert.equal(loadCard({cardPath: cardFile({nickname: '{{user}}的猫'}), parseYaml}).name, '用户的猫');
+  assert.equal(loadCard({cardPath: cardFile({name: '甲{{x}}'}), parseYaml}).name, '甲{x}');
+});
+
+test('the build returns the exact bytes it rendered from', () => {
+  const cardPath = cardFile({});
+  const systemRulesPath = textFile('规则');
+  const withRules = loadCard({cardPath, systemRulesPath, parseYaml});
+  assert.deepEqual(withRules.inputs, {card: readFileSync(cardPath), systemRules: readFileSync(systemRulesPath), reminder: null});
+});
+
+test('a malformed lorebook or non-text ignored field only warns', () => {
+  const build = loadCard({cardPath: cardFile({system_prompt: ['x'], character_book: {entries: 'x'}}), parseYaml});
+  assert.deepEqual(build.warnings, ['已忽略 system_prompt：「["x"]」', '设定集格式不正确，已忽略（第二期才生效）']);
+});
+
+// Card whose rendered Persona is exactly `target` tokens: ASCII description
+// characters add 0.3 token each, so every integer total is reachable.
+function cardWithTotal(target) {
+  const folder = dir();
+  const totalOf = cardPath => {
+    try {
+      return loadCard({cardPath, parseYaml}).tokens.total;
+    } catch (error) {
+      return Number(/约 (\d+) token/.exec(error.message)[1]);
+    }
+  };
+  let length = Math.round(target / 0.3);
+  for (let attempt = 0; attempt < 30; attempt++) {
+    const cardPath = cardFile({description: 'a'.repeat(length)}, folder);
+    const total = totalOf(cardPath);
+    if (total === target) return cardPath;
+    length += Math.round((target - total) / 0.3) || Math.sign(target - total);
+  }
+  throw Error('no card with total ' + target);
+}
+
+test('warning and hard limits apply strictly above 3000 and 8000', () => {
+  const sizeWarning = cardPath => loadCard({cardPath, parseYaml}).warnings.filter(w => w.startsWith('人设约'));
+  assert.deepEqual(sizeWarning(cardWithTotal(3000)), []);
+  assert.deepEqual(sizeWarning(cardWithTotal(3001)), ['人设约 3001 token，超过 3000，模型可能忽略部分规则']);
+  assert.equal(loadCard({cardPath: cardWithTotal(8000), parseYaml}).tokens.total, 8000);
+  assert.throws(() => loadCard({cardPath: cardWithTotal(8001), parseYaml}), /渲染后的人设约 8001 token，上限 8000/);
 });
