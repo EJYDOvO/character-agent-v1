@@ -13,9 +13,9 @@ const PERSONA_FIELDS = ['description', 'personality', 'scenario'];
  * @typedef {{name: string, nickname: string, description: string,
  *   personality: string, scenario: string, mes_example: string,
  *   system_prompt: string, post_history_instructions: string,
- *   bookEntryCount: number, bookMalformed: boolean}} CardData
- *   The two ignored fields hold their value as text (non-text values as
- *   JSON) for the warning preview. The lorebook is not used yet: only its
+ *   depth_prompt: string, bookEntryCount: number, bookMalformed: boolean}} CardData
+ *   The ignored rule fields (including SillyTavern's extensions.depth_prompt)
+ *   hold their value as text (non-text values as JSON) for the warning preview. The lorebook is not used yet: only its
  *   entry count is kept, and a malformed one is flagged instead of rejected.
  *
  * @param {unknown} raw parsed card file
@@ -32,6 +32,8 @@ export function normalizeCard(raw, file) {
   const data = {name: name.trim()};
   for (const field of RENDERED_FIELDS) data[field] = textField(source, field, file);
   for (const field of IGNORED_FIELDS) data[field] = previewText(source[field]);
+  const depth = source.extensions?.depth_prompt;
+  data.depth_prompt = isObject(depth) ? previewText(depth.prompt) : '';
   Object.assign(data, lorebook(source.character_book));
 
   if (PERSONA_FIELDS.every(field => !data[field].trim())) {

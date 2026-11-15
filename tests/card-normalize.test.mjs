@@ -22,7 +22,7 @@ test('keeps exactly the prompt-relevant fields', () => {
   }), 'f');
   assert.deepEqual(data, {
     name: 'A', nickname: 'a', description: 'd', personality: 'p', scenario: 's', mes_example: 'm',
-    system_prompt: 'sp', post_history_instructions: 'phi', bookEntryCount: 0, bookMalformed: false,
+    system_prompt: 'sp', post_history_instructions: 'phi', depth_prompt: '', bookEntryCount: 0, bookMalformed: false,
   });
 });
 
@@ -72,4 +72,11 @@ test('fields the deployment ignores never fail the card', () => {
   assert.equal(data.bookMalformed, true);
   assert.equal(normalizeCard(v3({name: 'A', description: 'd', character_book: 'book'}), 'f').data.bookMalformed, true);
   assert.equal(normalizeCard(v3({name: 'A', description: 'd', character_book: {entries: [{}]}}), 'f').data.bookMalformed, false);
+});
+
+test('the SillyTavern depth prompt is kept for its warning', () => {
+  const depth = {prompt: '{{char}} speaks simply', depth: 4, role: 'system'};
+  assert.equal(normalizeCard(v3({name: 'A', description: 'd', extensions: {depth_prompt: depth}}), 'f').data.depth_prompt, '{{char}} speaks simply');
+  assert.equal(normalizeCard(v3({name: 'A', description: 'd', extensions: {depth_prompt: 'x'}}), 'f').data.depth_prompt, '');
+  assert.equal(normalizeCard(v3({name: 'A', description: 'd'}), 'f').data.depth_prompt, '');
 });

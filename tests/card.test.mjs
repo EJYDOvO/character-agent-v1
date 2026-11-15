@@ -174,3 +174,14 @@ test('warning and hard limits apply strictly above 3000 and 8000', () => {
   assert.equal(loadCard({cardPath: cardWithTotal(8000), parseYaml}).tokens.total, 8000);
   assert.throws(() => loadCard({cardPath: cardWithTotal(8001), parseYaml}), /渲染后的人设约 8001 token，上限 8000/);
 });
+
+test('a depth prompt is reported as ignored, and previews stay on one line', () => {
+  const build = loadCard({cardPath: cardFile({
+    system_prompt: '第一行\n\n  第二行',
+    extensions: {depth_prompt: {prompt: '说话简单，充满积极', depth: 4, role: 'system'}},
+  }), parseYaml});
+  assert.deepEqual(build.warnings, [
+    '已忽略 system_prompt：「第一行 第二行」',
+    '已忽略 extensions.depth_prompt：「说话简单，充满积极」',
+  ]);
+});

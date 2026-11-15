@@ -17,7 +17,13 @@ export const MAX_REMINDER_CHARS = 4000;
 export const DEFAULT_USER_NAME = '用户';
 const MAX_USER_NAME_CHARS = 32;
 
-const IGNORED_RULE_FIELDS = ['system_prompt', 'post_history_instructions'];
+// Card fields that carry rules the deployment replaces with its own files,
+// as [CardData key, name shown in the warning].
+const IGNORED_RULE_FIELDS = [
+  ['system_prompt', 'system_prompt'],
+  ['post_history_instructions', 'post_history_instructions'],
+  ['depth_prompt', 'extensions.depth_prompt'],
+];
 const IGNORED_PREVIEW_CHARS = 60;
 const CONTENT_FIELDS = ['rules', 'description', 'personality', 'scenario', 'examples'];
 
@@ -102,9 +108,10 @@ function largestFields(fields) {
 
 function collectWarnings(data, downgraded, totalTokens) {
   const warnings = [];
-  for (const field of IGNORED_RULE_FIELDS) {
-    const text = data[field].trim();
-    if (text) warnings.push(`已忽略 ${field}：「${[...text].slice(0, IGNORED_PREVIEW_CHARS).join('')}」`);
+  for (const [key, label] of IGNORED_RULE_FIELDS) {
+    // One line, so a multi-line field does not break up the warning.
+    const text = data[key].replace(/\s+/g, ' ').trim();
+    if (text) warnings.push(`已忽略 ${label}：「${[...text].slice(0, IGNORED_PREVIEW_CHARS).join('')}」`);
   }
   if (data.bookMalformed) warnings.push('设定集格式不正确，已忽略（第二期才生效）');
   else if (data.bookEntryCount > 0) warnings.push(`设定集 ${data.bookEntryCount} 条，第二期才生效，目前不起作用`);
