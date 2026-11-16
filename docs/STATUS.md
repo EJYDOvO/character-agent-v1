@@ -6,7 +6,7 @@
 
 | 范围 | 状态 |
 |---|---|
-| Character | 0.1.0-test.37（角色卡 V3 第一期，含可选角色模式），Long Tasks 0.1.0-test.6，Interaction 0.1.0-test.10；角色管理在未合并的分支上（见下节） |
+| Character | 0.1.0-test.37（角色卡 V3 第一期，含可选角色模式），Long Tasks 0.1.0-test.7，Interaction 0.1.0-test.10；角色管理在未合并的分支上（见下节） |
 | 配套 QQTK | I/O test.9、Manager test.5、Remote Ops 1.1.1-test.3、QQ0.5.2 / SDK1.0.5 |
 | 官方宿主目标 | DSH 0.2.2-rc.1 / Node 24 / Windows；源码不再支持 0.2.1 Schedule API |
 
