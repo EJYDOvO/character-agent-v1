@@ -8,12 +8,12 @@ import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import {loadCard, DEFAULT_USER_NAME} from './card/card.mjs';
-import {COMPILED_VERSION, MAX_HANG_ON_CHARS, readCompiled, validateCompiled, writeJsonAtomic} from './compiled.mjs';
+import {COMPILED_VERSION, MAX_HANG_ON_CHARS, readCompiled, validateCompiled, writeFileAtomic, writeJsonAtomic} from './compiled.mjs';
 
 export const PUBLIC_USER_NAME = '对方';
 export const DEFAULT_PUBLIC_RELATIONSHIP = '正在和你聊天的是被允许来聊天的人，不是你的主人，你们并不熟。不要提起主人的私事，也不要假装记得之前的对话。';
 export const CARD_FILES = ['card.json', 'card.png', 'card.yaml'];
-export const DEFAULT_HANG_ON_TEXT = '稍等，我想一下……';
+export const DEFAULT_HANG_ON_TEXT = '还在处理中，稍等一下。';
 
 const SETTINGS_FILE = 'character.json';
 const COMPILED_FILE = 'compiled.json';
@@ -110,8 +110,8 @@ export function saveCharacter({dir, characterId, parseYaml, draft, revision}) {
   const next = normalizeSettings({...disk, ...draft.settings, revision: revision + 1});
   const {compiled} = compileCharacter({dir, characterId, parseYaml, draft: {...draft, settings: next}});
 
-  if (draft.rules !== undefined) fs.writeFileSync(path.join(dir, RULES_FILE), draft.rules);
-  if (draft.reminder !== undefined) fs.writeFileSync(path.join(dir, REMINDER_FILE), draft.reminder);
+  if (draft.rules !== undefined) writeFileAtomic(path.join(dir, RULES_FILE), draft.rules);
+  if (draft.reminder !== undefined) writeFileAtomic(path.join(dir, REMINDER_FILE), draft.reminder);
   writeJsonAtomic(path.join(dir, SETTINGS_FILE), next);
   writeJsonAtomic(path.join(dir, COMPILED_FILE), compiled);
   return compiled;
@@ -134,6 +134,32 @@ export function approvePublic({dir, characterId, parseYaml, hash}) {
   writeJsonAtomic(path.join(dir, SETTINGS_FILE), next);
   writeJsonAtomic(path.join(dir, COMPILED_FILE), compiled);
   return compiled;
+}
+
+/**
+ * The compiled.json on disk when it is still in step with character.json and
+ * the files it was compiled from; otherwise recompiles and rewrites it. This
+ * heals an interrupted save or approval (files are written one at a time).
+ * @param {{dir: string, characterId: string, parseYaml: (text: string) => unknown}} options
+ * @returns {Compiled}
+ */
+export function ensureCompiled({dir, characterId, parseYaml}) {
+  const current = readPrevious(dir, characterId);
+  if (current && isCurrent(current, dir)) return current;
+  const {compiled} = compileCharacter({dir, characterId, parseYaml});
+  if (JSON.stringify(compiled) !== JSON.stringify(current)) writeJsonAtomic(path.join(dir, COMPILED_FILE), compiled);
+  return compiled;
+}
+
+function isCurrent(compiled, dir) {
+  const settings = readSettings(dir);
+  const read = name => (fs.existsSync(path.join(dir, name)) ? fs.readFileSync(path.join(dir, name)) : null);
+  const files = revisionsOf({card: fs.readFileSync(cardPathOf(dir)), systemRules: read(RULES_FILE), reminder: read(REMINDER_FILE)});
+  const approved = settings.publicApproved?.hash;
+  return compiled.revision === settings.revision
+    && compiled.cardRevision === files.cardRevision
+    && compiled.rulesRevision === files.rulesRevision
+    && (approved === undefined || compiled.public?.hash === approved);
 }
 
 // The public persona is whatever the Owner last approved: the fresh render if

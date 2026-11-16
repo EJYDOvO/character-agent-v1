@@ -1,12 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {copyFileSync, mkdtempSync, readFileSync, readdirSync, writeFileSync} from 'node:fs';
+import {copyFileSync, mkdirSync, mkdtempSync, rmSync, readFileSync, readdirSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join, resolve} from 'node:path';
 import {createRequire} from 'node:module';
 import yaml from 'js-yaml';
 import {
-  compileCharacter, saveCharacter, approvePublic, readSettings, publicHash,
+  compileCharacter, ensureCompiled, saveCharacter, approvePublic, readSettings, publicHash,
   PUBLIC_USER_NAME, DEFAULT_PUBLIC_RELATIONSHIP, CARD_FILES,
 } from '../packages/character-manager/compile.mjs';
 import {
@@ -27,6 +27,10 @@ function characterDir(settings) {
 
 const options = dir => ({dir, characterId, parseYaml});
 const owner = {userName: '阿宁', relationship: {owner: '正在和你聊天的是你的主人阿宁。'}};
+
+test('a missing character.json yields the default wait text', () => {
+  assert.equal(compileCharacter(options(characterDir())).compiled.hangOnText, '还在处理中，稍等一下。');
+});
 
 test('constants are the spec values', () => {
   assert.equal(COMPILED_VERSION, 1);
@@ -187,4 +191,53 @@ test('settings reject unknown keys and bad values', () => {
   assert.throws(bad({publicExclude: 'scenario'}), /publicExclude/);
   assert.throws(bad({revision: -1}), /revision/);
   assert.deepEqual(readSettings(characterDir()).relationship, {});
+});
+
+test('ensureCompiled returns the file when it is current and heals it otherwise', () => {
+  const dir = characterDir(owner);
+  const saved = saveCharacter({...options(dir), revision: 0, draft: {}});
+  const mtime = () => readFileSync(join(dir, 'compiled.json'), 'utf8');
+  const before = mtime();
+  assert.deepEqual(ensureCompiled(options(dir)), saved);
+  assert.equal(mtime(), before);
+
+  // Crash after rules.md was replaced but before compiled.json.
+  writeFileSync(join(dir, 'rules.md'), '【说话规则】崩溃后的新规则');
+  const healed = ensureCompiled(options(dir));
+  assert(healed.owner.prefix.includes('崩溃后的新规则'));
+  assert.deepEqual(readCompiled(join(dir, 'compiled.json'), {characterId}), healed);
+
+  // No compiled.json at all.
+  writeFileSync(join(dir, 'compiled.json'), '{broken');
+  assert.equal(ensureCompiled(options(dir)).characterId, characterId);
+});
+
+test('ensureCompiled recovers an approval whose compiled.json was not written', () => {
+  const dir = characterDir(owner);
+  const {hash} = saveCharacter({...options(dir), revision: 0, draft: {}}).pendingPublic;
+  writeFileSync(join(dir, 'character.json'), JSON.stringify({...readSettings(dir), publicApproved: {hash, at: '2026-11-16T00:00:00.000Z'}}));
+  assert.equal(readCompiled(join(dir, 'compiled.json'), {characterId}).public, undefined);
+  const healed = ensureCompiled(options(dir));
+  assert.equal(healed.public.hash, hash);
+  assert.equal(healed.pendingPublic, undefined);
+});
+
+test('a failed write of compiled.json leaves the old one valid', () => {
+  const dir = characterDir(owner);
+  const old = saveCharacter({...options(dir), revision: 0, draft: {}});
+  const target = join(dir, 'compiled.json');
+  // A directory where the temporary file belongs makes the write fail.
+  mkdirSync(`${target}.${process.pid}.tmp`);
+  assert.throws(() => saveCharacter({...options(dir), revision: 1, draft: {reminder: '新的提醒'}}));
+  assert.deepEqual(readCompiled(target, {characterId}), old);
+  // The interrupted save is healed on the next read, once the obstacle is gone.
+  rmSync(`${target}.${process.pid}.tmp`, {recursive: true});
+  assert.equal(ensureCompiled(options(dir)).reminder, '新的提醒');
+});
+
+test('text files are written atomically', () => {
+  const dir = characterDir(owner);
+  saveCharacter({...options(dir), revision: 0, draft: {rules: '新的规则', reminder: '新的提醒'}});
+  assert.equal(readdirSync(dir).some(name => name.endsWith('.tmp')), false);
+  assert.equal(readFileSync(join(dir, 'rules.md'), 'utf8'), '新的规则');
 });

@@ -7,8 +7,8 @@ export const COMPILED_VERSION = 1;
 export const NEUTRAL_PERSONA = '角色资料暂时不可用。请简短告知对方稍后再试，不要扮演任何角色。';
 export const MAX_PERSONA_CHARS = 32000;
 export const MAX_HANG_ON_CHARS = 200;
-// Matches MAX_REMINDER_CHARS of the card pipeline (tests keep them equal).
-const MAX_REMINDER_CHARS = 4000;
+// Equal to MAX_REMINDER_CHARS of the card pipeline (tests/reminder-limit.test.mjs).
+export const MAX_REMINDER_CHARS = 4000;
 
 const REVISION_FIELDS = ['cardRevision', 'rulesRevision'];
 
@@ -76,16 +76,21 @@ export function readCompiled(file, {characterId}) {
   return validateCompiled(JSON.parse(fs.readFileSync(file, 'utf8')), {characterId});
 }
 
-/** Writes JSON through a same-directory temporary file and a rename. */
-export function writeJsonAtomic(file, value) {
+/** Writes a file through a same-directory temporary file and a rename. */
+export function writeFileAtomic(file, content) {
   const temp = `${file}.${process.pid}.tmp`;
   try {
-    fs.writeFileSync(temp, `${JSON.stringify(value, null, 2)}\n`);
+    fs.writeFileSync(temp, content);
     fs.renameSync(temp, file);
   } catch (error) {
     fs.rmSync(temp, {force: true});
     throw error;
   }
+}
+
+export function writeJsonAtomic(file, value) {
+  writeFileAtomic(file, `${JSON.stringify(value, null, 2)}
+`);
 }
 
 function persona(value, label) {
