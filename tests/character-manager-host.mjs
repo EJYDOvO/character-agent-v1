@@ -42,7 +42,7 @@ export function apply(ctx,config){
    const access=await import(pathToFileURL(config.toolkit+'/plugin-sources/dsh-identity-access/index.mjs').href);
    forks.push(await ctx.plugin(access,{stateFile:config.account+'/identity-access.json',ownerFile:config.account+'/identity-owner.json',legacyOwnerPresets:['qq-character']}));
    for(let i=0;i<100&&!ctx.get('identityAccess');i++)await sleep(20);assert(ctx.get('identityAccess'));
-   const settings=ConfigSchema({appId:'mock-app',appSecret:'synthetic-not-a-credential',provider:'character-manager-fixture',model:'fixture',preset:'character',cwd:config.cwd,access:{c2cMode:'allowlist',c2cAllow:['mock-owner','mock-friend','mock-stranger'],groupMode:'disabled'},identityAccess:{enabled:true},debug:false,media:{enabled:false},vision:{enabled:false},hitl:{enabled:true},notifications:{enabled:true}});
+   const settings=ConfigSchema({appId:'mock-app',appSecret:'synthetic-not-a-credential',provider:'character-manager-fixture',model:'fixture',preset:'character',cwd:config.cwd,access:{c2cMode:'allowlist',c2cAllow:['mock-owner','mock-friend','mock-stranger','mock-visitor'],groupMode:'disabled'},identityAccess:{enabled:true},debug:false,media:{enabled:false},vision:{enabled:false},hitl:{enabled:true},notifications:{enabled:true}});
    let runtime;
    forks.push(await ctx.plugin({name:'synthetic-qq-gateway',inject:['agents','agentIO','conversationManager'],async apply(inner){await activate(inner,settings,(g,c,options)=>bootstrapGateway(g,g.agents,c,g.logger,options));runtime=inner.get('qqGateway');}},{}));
    for(let i=0;i<200&&!runtime;i++){await sleep(25);runtime=ctx.get('qqGateway');}assert(runtime,'Gateway must become active');
@@ -91,6 +91,15 @@ export function apply(ctx,config){
     out=(await say('mock-owner','/role list')).out.join('\n');const stranger=[...out.matchAll(/principal-[a-f0-9]{64}/g)].map(m=>m[0]).find(p=>p!==friend);assert(stranger);
     await say('mock-owner','/role block '+stranger);assert.deepEqual((await say('mock-stranger','hello',{expect:false})).out,[]);
 
+    // 2 (setup). A Guest who stays a Guest: its first Session has the id Conversation
+    // Manager derives from the conversation key (nothing recorded); a new Session,
+    // as /new makes it, records a fresh id in A's conversations.json.
+    one(await say('mock-visitor','VISITOR_A_HISTORY_MARK 第一次'));assert.equal(record('mock-visitor').agentPreset,'character-guest');
+    const visitorDerived=record('mock-visitor').sessionId;
+    await manager.remove('c2c','mock-visitor');
+    one(await say('mock-visitor','VISITOR_A_HISTORY_MARK 第二次'));const visitorSession=record('mock-visitor').sessionId;
+    assert.notEqual(visitorSession,visitorDerived,'the visitor moved to a new Session');assert.equal(record('mock-visitor').agentPreset,'character-guest');
+
     // 1. Hot reload: an edit of compiled.json reaches the next request through the Host's own prompt assembly.
     const compiled=readCompiled(config.current+'/compiled.json',{characterId:'a'});
     writeJsonAtomic(config.current+'/compiled.json',{...compiled,owner:{prefix:HOT.prefix,suffix:HOT.suffix},reminder:HOT.reminder});
@@ -108,7 +117,7 @@ export function apply(ctx,config){
     memory.remember(trusted,{kind:'semantic',statement:MEMORY},{sessionId:ownerSession,eventSeq:1,messageId:'character-manager-memory',origin:'direct_user',quote:MEMORY});
     assert(JSON.stringify(memory.recall(identity.forSession(ownerSession),'A_PRIVATE_MEMORY_MARK')).includes('A_PRIVATE_MEMORY_MARK'),'A recalls its own memory');
     const reminder=await ctx.schedule.create({title:'A reminder',prompt:REMINDER_PROMPT,timing:{kind:'after',after_seconds:60},target:{kind:'session',sessionId:ownerSession}},ownerSession);
-    fs.writeFileSync(phaseFile,JSON.stringify({ownerSession,contactSession,friend,stranger,reminder:reminder.id,dueAt:Date.now()+60000}));
+    fs.writeFileSync(phaseFile,JSON.stringify({ownerSession,contactSession,visitorDerived,visitorSession,friend,stranger,reminder:reminder.id,dueAt:Date.now()+60000}));
     report.checks.push('Switch setup: A memory remembered and recalled; A reminder due in 60 s on the Owner Session');
     report.ok=true;return;
    }
@@ -125,6 +134,13 @@ export function apply(ctx,config){
    const recalled=JSON.stringify([memory.recall(identity.forSession(ownerSession),'A_PRIVATE_MEMORY_MARK'),memory.recall(identity.forSession(ownerSession),'')]);
    assert(!recalled.includes('A_PRIVATE_MEMORY_MARK'),'B recalls nothing of A');
    assert.throws(()=>identity.forSession(previous.ownerSession),undefined,'A\'s Owner Session has no identity under B');
+   // A Guest who keeps the Guest role across the switch: B's own new Session (the
+   // one prepared for B), none of A's history, although Guest Sessions of A exist.
+   request=one(await say('mock-visitor','hello B'));assert.equal(record('mock-visitor').agentPreset,'character-guest');
+   assert(![previous.visitorDerived,previous.visitorSession].includes(record('mock-visitor').sessionId),'the Guest does not resume a Session of A');
+   assert.equal(record('mock-visitor').sessionId,config.seededVisitorSession,'the Session prepared for B');
+   for(const mark of ['VISITOR_A_HISTORY_MARK','A_CARD_MARK','A_PUBLIC_REL'])assert(!request.body.includes(mark),'Guest request has nothing of A: '+mark);
+   assert(request.system.includes('B_CARD_MARK'));noTools('mock-visitor',request);
 
    // 4. Grants survive the switch; Contact enters B's own new Session with B's public version.
    request=one(await say('mock-friend','hello B'));assert.equal(record('mock-friend').agentPreset,'character-contact','the Contact grant survives');
@@ -145,7 +161,7 @@ export function apply(ctx,config){
    assert.equal(requests.length,asked,'no model request after the reminder fell due');assert(!requests.some(r=>r.body.includes(REMINDER_PROMPT)),'the reminder never reached a model');
    assert.equal(bot.sent.length,sent,'nothing sent to QQ');assert(!bot.sent.some(t=>t.includes(REMINDER_PROMPT)||t.includes('[提醒到期]')));
    report.reminderResumeAttempts=count(resumes.attempted,previous.ownerSession);
-   scenario('switch','Switch isolation: new Owner Session (the one prepared for B), B persona only, B recalls nothing of A, A\'s Session has no identity; A\'s due reminder: cold resume refused, no model request, nothing sent');
+   scenario('switch','Switch isolation: new Owner Session (the one prepared for B), B persona only, B recalls nothing of A, A\'s Session has no identity; a Guest who stays a Guest enters B\'s prepared Session without A\'s history; A\'s due reminder: cold resume refused, no model request, nothing sent');
    report.ok=true;
   }catch(error){report.error=error.stack;}
   finally{for(const fork of forks.reverse())await fork.dispose().catch(()=>{});fs.writeFileSync(config.result,JSON.stringify(report,null,2));}

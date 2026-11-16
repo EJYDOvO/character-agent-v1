@@ -11,7 +11,7 @@ const fs=require('node:fs'),path=require('node:path'),cp=require('node:child_pro
 const project=path.resolve(__dirname,'..'),toolkit=path.resolve(process.env.DSH_QQTK_PROJECT||project+'/../harness-qq-toolkit');
 const yaml=require('js-yaml'),dialect=require('./deployment-plan.cjs').entryYaml(yaml),{parseCardYaml}=require('./card-yaml.cjs');
 const local=p=>pathToFileURL(path.join(project,p)).href,manager=p=>import(local('packages/character-manager/'+p));
-const OWNER_KEY='qqbot:mock-app:c2c:mock-owner';
+const OWNER_KEY='qqbot:mock-app:c2c:mock-owner',VISITOR_KEY='qqbot:mock-app:c2c:mock-visitor';
 const card=(name,description)=>JSON.stringify({spec:'chara_card_v3',spec_version:'3.0',data:{name,description,personality:'说话简短。'}});
 const readRows=dir=>dialect.load(fs.readFileSync(dir+'/cordis.patch.yml','utf8')),writeRows=(dir,rows)=>fs.writeFileSync(dir+'/cordis.patch.yml',dialect.dump(rows,{noRefs:true}));
 const probeOf=rows=>rows.find(r=>r.insert).insert.find(r=>r.id==='inspector-probe');
@@ -25,7 +25,8 @@ async function phase2(home){
  // The link is only ever unlinked (never removed recursively) and only after checking it is the link to A.
  if(!fs.lstatSync(current).isSymbolicLink()||fs.realpathSync(current)!==fs.realpathSync(characterDir(data,'a')))throw Error('character-current must be the link to A');
  fs.unlinkSync(current);fs.symlinkSync(target,current,'junction');
- Object.assign(entry.config,{phase:2,seededOwnerSession:JSON.parse(fs.readFileSync(target+'/conversations.json','utf8')).sessionIds[OWNER_KEY]});
+ const seeded=JSON.parse(fs.readFileSync(target+'/conversations.json','utf8')).sessionIds;
+ Object.assign(entry.config,{phase:2,seededOwnerSession:seeded[OWNER_KEY],seededVisitorSession:seeded[VISITOR_KEY]??null});
  writeRows(dir,rows);
 }
 

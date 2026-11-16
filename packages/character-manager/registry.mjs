@@ -8,7 +8,7 @@ import {randomUUID} from 'node:crypto';
 import {readCardFile, CardError} from './card/card-reader.mjs';
 import {normalizeCard} from './card/card-normalize.mjs';
 import {CARD_FILES, DEFAULT_HANG_ON_TEXT, compileCharacter} from './compile.mjs';
-import {writeJsonAtomic} from './compiled.mjs';
+import {readJsonFile, writeJsonAtomic} from './compiled.mjs';
 
 export const ID = /^[a-z0-9-]{1,48}$/;
 export const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
@@ -43,7 +43,7 @@ export function validId(id) {
 export function readRegistry(root) {
   const file = registryFile(root);
   if (!fs.existsSync(file)) return {version: 1, characters: []};
-  const value = JSON.parse(fs.readFileSync(file, 'utf8'));
+  const value = readJsonFile(file);
   if (value?.version !== 1 || !Array.isArray(value.characters)) throw new Error('registry.json 格式不正确');
   const seen = new Set();
   const characters = value.characters.map(entry => {
@@ -70,6 +70,32 @@ export function characterDir(root, id) {
   if (!entry) throw new Error(`角色未注册：${id}`);
   if (entry.archived) throw new Error(`角色已归档：${id}`);
   return checkCharacterDirectory(root, id, entry.dir);
+}
+
+/**
+ * The directory of every registered character, archived ones included, for
+ * reading their state only. An unarchived directory must pass characterDir's
+ * checks; an archived one must be a real directory directly under
+ * `<root>/characters/.archive`. A directory that is gone or fails is left out.
+ * @param {string} root
+ * @returns {{id: string, dir: string}[]} dir: absolute, forward slashes
+ */
+export function registeredDirectories(root) {
+  const archive = path.join(root, 'characters', ARCHIVE_DIR);
+  const dirs = [];
+  for (const {id, dir, archived} of readRegistry(root).characters) {
+    try {
+      if (!archived) {
+        dirs.push({id, dir: checkCharacterDirectory(root, id, dir)});
+      } else if (path.isAbsolute(dir) && samePath(path.dirname(path.resolve(dir)), archive)) {
+        const stat = fs.lstatSync(dir);
+        if (stat.isDirectory() && !stat.isSymbolicLink()) dirs.push({id, dir: toPosix(dir)});
+      }
+    } catch {
+      // Gone or not trusted: nothing of it is read.
+    }
+  }
+  return dirs;
 }
 
 /** The id of the character the link `<root>/character-current` points at, or null. */
@@ -236,7 +262,7 @@ function bindingFor(root, id) {
   const current = currentId(root);
   if (current) {
     try {
-      const {appId, ownerId, projectId} = JSON.parse(fs.readFileSync(path.join(characterDir(root, current), 'binding.json'), 'utf8'));
+      const {appId, ownerId, projectId} = readJsonFile(path.join(characterDir(root, current), 'binding.json'));
       if ([appId, ownerId, projectId].every(value => typeof value === 'string' && value)) return {appId, ownerId, projectId, characterId: id};
     } catch {
       // Falls through to the id-only binding.
@@ -252,6 +278,8 @@ function bindingFor(root, id) {
  * @returns {string} absolute path with forward slashes
  */
 export function checkCharacterDirectory(root, id, dir) {
+  // One format for registry.json (R6): QQTK accepts absolute paths only, so do we.
+  if (typeof dir !== 'string' || !path.isAbsolute(dir)) throw new Error(`角色目录必须是绝对路径：${id}`);
   const resolved = path.resolve(dir);
   const allowed = [path.join(root, 'characters', id), path.join(root, `character-${id}`)];
   if (!allowed.some(candidate => samePath(candidate, resolved))) throw new Error(`角色目录不在允许的位置：${id}`);
@@ -268,7 +296,7 @@ export function checkCharacterDirectory(root, id, dir) {
   if (!samePath(parent, base) && !samePath(parent, path.join(base, 'characters'))) throw new Error(`角色目录不在数据目录之下：${id}`);
   let bound;
   try {
-    bound = JSON.parse(fs.readFileSync(path.join(resolved, 'binding.json'), 'utf8')).characterId;
+    bound = readJsonFile(path.join(resolved, 'binding.json')).characterId;
   } catch {
     throw new Error(`角色目录缺少有效的 binding.json：${id}`);
   }

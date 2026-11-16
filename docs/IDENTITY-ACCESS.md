@@ -53,7 +53,8 @@ contact/guest 从空组合独立装配，不从 Owner Preset 继承后靠 Prompt
 
 - 公开人设不再来自 `roles.publicPersonaFile`（同时设置会被构建拒绝），而由当前角色生成：同一张卡、同一份规则，关系段换成对其他人的关系，`{{user}}` 换成「对方」，可排除含私人关系的设定字段。Owner 在设置 → 角色管理里预览并确认后才生效；没有确认过的公开版时，Contact / Guest 得到中性回退文本，不读 Owner 版。
 - Contact / Guest 的 Preset 组成不变：仍从空组合装配，只含运行时人设插件（只读公开部分）和 `tool-scope`，工具不可见、不可执行。
-- `identity-access.json`、`identity-owner.json` 放在 `data/account/`，不在角色目录里：授权和封禁属于 QQ 账号与这个 bot，切换角色后仍然有效。Contact / Guest 的会话在角色目录的 `conversations.json` 里，换角色后他们进入新角色自己的新 Session。
+- `identity-access.json`、`identity-owner.json` 放在 `data/account/`，不在角色目录里：授权和封禁属于 QQ 账号与这个 bot，切换角色后仍然有效。Contact / Guest 的会话路由在角色目录的 `conversations.json` 里；切换时，任一角色记录过的会话键都会在目标里得到新的 Session ID，这些 Contact / Guest 换角色后进入新角色自己的新 Session。
+- 已知限制：Conversation Manager 只在换新 Session（`/new`、角色变化）、改模型或 Preset 偏好、或开启 `sessionLifecycle` 时才记录会话键。QQ 默认关闭 `sessionLifecycle`，一直保持同一角色、从没换过 Session 的 Contact / Guest 私聊不会出现在任何 `conversations.json` 里；切换后若其角色不变，新角色会恢复旧角色的 Session 与历史。开启 QQ 的 `sessionLifecycle.enabled` 可消除这个缺口（代价：Host 重启和长时间不活动后私聊会换新 Session，含 Owner）。详见 [MANAGEMENT](MANAGEMENT.md)「角色管理」的「已知限制」。
 - 旧位置（角色数据目录）已有这两个文件的安装，停机后把它们移到 `data/account/`。
 
 ## 验证
@@ -63,7 +64,7 @@ contact/guest 从空组合独立装配，不从 Owner Preset 继承后靠 Prompt
 | Node 单元（Character） | `npm test` | Preset 组成、Owner Persona 保留、别名限制、Identity 角色放行与 Owner 能力隔离、旧 Preset 迁移 |
 | Node 单元（QQTK） | `npm test` | 服务、/role、并发冲突、过期、持久化失败、HMR 单写入者、工具守卫；真实 Agent I/O + Conversation Manager 上的入站/命令/HITL/出站/通知/撤销/重启/伪造身份 |
 | 真实 Host（rc.3；0.2.2-rc.1 兼容分支复测通过） | `scripts/run-roles.ps1`（隔离 Home、合成 QQ 传输与 LLM） | 旧 Owner Session 恢复、Guest/Contact 独立 Preset 与 Session、工具不可见且不可执行、/role、运行中撤销、封禁、Identity & Access HMR 与卸载、进程重启后恢复 |
-| 真实 Host（0.2.2-rc.1，角色管理） | `scripts/run-character-manager.ps1`（隔离 Home、合成 QQ 传输与 LLM） | 公开版（未确认时中性回退、确认后只含公开内容）、切换后封禁与 Contact 授权保留、Contact / Guest 工具为空 |
+| 真实 Host（0.2.2-rc.1，角色管理） | `scripts/run-character-manager.ps1`（隔离 Home、合成 QQ 传输与 LLM） | 公开版（未确认时中性回退、确认后只含公开内容）、切换后封禁与 Contact 授权保留、角色不变的 Guest 切换后进入新角色预置的新 Session 且没有旧角色历史、Contact / Guest 工具为空 |
 | 干净安装 | `portable prepare/install/verify`（合成配置） | 包与锁、角色 Preset 在已安装包上解析和挂载 |
 
 未验证：真实 QQ 与手机收发、真实模型、多进程共享状态、生产迁移。群聊、跨平台账号关联与细粒度 Capability Grants 未实现。原生 Web/Desktop 窗口属本机 Owner，不经角色闸门。

@@ -76,7 +76,22 @@ export function validateCompiled(value, {characterId}) {
  * @returns {Compiled}
  */
 export function readCompiled(file, {characterId}) {
-  return validateCompiled(JSON.parse(fs.readFileSync(file, 'utf8')), {characterId});
+  return validateCompiled(readJsonFile(file), {characterId});
+}
+
+/**
+ * Parses JSON text, ignoring a leading UTF-8 byte order mark (Windows editors
+ * add one). The one place the package tolerates it.
+ * @param {string} text
+ * @returns {unknown}
+ */
+export function parseJson(text) {
+  return JSON.parse(text.replace(/^\uFEFF/, ''));
+}
+
+/** Reads and parses a JSON file (BOM tolerated); throws when it cannot be read or parsed. */
+export function readJsonFile(file) {
+  return parseJson(fs.readFileSync(file, 'utf8'));
 }
 
 /** Writes a file through a same-directory temporary file and a rename. */

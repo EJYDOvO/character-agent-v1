@@ -4,8 +4,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import {randomUUID} from 'node:crypto';
-import {characterDir, currentId, readRegistry} from './registry.mjs';
-import {readCompiled, writeJsonAtomic} from './compiled.mjs';
+import {characterDir, currentId, readRegistry, registeredDirectories} from './registry.mjs';
+import {readCompiled, readJsonFile, writeJsonAtomic} from './compiled.mjs';
 
 export const REQUEST_FILE = 'character-switch.json';
 export const INPROGRESS_FILE = 'character-switch.inprogress.json';
@@ -18,6 +18,9 @@ const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
 const WATCHDOG_STATE_FILE = 'watchdog-state.json';
 const IDENTITY_KEYS = ['appId', 'ownerId', 'projectId'];
+const CONVERSATIONS_FILE = 'conversations.json';
+// The maps of Conversation Manager's state file, each keyed by conversation key.
+const CONVERSATION_MAPS = ['sessionIds', 'lifecycle', 'presets', 'overrides'];
 
 /**
  * The watchdog must be switched on and have checked in recently: it is the
@@ -35,8 +38,11 @@ export function watchdogReady({maintenanceDirectory, featuresFile, now = Date.no
 }
 
 /**
- * Creates the files of `target` the Host needs to start as that character,
- * for those that do not exist yet (binding.json is never written here). Nothing of `current` is written.
+ * Prepares the Conversation state of `target` (which is not running): its
+ * conversations.json is created, or gets a new Session ID for each key it has
+ * none for; nothing it has is changed (binding.json is never written here).
+ * Nothing of `current` or any other character is written. Throws when a
+ * character's conversations.json exists but cannot be read.
  * @param {{root: string, target: string, current: string}} options
  */
 export function prepareTarget({root, target, current}) {
@@ -52,10 +58,43 @@ export function prepareTarget({root, target, current}) {
     throw new Error('目标角色的 binding.json 缺少身份信息，不能切换。');
   }
 
-  const conversationsFile = path.join(targetDir, 'conversations.json');
-  if (!fs.existsSync(conversationsFile)) {
-    writeJsonAtomic(conversationsFile, {overrides: {}, presets: {}, sessionIds: {[`qqbot:${appId}:c2c:${ownerId}`]: randomUUID()}, lifecycle: {}});
+  // Conversation Manager derives the Session ID of a key it has no record of
+  // from the key alone, and the key does not name the character: a key the
+  // target lacks would resume whichever character's Session has that id. So
+  // the Owner's key and every key a registered character has recorded get a
+  // new Session in the target; what the target already has is kept. Keys
+  // Conversation Manager never recorded cannot be known (docs/MANAGEMENT.md).
+  const keys = new Set([`qqbot:${appId}:c2c:${ownerId}`]);
+  for (const {id, dir} of registeredDirectories(root)) {
+    for (const key of conversationKeys(readConversations(id, dir))) keys.add(key);
   }
+  const state = readConversations(target, targetDir) ?? {overrides: {}, presets: {}, sessionIds: {}, lifecycle: {}};
+  const recorded = state.sessionIds ?? {};
+  const missing = [...keys].filter(key => typeof recorded[key] !== 'string' || !recorded[key]);
+  if (!missing.length) return;
+  const sessionIds = {...recorded, ...Object.fromEntries(missing.map(key => [key, randomUUID()]))};
+  writeJsonAtomic(path.join(targetDir, CONVERSATIONS_FILE), {...state, sessionIds});
+}
+
+// A character's Conversation Manager state; null when it has none yet. One that
+// cannot be read refuses the switch: its keys would be unknown.
+function readConversations(id, dir) {
+  const file = path.join(dir, CONVERSATIONS_FILE);
+  if (!fs.existsSync(file)) return null;
+  let value;
+  try {
+    value = readJsonFile(file);
+  } catch {
+    throw new Error(`角色 ${id} 的 ${CONVERSATIONS_FILE} 无法读取，不能切换。`);
+  }
+  if (!isObject(value) || CONVERSATION_MAPS.some(name => value[name] !== undefined && !isObject(value[name]))) {
+    throw new Error(`角色 ${id} 的 ${CONVERSATIONS_FILE} 格式不正确，不能切换。`);
+  }
+  return value;
+}
+
+function conversationKeys(state) {
+  return state ? CONVERSATION_MAPS.flatMap(name => Object.keys(state[name] ?? {})) : [];
 }
 
 /**
@@ -123,7 +162,7 @@ function readHistory(maintenanceDirectory, now) {
 // A missing or unreadable file reads as null: state files may be mid-write or absent.
 function readJson(file) {
   try {
-    return JSON.parse(fs.readFileSync(file, 'utf8').replace(/^\uFEFF/, ''));
+    return readJsonFile(file);
   } catch {
     return null;
   }

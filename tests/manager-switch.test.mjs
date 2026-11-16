@@ -4,7 +4,7 @@ import {existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSyn
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import yaml from 'js-yaml';
-import {beginUpload, appendUpload, importCharacter, characterDir} from '../packages/character-manager/registry.mjs';
+import {beginUpload, appendUpload, importCharacter, characterDir, archiveCharacter} from '../packages/character-manager/registry.mjs';
 import {
   REQUEST_FILE, INPROGRESS_FILE, RESULT_FILE, HISTORY_FILE, MAX_SWITCHES_PER_HOUR, WATCHDOG_STALE_MS,
   watchdogReady, prepareTarget, requestSwitch, switchStatus,
@@ -72,22 +72,80 @@ test('watchdog must be running', () => {
   assert.equal(watchdogReady({...missing, now: NOW}).ok, false);
 });
 
-test('prepares only missing files', () => {
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const OWNER_KEY = 'qqbot:app-1:c2c:owner-1';
+const conversationsOf = (root, id) => JSON.parse(readFileSync(join(characterDir(root, id), 'conversations.json'), 'utf8'));
+
+test('prepares only missing files and keys', () => {
   const f = fixture();
   const next = characterDir(f.root, 'next');
   writeFileSync(join(next, 'conversations.json'), '{"keep":"me"}');
   const request = requestSwitch(f.options());
-  assert.equal(readFileSync(join(next, 'conversations.json'), 'utf8'), '{"keep":"me"}');
+  const kept = conversationsOf(f.root, 'next');
+  assert.equal(kept.keep, 'me', 'other content of the file stays');
+  assert.deepEqual(Object.keys(kept.sessionIds).sort(), ['k', OWNER_KEY]);
 
   const other = fixture({targets: ['fresh']});
   requestSwitch(other.options('fresh'));
-  const fresh = JSON.parse(readFileSync(join(characterDir(other.root, 'fresh'), 'conversations.json'), 'utf8'));
-  assert.deepEqual(Object.keys(fresh.sessionIds), ['qqbot:app-1:c2c:owner-1']);
-  const [sessionId] = Object.values(fresh.sessionIds);
-  assert.match(sessionId, /^[0-9a-f-]{36}$/);
-  assert.notEqual(sessionId, 'old-session');
+  const fresh = conversationsOf(other.root, 'fresh');
+  // The Owner and every key the current character knows ('k') get a new Session.
+  assert.deepEqual(Object.keys(fresh.sessionIds).sort(), ['k', OWNER_KEY]);
+  for (const sessionId of Object.values(fresh.sessionIds)) {
+    assert.match(sessionId, UUID);
+    assert.notEqual(sessionId, 'old-session');
+  }
+  assert.notEqual(fresh.sessionIds.k, fresh.sessionIds[OWNER_KEY]);
   assert.deepEqual([fresh.overrides, fresh.presets, fresh.lifecycle], [{}, {}, {}]);
   assert.equal(request.target, 'next');
+});
+
+test('every key a registered character knows gets a fresh Session in the target; existing ones are untouched', () => {
+  const f = fixture({targets: ['next', 'other', 'gone']});
+  const write = (id, value) => writeFileSync(join(characterDir(f.root, id), 'conversations.json'), JSON.stringify(value));
+  const lifecycle = {lastUserAt: 1, bootId: 'boot'};
+  write('other', {sessionIds: {'s-other': 'other-1'}, lifecycle: {'l-other': lifecycle}, presets: {'p-other': 'character'}, overrides: {'o-other': {provider: 'p', model: 'm'}}});
+  write('gone', {sessionIds: {'s-archived': 'gone-1'}, overrides: {}, presets: {}, lifecycle: {}});
+  archiveCharacter(f.root, 'gone'); // archived characters' Sessions are still in the shared store
+  const own = {sessionIds: {k: 'next-own', 's-other': 'next-s'}, lifecycle: {'l-next': lifecycle}, presets: {'p-next': 'character-guest'}, overrides: {}, extra: {kept: true}};
+  write('next', own);
+
+  requestSwitch(f.options());
+  const next = conversationsOf(f.root, 'next');
+  const added = ['l-next', 'l-other', 'o-other', 'p-next', 'p-other', 's-archived', OWNER_KEY];
+  assert.deepEqual(Object.keys(next.sessionIds).sort(), ['k', 's-other', ...added].sort());
+  assert.equal(next.sessionIds.k, 'next-own', 'an existing Session ID is kept');
+  assert.equal(next.sessionIds['s-other'], 'next-s', 'an existing Session ID is kept');
+  const fresh = added.map(key => next.sessionIds[key]);
+  assert(fresh.every(id => UUID.test(id)), 'fresh ids are random UUIDs');
+  assert.equal(new Set(fresh).size, fresh.length, 'one Session per key');
+  assert.deepEqual([next.lifecycle, next.presets, next.overrides, next.extra], [own.lifecycle, own.presets, own.overrides, own.extra]);
+
+  // Preparing again changes nothing.
+  const file = join(characterDir(f.root, 'next'), 'conversations.json');
+  const before = [readFileSync(file, 'utf8'), statSync(file).mtimeMs];
+  prepareTarget({root: f.root, target: 'next', current: 'cur'});
+  assert.deepEqual([readFileSync(file, 'utf8'), statSync(file).mtimeMs], before);
+  // Nothing of the other characters is written.
+  assert.deepEqual(conversationsOf(f.root, 'other').sessionIds, {'s-other': 'other-1'});
+});
+
+test('an unreadable conversations.json refuses the switch', () => {
+  for (const [where, content] of [['other', '{broken'], ['next', '{broken'], ['next', '{"sessionIds":[]}']]) {
+    const f = fixture({targets: ['next', 'other']});
+    const file = join(characterDir(f.root, where), 'conversations.json');
+    writeFileSync(file, content);
+    assert.throws(() => requestSwitch(f.options()), /conversations\.json/, `${where}: ${content}`);
+    assert.equal(existsSync(f.file(REQUEST_FILE)), false);
+    assert.equal(readFileSync(file, 'utf8'), content);
+    if (where === 'other') assert.equal(existsSync(join(characterDir(f.root, 'next'), 'conversations.json')), false);
+  }
+});
+
+test('a conversations.json with a byte order mark is read', () => {
+  const f = fixture();
+  writeFileSync(join(characterDir(f.root, 'cur'), 'conversations.json'), `\uFEFF${JSON.stringify({sessionIds: {bom: 'x'}})}`);
+  requestSwitch(f.options());
+  assert.deepEqual(Object.keys(conversationsOf(f.root, 'next').sessionIds).sort(), ['bom', OWNER_KEY]);
 });
 
 test('binding copies identity but not the character', () => {

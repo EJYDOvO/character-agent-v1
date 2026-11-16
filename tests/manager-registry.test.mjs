@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
-import {join} from 'node:path';
+import {isAbsolute, join, relative} from 'node:path';
 import yaml from 'js-yaml';
 import {
   validId, readRegistry, characterDir, currentId, register, beginUpload, appendUpload, importCharacter,
@@ -86,6 +86,24 @@ test('directory trust', () => {
   for (const id of ['x', 'mismatch', 'nobind', 'linked', 'y', 'gone', 'unknown']) assert.throws(() => characterDir(root, id), undefined, id);
   assert.throws(() => characterDir(root, 'mismatch'), /binding\.json/);
   assert.throws(() => characterDir(root, '../plain'), /id/);
+});
+
+test('a registry dir must be absolute (one format, as QQTK requires)', () => {
+  const root = dataRoot();
+  const dir = plainCharacter(root, 'rel');
+  const relativeDir = relative(process.cwd(), dir);
+  assert.equal(isAbsolute(relativeDir), false);
+  assert.throws(() => register(root, {id: 'rel', dir: relativeDir}), /绝对路径/);
+  writeFileSync(join(root, 'characters', 'registry.json'), JSON.stringify({version: 1, characters: [{id: 'rel', dir: relativeDir, addedAt: 'x', archived: false}]}));
+  assert.throws(() => characterDir(root, 'rel'), /绝对路径/);
+});
+
+test('a binding.json with a byte order mark is accepted', () => {
+  const root = dataRoot();
+  const dir = plainCharacter(root, 'bom');
+  writeFileSync(join(dir, 'binding.json'), `\uFEFF${JSON.stringify({characterId: 'bom'})}`);
+  register(root, {id: 'bom', dir});
+  assert.equal(characterDir(root, 'bom'), dir.replace(/\\/g, '/'));
 });
 
 test('the old location data/character-<id> is accepted', () => {
