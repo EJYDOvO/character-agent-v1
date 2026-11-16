@@ -47,25 +47,31 @@ data/maintenance/character-switch*.json   切换请求、进行中快照、结�
 ```
 
 - **切换前提：watchdog 在运行。** 只有 watchdog 能停 Host、改联接、再拉起 Host。`maintenance/features.json` 的 `watchdog.enabled` 为真，且 `data/maintenance/watchdog-state.json` 两分钟内有更新，管理页才写切换请求；否则拒绝并提示先启用 watchdog。每小时最多 4 次切换请求；切换引起的启动不计入 `watchdog.maxStartsPerHour`。`character-switch.json` 或 `character-switch.inprogress.json` 任一存在都表示有未完成的切换，期间不接受新请求。
-- **切换会做什么。** 目标的 `compiled.json` 必须有效；目标目录里没有 `conversations.json` 时写入一个新的 Owner Session ID。watchdog 等待空闲后停 Host、把联接改指向目标、启动 Host，等到 QQ 就绪且 `runtime-health.json` 的 `pid` 属于新 Host、`characterId` 等于目标、`personaSource` 为 `compiled` 才算成功；否则联接指回原角色并重启 Host。旧角色设的提醒和长期任务在切换后不执行（投递授权在旧目录的 `coordination.sqlite`），切回后恢复。
+- **切换会做什么。** 目标的 `compiled.json` 必须有效。切换前为目标准备会话路由：Owner 私聊的会话键，以及任一已登记角色（含已归档的）`conversations.json` 里出现过的会话键（`sessionIds`、`lifecycle`、`presets`、`overrides` 的键），凡目标的 `sessionIds` 里还没有的，都写入一个新的随机 Session ID；目标已有的记录和其他内容不改（没有 `conversations.json` 时新建）。任一已有的 `conversations.json` 读不出来时拒绝切换，不写请求。watchdog 等待空闲后停 Host、把联接改指向目标、启动 Host，等到 QQ 就绪且 `runtime-health.json` 的 `pid` 属于新 Host、`characterId` 等于目标、`personaSource` 为 `compiled` 才算成功；否则联接指回原角色并重启 Host。旧角色设的提醒和长期任务在切换后不执行（投递授权在旧目录的 `coordination.sqlite`），切回后恢复。
+- **已知限制：从未被记录的会话会跟到新角色。** Conversation Manager 对状态文件里没有记录的会话键，用会话键的 SHA-256 推导 Session ID，并且不把它写进状态文件。只有以下情况会写：换新 Session（`/new`、或发送者的角色变化使原 Session 不再被授权）、改模型或 Preset 偏好、私聊生命周期（`sessionLifecycle.enabled` 时每条被接受的私聊消息记入 `lifecycle`）。QQ 默认关闭 `sessionLifecycle`，此时一个一直是同一角色身份、从没换过 Session 的 Contact / Guest 私聊，在任何 `conversations.json` 里都没有记录，切换前无法为目标准备；切换后只要他的角色不变，新角色会按同一推导结果恢复旧角色的 Session 和聊天历史。Owner 不受影响（总会预置）；角色模式下群聊禁用。角色模式与角色管理一起开启时注意这一点；开启 QQ 的 `sessionLifecycle.enabled` 会让每个私聊会话键都被记录，消除这个缺口，但它也会在 Host 重启和长时间不活动后为私聊（含 Owner）换新 Session。
 - **角色目录被删除或移走。** 联接指向不存在的目录时，Host 无法在该目录写 `runtime-health.json`：切换校验得到「no runtime health」，按失败退回原角色。Host 若直接以这种联接启动，人设用中性回退文本，Identity 读不到 `binding.json`，QQ 无法连接；把目录放回原位或把联接改回有效角色后重启。
 - **第一个角色必须接入（adopt）。** 导入新角色时，`binding.json` 的 appId、ownerId、projectId 取自当前角色。还没有当前角色时导入的角色只有 `characterId`，不能被切换到，直到用 `adopt-character.cjs` 接入当前角色后重新导入。因此生产先接入现有角色（`--link`），再导入其他角色。
 - **公开版。** Contact / Guest 只读 Owner 在管理页确认过的公开版；没有确认过时用中性回退文本，不读 Owner 版。编辑规则或卡之后，新公开版待确认期间仍用上一份已确认的版本。
 
 ### 生产接入（一次性）
 
-1. 用 `characterManager.enabled: true` 构建，按现有 `Stage` / `DeployValidated` 流程准备新的核心包、Interaction 与 `dsh-character-manager`（先只 Stage，不部署）。
-2. Host 运行中、部署前，接入现有角色目录（只新增文件，不改 `binding.json`、数据库和会话）：
+顺序不能调换：`Stage` 把当时的 Profile（`cordis.patch.yml`）复制进候选，`DeployValidated` 开始前核对 Profile 自 Stage 以来没有变化（否则停止并提示 "Live profile changed: stage again"）。所以 Profile 必须在 Stage 之前改好，候选才带着新的 `character-identity` 行。
+
+1. 用 `characterManager.enabled: true` 构建并 pack（核心包、Interaction 与 `dsh-character-manager`）。
+2. Host 运行中，接入现有角色目录（只新增文件，不改 `binding.json`、数据库和会话）：
    ```
    node scripts/adopt-character.cjs --root D:/DeepSeek-Harness/data --id yuha --dir D:/DeepSeek-Harness/data/character-yuha --card <卡文件> --rules <rules.md> --reminder <reminder.md> --user-name <称呼> --hang-on-text <等待提示> --link
    ```
    脚本把卡、规则、提醒复制进目录（目录里已有同名但内容不同的文件即拒绝），写 `character.json`、`compiled.json`，登记到 `registry.json`，并建联接 `data/character-current`（联接已存在即拒绝）。目录没有 `binding.json`，或其中缺 appId / ownerId / projectId、`characterId` 不是该 id，目录不在 `data/characters/<id>` 或 `data/character-<id>`、或本身是联接，都在写入前拒绝且不写任何文件。写入后任何一步失败（含建联接），本次新增的文件、`registry.json` 的改动和本次建的联接都会撤销，可以直接重跑；只有撤销本身也失败时，错误信息会列出需要手动检查的项。
-3. 另存 Profile 原件，再按脚本最后打印的内容替换 Profile 的 `character-identity` 行：`presetId`、`memoryMode` 保持原值，`bindingFile`、`stateFile` 改到 `data/character-current/`。脚本不修改 Profile。
-4. `DeployValidated`。部署后核对 Yuha 的身份、记忆、会话与接入前一致（路径经联接指向同一目录），然后在管理页确认公开版、导入其他角色。
+3. 另存 Profile 原件（改动之前的完整副本），再按脚本最后打印的内容替换 Profile 的 `character-identity` 行，四个键都写：`presetId`、`memoryMode` 保持原值，`bindingFile`、`stateFile` 改到 `data/character-current/`。脚本不修改 Profile。新旧路径经联接指向同一目录，无论 Host 何时按新行加载，读到的都是同一份数据。
+4. 更新 `plugin-policy.json` 固定（含 `dsh-character-manager` 与其 `js-yaml` 依赖），然后 `Stage`。
+5. `DeployValidated`（后台运行，读 `latest-result.json` 判断结果）。部署后核对 Yuha 的身份、记忆、会话与接入前一致（路径经联接指向同一目录），然后在管理页确认公开版、导入其他角色。
+
+`DeployValidated` 失败时的自动回滚恢复的是部署开始时的 Profile，也就是第 3 步已经改过的那份：身份行指向 `data/character-current`，联接仍指向 `character-yuha`，旧构建照样能用。要完全退回接入前，用第 3 步另存的原件替换 Profile（自动回滚不会替你做这一步）。
 
 ### 回退
 
-部署 `characterManager.enabled: false` 的构建，并把 Profile 的 `character-identity` 行恢复为原件；若当时的当前角色不是原来那个，身份行指向当时的当前角色目录。联接和 `data/characters` 可以保留，不会被使用。删除联接只能用非递归方式（例如 `cmd /c rmdir data\character-current`），不要对联接路径做递归删除。
+部署 `characterManager.enabled: false` 的构建，并把 Profile 的 `character-identity` 行恢复为原件。关闭角色管理的构建会把角色卡和 `dataDirectory` 重新固定进核心包：若当前角色已不是 Yuha，回退要用那个角色自己的构建配置（它的卡、规则、提醒和 `dataDirectory` = 它的角色目录），身份行也指向那个目录，而不是 Yuha 的原件。联接和 `data/characters` 可以保留，不会被使用。删除联接只能用非递归方式（例如 `cmd /c rmdir data\character-current`），不要对联接路径做递归删除。
 
 ### 角色模式的授权文件
 

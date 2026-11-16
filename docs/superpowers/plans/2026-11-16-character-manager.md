@@ -475,10 +475,14 @@ else: pendingPublic = fresh
 ## 生产接入（不属于任务；每一步执行前须 Owner 明确同意）
 
 1. QQTK：Task 13–14 合并后，把 `character-switch.cjs`、`manage.ps1`、`watchdog.ps1` 逐个审阅后同步到 `D:\DeepSeek-Harness\maintenance`（保留实例文件）。
-2. Character：构建配置加 `characterManager:{enabled:true}`，pack，更新 `plugin-policy.json` 固定（含新包 `dsh-character-manager` 与其 `js-yaml` 依赖），`Stage`。
-3. 在 Host 运行时运行 `adopt-character.cjs` 收编 `yuha → data/character-yuha` 并建联接；另存 Profile 原件后，把 `character-identity` 行改到 `data/character-current`。
-4. `DeployValidated`（后台运行，读 `latest-result.json`）；核对 Yuha 的身份、记忆、会话与接入前一致。
-5. 界面导入 Tasha、切换、再切回，每次核对隔离和 QQ 就绪。
+2. Character：构建配置加 `characterManager:{enabled:true}`，构建并 pack。
+3. 在 Host 运行时运行 `adopt-character.cjs --link` 收编 `yuha → data/character-yuha` 并建联接（只新增文件）。
+4. 另存 Profile 原件，再把 `character-identity` 行改到 `data/character-current`（`presetId`、`bindingFile`、`stateFile`、`memoryMode` 四个键都写）。必须在 Stage 之前：Stage 把当时的 Profile 复制进候选，`DeployValidated` 发现 Profile 在 Stage 之后变过会停止（"Live profile changed: stage again"）。
+5. 更新 `plugin-policy.json` 固定（含新包 `dsh-character-manager` 与其 `js-yaml` 依赖），`Stage`。
+6. `DeployValidated`（后台运行，读 `latest-result.json`）；核对 Yuha 的身份、记忆、会话与接入前一致。自动回滚恢复的是第 4 步改过的 Profile（联接仍指向 yuha，旧构建可用）；完全退回接入前要用第 4 步另存的原件。
+7. 界面导入 Tasha、切换、再切回，每次核对隔离和 QQ 就绪。
+
+回退：部署 `characterManager:false` 的构建并恢复 Profile 原件。这样的构建把卡和 `dataDirectory` 重新固定进核心包；当前角色已不是 Yuha 时，要用该角色自己的构建配置（卡、规则、提醒、`dataDirectory` 为该角色目录）。
 
 ## 裁定（与规格的差异，执行前已确定）
 
