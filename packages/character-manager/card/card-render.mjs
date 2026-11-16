@@ -13,6 +13,11 @@ const CHAR_MACRO = /\{\{char\}\}|<bot>/gi;
 const USER_MACRO = /\{\{user\}\}|<user>/gi;
 const LEFTOVER_MACRO = /\{\{+[^{}]*\}\}+/g;
 const STRAY_MARKER = /\{\{+|\}\}+/g;
+const USER_ADDRESS = /\{\{user\}\}|<user>/i;
+
+export const RELATIONSHIP_HEADING = '## 与对话者的关系';
+// Card fields a public audience can leave out, in the order they are reported.
+export const EXCLUDABLE_FIELDS = ['description', 'personality', 'scenario', 'examples'];
 
 /**
  * @param {string} text
@@ -56,13 +61,18 @@ export function splitExamples(mesExample) {
 
 /**
  * @param {import('./card-normalize.mjs').CardData} data
- * @param {{userName: string, rules: string}} options rules is deployment
- *   text placed first in the prefix; it is not macro-substituted.
+ * @param {{userName: string, rules: string, relationship?: string,
+ *   exclude?: string[]}} options rules and relationship are deployment text
+ *   placed first in the prefix (rules, then the relationship section); they
+ *   are not macro-substituted. exclude lists EXCLUDABLE_FIELDS to leave out of
+ *   the prefix and suffix (their rendered text stays in parts for counting).
  * @returns {{displayName: string, prefix: string, suffix: string,
- *   parts: Record<string, string>, downgraded: string[]}} displayName is the
- *   name the prompt uses (nickname or name, brace-safe).
+ *   parts: Record<string, string>, downgraded: string[], userFields: string[]}}
+ *   displayName is the name the prompt uses (nickname or name, brace-safe).
+ *   userFields names the fields whose source text addresses the user
+ *   (`{{user}}` or `<user>`), whether or not they are excluded.
  */
-export function renderCard(data, {userName, rules}) {
+export function renderCard(data, {userName, rules, relationship = '', exclude = []}) {
   const downgraded = [];
   const collect = result => {
     for (const original of result.downgraded) {
@@ -82,18 +92,25 @@ export function renderCard(data, {userName, rules}) {
     scenario: render(data.scenario),
     examples: splitExamples(data.mes_example).map(render).filter(Boolean).join(EXAMPLE_SEPARATOR),
   };
+  const shown = field => (exclude.includes(field) ? '' : parts[field]);
 
   const prefix = joinSections([
     parts.rules,
+    section(RELATIONSHIP_HEADING, relationship.trim()),
     PREAMBLE,
     // The name heading stays even without a description: it is often the only
     // place the model learns its own name.
-    [`## 角色：${displayName}`, parts.description].filter(Boolean).join('\n'),
-    section('## 性格', parts.personality),
-    section('## 场景', parts.scenario),
+    [`## 角色：${displayName}`, shown('description')].filter(Boolean).join('\n'),
+    section('## 性格', shown('personality')),
+    section('## 场景', shown('scenario')),
   ]);
-  const suffix = section(EXAMPLES_HEADING, parts.examples);
-  return {displayName, prefix, suffix, parts, downgraded};
+  const suffix = section(EXAMPLES_HEADING, shown('examples'));
+  return {displayName, prefix, suffix, parts, downgraded, userFields: userFieldsOf(data)};
+}
+
+function userFieldsOf(data) {
+  const source = {description: data.description, personality: data.personality, scenario: data.scenario, examples: data.mes_example};
+  return EXCLUDABLE_FIELDS.filter(field => USER_ADDRESS.test(source[field]));
 }
 
 function section(heading, body) {

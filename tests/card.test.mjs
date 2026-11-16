@@ -4,7 +4,7 @@ import {mkdtempSync, readFileSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import yaml from 'js-yaml';
-import {loadCard, CardError, estimatePromptTokens, WARN_TOKENS, MAX_TOKENS, MAX_REMINDER_CHARS} from '../packages/character-definition/card.mjs';
+import {loadCard, CardError, estimatePromptTokens, WARN_TOKENS, MAX_TOKENS, MAX_REMINDER_CHARS, MAX_RELATIONSHIP_CHARS} from '../packages/character-definition/card.mjs';
 
 const parseYaml = text => yaml.load(text);
 const dir = () => mkdtempSync(join(tmpdir(), 'card-load-'));
@@ -184,4 +184,28 @@ test('a depth prompt is reported as ignored, and previews stay on one line', () 
     '已忽略 system_prompt：「第一行 第二行」',
     '已忽略 extensions.depth_prompt：「说话简单，充满积极」',
   ]);
+});
+
+test('relationship is checked like rules', () => {
+  const options = {cardPath: cardFile({}), parseYaml};
+  assert.throws(() => loadCard({...options, relationship: '含{{x}}'}), error => error instanceof CardError && /不能包含/.test(error.message));
+  assert.throws(() => loadCard({...options, relationship: '字'.repeat(2001)}), error => error instanceof CardError && /2000/.test(error.message));
+  assert.equal(MAX_RELATIONSHIP_CHARS, 2000);
+  assert(loadCard({...options, relationship: '字'.repeat(2000)}).prefix.includes('## 与对话者的关系'));
+});
+
+test('unknown exclude field is rejected', () => {
+  assert.throws(() => loadCard({cardPath: cardFile({}), parseYaml, exclude: ['name']}), error => error instanceof CardError && /exclude/.test(error.message));
+});
+
+test('nickname override replaces the card nickname and is validated', () => {
+  const build = loadCard({cardPath: cardFile({nickname: '原名'}), parseYaml, nickname: '小尤'});
+  assert.equal(build.name, '小尤');
+  assert(build.prefix.includes('## 角色：小尤'));
+  assert.throws(() => loadCard({cardPath: cardFile({}), parseYaml, nickname: '小{尤'}), CardError);
+  assert.throws(() => loadCard({cardPath: cardFile({}), parseYaml, nickname: '甲\n乙'}), CardError);
+});
+
+test('userFields is returned from the build', () => {
+  assert.deepEqual(loadCard({cardPath: cardFile({description: '{{user}}的朋友'}), parseYaml}).userFields, ['description']);
 });

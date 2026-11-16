@@ -3,7 +3,7 @@
 // stages themselves live in the card-*.mjs modules.
 import {readCardFile, readRulesFile, CardError} from './card-reader.mjs';
 import {normalizeCard} from './card-normalize.mjs';
-import {renderCard} from './card-render.mjs';
+import {renderCard, EXCLUDABLE_FIELDS} from './card-render.mjs';
 import {estimatePromptTokens} from './card-tokens.mjs';
 
 export {CardError, estimatePromptTokens};
@@ -15,7 +15,8 @@ export const MAX_TOKENS = 8000;
 // tests/reminder-limit.test.mjs keeps the three limits equal.
 export const MAX_REMINDER_CHARS = 4000;
 export const DEFAULT_USER_NAME = '用户';
-const MAX_USER_NAME_CHARS = 32;
+export const MAX_RELATIONSHIP_CHARS = 2000;
+const MAX_NAME_CHARS = 32;
 
 // Card fields that carry rules the deployment replaces with its own files,
 // as [CardData key, name shown in the warning].
@@ -29,7 +30,7 @@ const CONTENT_FIELDS = ['rules', 'description', 'personality', 'scenario', 'exam
 
 /**
  * @typedef {{name: string, spec: 'v1'|'v2'|'v3', prefix: string,
- *   suffix: string, reminder: string,
+ *   suffix: string, reminder: string, userFields: string[],
  *   tokens: {total: number, fields: Record<string, number>},
  *   warnings: string[],
  *   inputs: {card: Buffer, systemRules: Buffer|null, reminder: Buffer|null}}} CardBuild
@@ -38,20 +39,30 @@ const CONTENT_FIELDS = ['rules', 'description', 'personality', 'scenario', 'exam
  *
  * @param {{cardPath: string, systemRulesPath?: string|null,
  *   reminderPath?: string|null, userName?: unknown,
- *   parseYaml: (text: string) => unknown}} options
+ *   parseYaml: (text: string) => unknown, relationship?: string,
+ *   exclude?: string[], nickname?: string}} options relationship is the
+ *   section about who the character talks to; exclude names fields to leave
+ *   out of the Persona (see EXCLUDABLE_FIELDS); nickname overrides the card's.
  * @returns {CardBuild}
  */
-export function loadCard({cardPath, systemRulesPath = null, reminderPath = null, userName, parseYaml}) {
-  const user = resolveUserName(userName);
+export function loadCard({cardPath, systemRulesPath = null, reminderPath = null, userName, parseYaml,
+  relationship = '', exclude = [], nickname}) {
+  const user = resolveShortName(userName ?? DEFAULT_USER_NAME, 'userName');
+  const unknown = exclude.filter(field => !EXCLUDABLE_FIELDS.includes(field));
+  if (unknown.length) throw new CardError(`exclude 含未知字段 ${unknown.join('、')}：应为 ${EXCLUDABLE_FIELDS.join('、')}`);
   const card = readCardFile(cardPath, {parseYaml});
   const {spec, data} = normalizeCard(card.raw, cardPath);
+  if (nickname !== undefined) data.nickname = resolveShortName(nickname, '昵称');
   const rules = readOptionalRules(systemRulesPath);
   const reminder = readOptionalRules(reminderPath);
   if ([...reminder.text].length > MAX_REMINDER_CHARS) {
     throw new CardError(`末尾提醒超过 ${MAX_REMINDER_CHARS} 字：${reminderPath}`);
   }
 
-  const {displayName, prefix, suffix, parts, downgraded} = renderCard(data, {userName: user, rules: rules.text});
+  const relation = checkOwnText(relationship, '关系段', MAX_RELATIONSHIP_CHARS);
+  const {displayName, prefix, suffix, parts, downgraded, userFields} = renderCard(data, {
+    userName: user, rules: rules.text, relationship: relation, exclude,
+  });
   const tokens = measure({prefix, suffix, reminder: reminder.text, parts});
   if (tokens.total > MAX_TOKENS) {
     throw new CardError(`渲染后的人设约 ${tokens.total} token，上限 ${MAX_TOKENS}。占比最大的字段：${largestFields(tokens.fields)}（${cardPath}）`);
@@ -63,26 +74,33 @@ export function loadCard({cardPath, systemRulesPath = null, reminderPath = null,
     prefix,
     suffix,
     reminder: reminder.text,
+    userFields,
     tokens,
     warnings: collectWarnings(data, downgraded, tokens.total),
     inputs: {card: card.bytes, systemRules: rules.bytes, reminder: reminder.bytes},
   };
 }
 
-// The user's form of address is substituted into the Persona, so it must be
+// A name or form of address is substituted into the Persona, so it must be
 // short and unable to form a `{{` group or break a line.
-function resolveUserName(value = DEFAULT_USER_NAME) {
-  const valid = typeof value === 'string' && value.trim() && [...value].length <= MAX_USER_NAME_CHARS && !/[{}\r\n]/.test(value);
-  if (!valid) throw new CardError(`userName 无效：应为 1-${MAX_USER_NAME_CHARS} 个字符，不能包含花括号或换行`);
+function resolveShortName(value, label) {
+  const valid = typeof value === 'string' && value.trim() && [...value].length <= MAX_NAME_CHARS && !/[{}\r\n]/.test(value);
+  if (!valid) throw new CardError(`${label} 无效：应为 1-${MAX_NAME_CHARS} 个字符，不能包含花括号或换行`);
   return value.trim();
 }
 
 function readOptionalRules(file) {
   if (!file) return {text: '', bytes: null};
   const rules = readRulesFile(file);
-  // Rules are our own text: a macro here is a mistake, not something to fix up.
-  if (/\{\{|\}\}/.test(rules.text)) throw new CardError(`规则文件不能包含 {{ 或 }}：${file}`);
-  return rules;
+  return {...rules, text: checkOwnText(rules.text, '规则文件', Infinity, file)};
+}
+
+// Rules and the relationship section are our own text: a macro in them is a
+// mistake, not something to fix up.
+function checkOwnText(text, label, maxChars, where = '') {
+  if (/\{\{|\}\}/.test(text)) throw new CardError(`${label}不能包含 {{ 或 }}${where && `：${where}`}`);
+  if ([...text].length > maxChars) throw new CardError(`${label}超过 ${maxChars} 字`);
+  return text;
 }
 
 // Every token of the rendered prompt is attributed to one field; the
