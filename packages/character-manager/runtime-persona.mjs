@@ -73,8 +73,9 @@ export function personaState(file, bindingFile) {
 function textFor(state, audience) {
   if (state.source !== 'compiled') return NEUTRAL;
   const {compiled} = state;
-  const persona = audience === 'public' ? compiled.public : compiled.owner;
-  return persona ? {prefix: persona.prefix, suffix: persona.suffix, reminder: compiled.reminder} : NEUTRAL;
+  // Public text, reminder included, is exactly the version the Owner approved.
+  if (audience === 'public') return compiled.public ? {prefix: compiled.public.prefix, suffix: compiled.public.suffix, reminder: compiled.public.reminder} : NEUTRAL;
+  return {prefix: compiled.owner.prefix, suffix: compiled.owner.suffix, reminder: compiled.reminder};
 }
 
 function readCharacterId(bindingFile) {

@@ -66,7 +66,7 @@ export function compileCharacter({dir, characterId, parseYaml, draft = {}}) {
       exclude: settings.publicExclude,
     });
 
-    const fresh = {prefix: publicBuild.prefix, suffix: publicBuild.suffix, hash: publicHash(publicBuild)};
+    const fresh = {prefix: publicBuild.prefix, suffix: publicBuild.suffix, reminder: publicBuild.reminder, hash: publicHash(publicBuild)};
     const approved = settings.publicApproved?.hash;
     const compiled = {
       version: COMPILED_VERSION,

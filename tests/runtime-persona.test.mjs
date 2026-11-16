@@ -4,7 +4,7 @@ import {copyFileSync, mkdtempSync, rmSync, utimesSync, writeFileSync} from 'node
 import {tmpdir} from 'node:os';
 import {join, resolve} from 'node:path';
 import yaml from 'js-yaml';
-import {compileCharacter, approvePublic} from '../packages/character-manager/compile.mjs';
+import {compileCharacter, approvePublic, saveCharacter, readSettings} from '../packages/character-manager/compile.mjs';
 import {NEUTRAL_PERSONA, writeJsonAtomic} from '../packages/character-manager/compiled.mjs';
 import {apply, inject, name, personaState} from '../packages/character-manager/runtime-persona.mjs';
 
@@ -78,7 +78,7 @@ test('public reads only the approved public version', () => {
   const compiled = approved.read();
   assert(compiled.public);
   const publicText = host({audience: 'public', compiledFile: approved.compiledFile, bindingFile: approved.bindingFile}).read();
-  assert.deepEqual(publicText, {prefix: compiled.public.prefix, suffix: compiled.public.suffix, reminder: compiled.reminder});
+  assert.deepEqual(publicText, {prefix: compiled.public.prefix, suffix: compiled.public.suffix, reminder: compiled.public.reminder});
 
   const pending = fixture({approved: false});
   assert(pending.read().pendingPublic && !pending.read().public);
@@ -87,6 +87,18 @@ test('public reads only the approved public version', () => {
   for (const result of [publicText, neutral]) {
     assert(!Object.values(result).join('\n').includes(compiled.owner.prefix));
   }
+});
+
+test('an edited reminder reaches the Owner only until the Owner approves it', () => {
+  const {dir, compiledFile, bindingFile, read} = fixture();
+  const approvedReminder = read().public.reminder;
+  saveCharacter({dir, characterId, parseYaml, revision: readSettings(dir).revision, draft: {reminder: '没确认过的新提醒。'}});
+  bump(compiledFile);
+  const owner = host({audience: 'owner', compiledFile, bindingFile}).read();
+  const publicText = host({audience: 'public', compiledFile, bindingFile}).read();
+  assert.equal(owner.reminder, '没确认过的新提醒。');
+  assert.equal(publicText.reminder, approvedReminder);
+  assert(!JSON.stringify(publicText).includes('没确认过的新提醒。'));
 });
 
 test('approving the public version takes effect on the next read', () => {

@@ -14,7 +14,7 @@ const REVISION_FIELDS = ['cardRevision', 'rulesRevision'];
 
 /**
  * @typedef {{prefix: string, suffix: string}} PersonaText
- * @typedef {PersonaText & {hash: string}} PublicPersona
+ * @typedef {PersonaText & {reminder: string, hash: string}} PublicPersona
  * @typedef {{version: 1, revision: number, characterId: string, name: string,
  *   hangOnText: string, reminder: string, owner: PersonaText,
  *   public?: PublicPersona, pendingPublic?: PublicPersona,
@@ -40,8 +40,7 @@ export function validateCompiled(value, {characterId}) {
   if (!hangOnText.trim() || [...hangOnText].length > MAX_HANG_ON_CHARS) {
     throw new Error(`hangOnText must be 1-${MAX_HANG_ON_CHARS} characters`);
   }
-  const reminder = text(value.reminder, 'reminder');
-  if ([...reminder].length > MAX_REMINDER_CHARS) throw new Error(`reminder exceeds ${MAX_REMINDER_CHARS} characters`);
+  const reminder = reminderText(value.reminder, 'reminder');
 
   const compiled = {
     version: COMPILED_VERSION,
@@ -53,7 +52,11 @@ export function validateCompiled(value, {characterId}) {
     owner: persona(value.owner, 'owner'),
   };
   for (const key of ['public', 'pendingPublic']) {
-    if (value[key] !== undefined) compiled[key] = {...persona(value[key], key), hash: text(value[key].hash, `${key}.hash`)};
+    if (value[key] !== undefined) {
+      // The reminder travels with the approved version: the hash covers it, so a
+      // later edit of the top-level reminder must not reach public sessions.
+      compiled[key] = {...persona(value[key], key), reminder: reminderText(value[key].reminder, `${key}.reminder`), hash: text(value[key].hash, `${key}.hash`)};
+    }
   }
   compiled.tokens = {
     owner: nonNegativeInteger(value.tokens?.owner, 'tokens.owner'),
@@ -101,6 +104,12 @@ function persona(value, label) {
     throw new Error(`${label} persona exceeds ${MAX_PERSONA_CHARS} characters`);
   }
   return {prefix, suffix};
+}
+
+function reminderText(value, label) {
+  const reminder = text(value, label);
+  if ([...reminder].length > MAX_REMINDER_CHARS) throw new Error(`${label} exceeds ${MAX_REMINDER_CHARS} characters`);
+  return reminder;
 }
 
 function text(value, label) {

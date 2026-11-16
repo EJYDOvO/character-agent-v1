@@ -98,6 +98,19 @@ test('stale approval hash is rejected', () => {
   assert.equal(readCompiled(join(dir, 'compiled.json'), {characterId}).public, undefined);
 });
 
+test('the approved public version keeps the reminder it was approved with', () => {
+  const dir = characterDir(owner);
+  const pending = compileCharacter(options(dir)).compiled.pendingPublic;
+  assert.equal(pending.reminder, compileCharacter(options(dir)).compiled.reminder);
+  const approved = approvePublic({...options(dir), parseYaml, hash: pending.hash});
+  assert.equal(approved.public.reminder, approved.reminder);
+  const edited = saveCharacter({...options(dir), revision: readSettings(dir).revision, draft: {reminder: '一条没确认过的新提醒。'}});
+  assert.equal(edited.reminder, '一条没确认过的新提醒。');
+  assert.equal(edited.pendingPublic.reminder, '一条没确认过的新提醒。');
+  assert.equal(edited.public.reminder, approved.reminder);
+  assert(!JSON.stringify(edited.public).includes('一条没确认过的新提醒。'));
+});
+
 test('revision conflict', () => {
   const dir = characterDir(owner);
   saveCharacter({...options(dir), revision: 0, draft: {settings: {hangOnText: '请稍等。'}}});
@@ -153,6 +166,10 @@ test('validateCompiled rejects foreign or unsafe data', () => {
   assert.throws(() => validateCompiled({...compiled, reminder: '字'.repeat(4001)}, {characterId}), /reminder/);
   assert.throws(() => validateCompiled({...compiled, owner: {prefix: '甲'.repeat(20000), suffix: '乙'.repeat(12001)}}, {characterId}), /exceeds/);
   assert.throws(() => validateCompiled({...compiled, version: 2}, {characterId}), /version/);
+  const {reminder: _old, ...legacyPublic} = compiled.pendingPublic;
+  assert.throws(() => validateCompiled({...compiled, pendingPublic: legacyPublic}, {characterId}), /pendingPublic.reminder/);
+  assert.throws(() => validateCompiled({...compiled, pendingPublic: {...compiled.pendingPublic, reminder: '含{{x}}'}}, {characterId}), /{{/);
+  assert.throws(() => validateCompiled({...compiled, pendingPublic: {...compiled.pendingPublic, reminder: '字'.repeat(4001)}}, {characterId}), /pendingPublic.reminder/);
   assert.throws(() => validateCompiled(null, {characterId}), /object/);
 });
 
@@ -191,6 +208,18 @@ test('settings reject unknown keys and bad values', () => {
   assert.throws(bad({publicExclude: 'scenario'}), /publicExclude/);
   assert.throws(bad({revision: -1}), /revision/);
   assert.deepEqual(readSettings(characterDir()).relationship, {});
+});
+
+test('ensureCompiled rewrites a compiled.json without the public reminder and keeps the approval', () => {
+  const dir = characterDir(owner);
+  const pending = compileCharacter(options(dir)).compiled.pendingPublic;
+  const approved = approvePublic({...options(dir), parseYaml, hash: pending.hash});
+  const {reminder: _old, ...legacyPublic} = approved.public;
+  writeJsonAtomic(join(dir, 'compiled.json'), {...approved, public: legacyPublic});
+  assert.throws(() => readCompiled(join(dir, 'compiled.json'), {characterId}), /public.reminder/);
+  const healed = ensureCompiled(options(dir));
+  assert.deepEqual(healed.public, approved.public);
+  assert.deepEqual(readCompiled(join(dir, 'compiled.json'), {characterId}), healed);
 });
 
 test('ensureCompiled returns the file when it is current and heals it otherwise', () => {
