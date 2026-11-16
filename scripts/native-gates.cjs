@@ -5,7 +5,8 @@ const GATES=Object.freeze([
  {id:'lifecycle',script:'run-lifecycle.ps1',args:[],covers:'two-process cold recovery, Long Tasks, Schedule deadlines, Spawn availability'},
  {id:'workers',script:'run-inspector.ps1',args:['--workers'],covers:'ten native Worker Presets, tool scope, parent/child, cold recovery, Host restart'},
  {id:'roles',script:'run-roles.ps1',args:[],covers:'Identity roles, Guest/Contact isolation, Session restore across restart'},
- {id:'schedule-restart',script:'run-schedule-restart.ps1',args:[],covers:'Schedule restart and tool guard'}
+ {id:'schedule-restart',script:'run-schedule-restart.ps1',args:[],covers:'Schedule restart and tool guard'},
+ {id:'character-manager',script:'run-character-manager.ps1',args:[],covers:'runtime persona hot reload, character switch isolation, public version privacy, role grants across a switch, no tools for Contact/Guest'}
 ]);
 function summarize({host,results=[]}){
  const byId=new Map(results.map(r=>[r.id,r]));

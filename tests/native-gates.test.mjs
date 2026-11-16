@@ -50,8 +50,9 @@ test('only every required gate passing on a verified Host is a pass',()=>{
  assert.equal(summarize({host:{ok:true},results:[...all,{id:'invented',exitCode:0,reported:true}]}).ok,false);
 });
 
-test('required gates cover Worker, Identity, Schedule and Long Tasks lifecycles with existing scripts',()=>{
- assert.deepEqual(GATES.map(g=>g.id),['lifecycle','workers','roles','schedule-restart']);
+test('required gates cover Worker, Identity, Schedule, Long Tasks and the character manager with existing scripts',()=>{
+ assert.deepEqual(GATES.map(g=>g.id),['lifecycle','workers','roles','schedule-restart','character-manager']);
+ assert.equal(GATES.find(g=>g.id==='character-manager').script,'run-character-manager.ps1');
  for(const g of GATES)assert(fs.existsSync(new URL('../scripts/'+g.script,import.meta.url)),g.script);
  const pin=JSON.parse(fs.readFileSync(new URL('../docs/evidence/native-host-pin.json',import.meta.url),'utf8'));
  assert.equal(pin.version,'0.2.2-rc.1');for(const k of ['executableSha256','appAsarSha256','appAsarUnpackedTreeSha256'])assert.match(pin[k],/^[0-9a-f]{64}$/,k);
