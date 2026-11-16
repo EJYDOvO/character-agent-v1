@@ -1,7 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {Interaction,boundary,options,replyPolicy,semanticParts} from '../packages/interaction-policy/policy.mjs';
-import {apply} from '../packages/interaction-policy/index.mjs';
+import {apply,liveStyle} from '../packages/interaction-policy/index.mjs';
+import {mkdtempSync,readFileSync,rmSync,utimesSync,writeFileSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
 // The transport receives complete bubbles only (no stream, no edit): outcome(text, meta)
 // may hold a send or fail it with a delivery state, as the platform bridge reports it.
 function fixture(config={}){
@@ -180,4 +183,67 @@ test('hang-on stays outside the content bubble budget; final remainder is never 
  const text='第一份完整结果。'.repeat(40)+'\n\n'+'第二份完整结果。'.repeat(40);f.message(text);await f.p.idle();
  const content=f.sent.filter(s=>s[2]?.kind!=='status');assert.equal(f.sent.length-content.length,1);assert.equal(content.length,3);
  assert.equal(content.map(s=>s[1]).join(''),'先检查一下。'+text);await f.p.dispose();
+});
+
+// Live style: the reminder and wait text come from compiled.json at use time.
+const NEUTRAL_STYLE={styleReminder:'',hangOnText:'还在处理中，稍等一下。'};
+function styleFile(content){
+ const dir=mkdtempSync(join(tmpdir(),'interaction-style-')),file=join(dir,'compiled.json');
+ const write=(value,seconds=0)=>{writeFileSync(file,typeof value==='string'?value:JSON.stringify(value));const at=new Date(Date.now()+seconds*1000);utimesSync(file,at,at);};
+ if(content!==undefined)write(content);
+ return {dir,file,write};
+}
+test('compiledFile and styleReminder are exclusive',()=>{
+ assert.throws(()=>options({compiledFile:'C:/data/compiled.json',styleReminder:'R'}),/Invalid interaction option: compiledFile/);
+ assert.throws(()=>options({compiledFile:'relative/compiled.json'}),/Invalid interaction option: compiledFile/);
+ assert.throws(()=>options({compiledFile:7}),/Invalid interaction option: compiledFile/);
+ assert.equal(options({compiledFile:'C:/data/compiled.json'}).compiledFile,'C:/data/compiled.json');
+ assert.equal('compiledFile' in options({}),false);
+});
+test('liveStyle follows the file',()=>{
+ const f=styleFile({reminder:'A',hangOnText:'等等'});
+ try{
+  assert.deepEqual(liveStyle(f.file,NEUTRAL_STYLE.hangOnText),{styleReminder:'A',hangOnText:'等等'});
+  f.write({reminder:'B',hangOnText:'稍候'},1);
+  assert.deepEqual(liveStyle(f.file,NEUTRAL_STYLE.hangOnText),{styleReminder:'B',hangOnText:'稍候'});
+ }finally{rmSync(f.dir,{recursive:true,force:true});}
+});
+test('liveStyle reads the file only when it changed',()=>{
+ const f=styleFile({reminder:'A',hangOnText:'等等'});let reads=0;
+ const read=(...a)=>{reads++;return readFileSync(...a);};
+ try{
+  liveStyle(f.file,'x',read);liveStyle(f.file,'x',read);assert.equal(reads,1);
+  f.write({reminder:'B',hangOnText:'等等'},1);liveStyle(f.file,'x',read);assert.equal(reads,2);
+ }finally{rmSync(f.dir,{recursive:true,force:true});}
+});
+test('liveStyle falls back to neutral defaults',()=>{
+ const f=styleFile();
+ try{
+  assert.deepEqual(liveStyle(f.file,NEUTRAL_STYLE.hangOnText),NEUTRAL_STYLE,'missing file');
+  f.write('{broken');assert.deepEqual(liveStyle(f.file,NEUTRAL_STYLE.hangOnText),NEUTRAL_STYLE,'broken JSON');
+  f.write({reminder:'A',hangOnText:'字'.repeat(201)},1);assert.deepEqual(liveStyle(f.file,NEUTRAL_STYLE.hangOnText),NEUTRAL_STYLE,'long hang-on text');
+  f.write({reminder:'A',hangOnText:'  '},2);assert.deepEqual(liveStyle(f.file,NEUTRAL_STYLE.hangOnText),NEUTRAL_STYLE,'blank hang-on text');
+  f.write({reminder:'字'.repeat(4001),hangOnText:'等等'},3);assert.deepEqual(liveStyle(f.file,NEUTRAL_STYLE.hangOnText),NEUTRAL_STYLE,'long reminder');
+  f.write({reminder:7,hangOnText:'等等'},4);assert.deepEqual(liveStyle(f.file,NEUTRAL_STYLE.hangOnText),NEUTRAL_STYLE,'non-text reminder');
+  f.write({reminder:'字'.repeat(4000),hangOnText:'字'.repeat(200)},5);assert.equal(liveStyle(f.file,NEUTRAL_STYLE.hangOnText).styleReminder.length,4000,'limits are inclusive');
+ }finally{rmSync(f.dir,{recursive:true,force:true});}
+});
+test('the hang-on draft uses the live reminder and wait text',async()=>{
+ const f=styleFile({reminder:'用「嗯，」开头',hangOnText:'稍等哦。'});
+ try{
+  const listeners=new Map(),streams=[];let service;
+  const sections=new Map([['deployment:persona-prefix',{text:'你是小A。'}]]);
+  const ctx={provide:(_n,v)=>service=v,on:(n,fn)=>listeners.set(n,fn),effect(){},logger:{warn(){}},get:()=>undefined,
+   systemPrompt:{context(){},layers:{merge:()=>sections}},
+   llm:{stream(o){streams.push(o);return (async function*(){yield {type:'text-delta',index:0,text:'嗯，稍等我一下。'};yield {type:'finish',reason:{kind:'stop'}};})();}}};
+  apply(ctx,{compiledFile:f.file});
+  const agent={session:{requestHeader:()=>({config:{provider:'main',model:'m'}})},status:'running'};
+  listeners.get('agent/created')({agent});
+  const policy=service.get(agent),draft=()=>policy.drafter({agent,state:'agent',signal:new AbortController().signal});
+  assert.equal(policy.config.hangOnText,'稍等哦。');
+  await draft();assert(streams[0].system.includes('你是小A。\n\n用「嗯，」开头\n\n【等待提示】'),streams[0].system);
+  f.write({reminder:'用「唔，」开头',hangOnText:'马上哦。'},1);
+  await draft();assert(streams[1].system.includes('用「唔，」开头'));assert(!streams[1].system.includes('用「嗯，」开头'));
+  assert.equal(policy.config.hangOnText,'马上哦。');
+ }finally{rmSync(f.dir,{recursive:true,force:true});}
 });
