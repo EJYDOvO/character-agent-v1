@@ -41,6 +41,12 @@ export function readSettings(dir) {
   return normalizeSettings(fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : {});
 }
 
+/** The rules and reminder texts of a character directory; a missing file reads as empty. */
+export function readTexts(dir) {
+  const read = name => (fs.existsSync(path.join(dir, name)) ? fs.readFileSync(path.join(dir, name), 'utf8') : '');
+  return {rules: read(RULES_FILE), reminder: read(REMINDER_FILE)};
+}
+
 /**
  * @param {{dir: string, characterId: string, parseYaml: (text: string) => unknown,
  *   draft?: Draft}} options
@@ -108,7 +114,8 @@ export function saveCharacter({dir, characterId, parseYaml, draft, revision}) {
   const disk = readSettings(dir);
   if (revision !== disk.revision) throw new Error('Revision conflict');
   const next = normalizeSettings({...disk, ...draft.settings, revision: revision + 1});
-  const {compiled} = compileCharacter({dir, characterId, parseYaml, draft: {...draft, settings: next}});
+  // `next` is the complete new settings: optional keys it lacks must not come back from disk.
+  const {compiled} = compileCharacter({dir, characterId, parseYaml, draft: {...draft, settings: {nickname: undefined, publicApproved: undefined, ...next}}});
 
   if (draft.rules !== undefined) writeFileAtomic(path.join(dir, RULES_FILE), draft.rules);
   if (draft.reminder !== undefined) writeFileAtomic(path.join(dir, REMINDER_FILE), draft.reminder);

@@ -206,11 +206,7 @@ export function archiveCharacter(root, id) {
  * @returns {object}
  */
 export function exportCard(root, id, parseYaml) {
-  const dir = characterDir(root, id);
-  const file = CARD_FILES.map(name => path.join(dir, name)).find(candidate => fs.existsSync(candidate));
-  if (!file) throw new CardError('角色目录里没有角色卡');
-  const {raw} = readCardFile(file, {parseYaml});
-  const {data} = normalizeCard(raw, file);
+  const {raw, data} = readCard(root, id, parseYaml);
   const source = raw.spec === undefined ? raw : raw.data;
   const {name, nickname, description, personality, scenario, mes_example} = data;
   return {
@@ -218,6 +214,21 @@ export function exportCard(root, id, parseYaml) {
     spec_version: '3.0',
     data: {...source, name, nickname, description, personality, scenario, mes_example, extensions: source.extensions ?? {}},
   };
+}
+
+/** Which card format the character was imported from. @returns {{spec: 'v1'|'v2'|'v3', format: 'json'|'png'|'yaml'}} */
+export function cardInfo(root, id, parseYaml) {
+  const {spec, format} = readCard(root, id, parseYaml);
+  return {spec, format};
+}
+
+function readCard(root, id, parseYaml) {
+  const dir = characterDir(root, id);
+  const file = CARD_FILES.map(name => path.join(dir, name)).find(candidate => fs.existsSync(candidate));
+  if (!file) throw new CardError('角色目录里没有角色卡');
+  const {raw, format} = readCardFile(file, {parseYaml});
+  const {spec, data} = normalizeCard(raw, file);
+  return {raw, data, spec, format};
 }
 
 function checkDirectory(root, id, dir) {
