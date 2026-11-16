@@ -105,6 +105,11 @@ test('exactly one public persona source',()=>{
  assert.throws(()=>rolePresets({owner:owner(),publicPersonaRow:{...runtimeRow(),id:'other'}}),/public Persona/);
  assert.throws(()=>rolePresets({owner:owner(),publicPersonaRow:null}),/public Persona/);
 });
+test('the public persona row must read the public audience',()=>{
+ for(const audience of ['owner',undefined,'Public'])
+  assert.throws(()=>rolePresets({owner:owner(),publicPersonaRow:{...runtimeRow(),config:{...runtimeRow().config,audience}}}),/audience/,String(audience));
+ assert.throws(()=>rolePresets({owner:owner(),publicPersonaRow:{id:'persona',name:'x'}}),/audience/,'no config');
+});
 test('the legacy Owner alias is unchanged with a persona row',()=>{
  const rows=rolePresets({owner:owner(),publicPersonaRow:runtimeRow(),legacyOwner:'qq-character'});
  assert.deepEqual(rows.at(-1).config.plugins,rows[0].config.plugins);

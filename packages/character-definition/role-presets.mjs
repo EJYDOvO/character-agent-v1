@@ -11,6 +11,8 @@ export function rolePresets({owner,publicPersona,publicPersonaRow,legacyOwner}){
  const staticPersona=typeof publicPersona==='string'&&publicPersona.trim()!=='';
  if(!owner?.config?.plugins||staticPersona===(publicPersonaRow!==undefined))throw Error('Reviewed Owner composition and exactly one explicit public Persona required');
  if(publicPersonaRow!==undefined&&publicPersonaRow?.id!=='persona')throw Error('The public Persona row must be a persona plugin row');
+ // Defence in depth: Contact and Guest must never get a row that reads the Owner text.
+ if(publicPersonaRow!==undefined&&publicPersonaRow.config?.audience!=='public')throw Error('The public Persona row must read audience public');
  if(publicPersona!==undefined&&!staticPersona)throw Error('Reviewed Owner composition and exactly one explicit public Persona required');
  if(!owner.config.plugins.some(p=>p.id==='persona'))throw Error('Owner Persona missing');
  if(legacyOwner!==undefined&&(typeof legacyOwner!=='string'||!/^[a-z][a-z0-9-]{0,63}$/.test(legacyOwner)||Object.values(ROLE_PRESETS).includes(legacyOwner)))throw Error('Invalid legacy Owner Preset id');

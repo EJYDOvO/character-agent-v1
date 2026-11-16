@@ -186,6 +186,8 @@ window.__ModuleLoader__.load({id: 'dsh-character-manager', factory(require) {
     const named = id => characters.find(c => c.id === id)?.name ?? id;
 
     const header = h('div', {className: 'cm-row cm-between'}, h('h3', null, '角色管理'), btn('刷新', () => { setNotice(''); reload(); }, {disabled: busy}));
+    // The Host gives a settings section no way to open another one, so this is a pointer, not a link.
+    const memoryNote = h('p', {className: 'cm-muted'}, '当前角色的记忆在 设置 → 记忆管理 中查看和修改；切换角色后那里显示新角色的记忆。');
     const warnings = (list?.profileWarnings ?? []).map(text => h('p', {key: text, role: 'alert', className: 'cm-error'}, text));
     const status = list?.switch && h('div', null,
       list.switch.pending && h('p', {role: 'status'}, `切换到「${named(list.switch.pending.target)}」${list.switch.inProgress ? '正在进行' : '已请求，等待处理'}。`),
@@ -264,7 +266,7 @@ window.__ModuleLoader__.load({id: 'dsh-character-manager', factory(require) {
           preview.warnings.map((text, i) => h('p', {key: i, className: 'cm-muted'}, text))));
     }
 
-    return h('section', {className: 'dsh-cm', 'aria-label': '角色管理'}, header, warnings, status,
+    return h('section', {className: 'dsh-cm', 'aria-label': '角色管理'}, header, memoryNote, warnings, status,
       notice && h('p', {role: 'status'}, notice), error && h('div', {role: 'alert', className: 'cm-error'}, h('p', null, error)),
       confirmBox, importer,
       list ? (rows.length ? h('div', null, rows) : h('p', {className: 'cm-muted'}, '还没有角色，请先导入角色卡。')) : h('p', {role: 'status', className: 'cm-muted'}, '正在读取角色列表…'),

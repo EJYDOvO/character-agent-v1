@@ -225,6 +225,21 @@ test('the page lists characters, asks before switching and never mentions permis
   }
 });
 
+// A settings section only gets `close` from the shell (no way to open another
+// section), so the page names where Memory Inspector is instead of linking.
+test('the page points to Memory Inspector for the character\'s memories', async () => {
+  const m = mounted(handlers());
+  try {
+    m.render();
+    await m.settle();
+    const note = m.nodes().find(n => n.tag === 'p' && JSON.stringify(n.children).includes('设置 → 记忆管理'));
+    assert(note, 'a note naming 设置 → 记忆管理');
+    assert(JSON.stringify(note.children).includes('当前角色的记忆'));
+  } finally {
+    m.unmount();
+  }
+});
+
 test('confirming the public version sends the hash the preview returned', async () => {
   const m = mounted(handlers());
   try {
