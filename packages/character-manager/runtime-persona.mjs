@@ -4,8 +4,7 @@
 // and node built-ins only, so the Host-side path stays small.
 import fs from 'node:fs';
 import path from 'node:path';
-import {NEUTRAL_PERSONA, readCompiled} from './compiled.mjs';
-
+import {NEUTRAL_PERSONA, parseJson, readJsonFile, validateCompiled} from './compiled.mjs';
 export const name = 'character-runtime-persona';
 export const inject = ['systemPrompt'];
 
@@ -38,8 +37,10 @@ export function apply(ctx, config = {}) {
 }
 
 /**
- * Reads compiled.json when its mtime or size changed. A read that fails keeps
- * the last good content of this process; before any good read the state is
+ * Reads compiled.json when its mtime or size changed. Content that does not
+ * validate keeps the last good content of this process until the file changes
+ * again; a read that fails (a lock, a read during a replace) keeps it only for
+ * this call, and the next call reads again. Before any good read the state is
  * neutral. The character id comes from binding.json, read once it is readable.
  * @param {string} file compiled.json
  * @param {string} bindingFile
@@ -50,18 +51,19 @@ export function personaState(file, bindingFile) {
   const current = () => (last ? {source: 'compiled', compiled: last} : {source: 'neutral'});
   return {
     read() {
-      let stat;
+      let next, text;
       try {
-        stat = fs.statSync(file);
+        const stat = fs.statSync(file);
+        next = `${stat.mtimeMs}:${stat.size}`;
+        if (next === key) return current();
         characterId ??= readCharacterId(bindingFile);
+        text = fs.readFileSync(file, 'utf8');
       } catch {
         return current();
       }
-      const next = `${stat.mtimeMs}:${stat.size}`;
-      if (next === key) return current();
       key = next;
       try {
-        last = readCompiled(file, {characterId});
+        last = validateCompiled(parseJson(text), {characterId});
       } catch {
         // Keep the last good content.
       }
@@ -79,7 +81,7 @@ function textFor(state, audience) {
 }
 
 function readCharacterId(bindingFile) {
-  const {characterId} = JSON.parse(fs.readFileSync(bindingFile, 'utf8'));
+  const {characterId} = readJsonFile(bindingFile);
   if (typeof characterId !== 'string' || !characterId) throw new Error('binding.json has no characterId');
   return characterId;
 }

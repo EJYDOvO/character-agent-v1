@@ -1,6 +1,6 @@
-import test from 'node:test';
+import test, {mock} from 'node:test';
 import assert from 'node:assert/strict';
-import {copyFileSync, mkdtempSync, rmSync, utimesSync, writeFileSync} from 'node:fs';
+import fs, {copyFileSync, mkdtempSync, rmSync, utimesSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join, resolve} from 'node:path';
 import yaml from 'js-yaml';
@@ -132,6 +132,46 @@ test('a broken file keeps the last good text', () => {
   writeJsonAtomic(compiledFile, {...compiled, owner: {prefix: '恢复', suffix: ''}});
   bump(compiledFile, 2);
   assert.equal(h.read().prefix, '恢复');
+});
+
+// A read that fails (an antivirus lock, a read during a replace) is not a
+// verdict on the file: the next call reads it again.
+function failingOnce(file) {
+  const read = fs.readFileSync;
+  let failed = false;
+  return mock.method(fs, 'readFileSync', function (target, ...rest) {
+    if (!failed && String(target) === file) {
+      failed = true;
+      throw Object.assign(new Error('locked'), {code: 'EPERM'});
+    }
+    return read.call(this, target, ...rest);
+  });
+}
+
+test('a failed read is retried, not cached', t => {
+  const {compiledFile, bindingFile, read} = fixture();
+  const state = personaState(compiledFile, bindingFile);
+  const spy = failingOnce(compiledFile);
+  t.after(() => spy.mock.restore());
+  assert.deepEqual(state.read(), {source: 'neutral'}, 'nothing good read yet');
+  assert.deepEqual(state.read(), {source: 'compiled', compiled: read()}, 'the same file is read again');
+
+  // With last good content: a changed file whose first read fails is read on the next call.
+  const h = host({audience: 'owner', compiledFile, bindingFile});
+  assert.equal(h.read().prefix, read().owner.prefix);
+  writeJsonAtomic(compiledFile, {...read(), owner: {prefix: '改过的开头', suffix: ''}});
+  bump(compiledFile, 3);
+  spy.mock.restore();
+  const again = failingOnce(compiledFile);
+  t.after(() => again.mock.restore());
+  assert.equal(h.read().prefix, read().owner.prefix, 'the failed read keeps the last good text');
+  assert.equal(h.read().prefix, '改过的开头', 'and the next call reads the new file');
+});
+
+test('a binding.json with a byte order mark is read', () => {
+  const {compiledFile, bindingFile, read} = fixture();
+  writeFileSync(bindingFile, `\uFEFF${JSON.stringify({characterId})}`);
+  assert.deepEqual(personaState(compiledFile, bindingFile).read(), {source: 'compiled', compiled: read()});
 });
 
 test('a file that is broken from the start gives the neutral persona', () => {

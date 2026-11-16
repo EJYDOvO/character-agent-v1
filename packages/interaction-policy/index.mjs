@@ -23,20 +23,24 @@ export function hangOnModel(file,read=readFileSync){
 // The current character's compiled.json carries the style reminder and the
 // hang-on text. Interaction parses just those two fields itself, so it needs no
 // Character code. Anything unusable gives neutral values: no reminder and the
-// default wait text. The parsed file is cached until its mtime or size changes.
+// default wait text. The parsed file is cached until its mtime or size changes;
+// a read that fails (a lock, a read during a replace) is not cached: that call
+// keeps the previous style and the next call reads again.
 const liveFiles=new Map();
 export function liveStyle(file,fallbackHangOnText,read=readFileSync){
- let key;try{const stat=statSync(file);key=`${stat.mtimeMs}:${stat.size}`;}catch{liveFiles.delete(file);return {styleReminder:'',hangOnText:fallbackHangOnText};}
+ const neutral={styleReminder:'',hangOnText:fallbackHangOnText};
+ let key;try{const stat=statSync(file);key=`${stat.mtimeMs}:${stat.size}`;}catch{liveFiles.delete(file);return neutral;}
  let entry=liveFiles.get(file);
  if(entry?.key!==key){
+  let text;try{text=read(file,'utf8');}catch{return entry?.style?{...entry.style}:neutral;}
   entry={key,style:null};
   try{
-   const {reminder,hangOnText}=JSON.parse(read(file,'utf8'));
+   const {reminder,hangOnText}=JSON.parse(text);
    if(typeof reminder==='string'&&[...reminder].length<=MAX_STYLE_REMINDER_CHARS&&typeof hangOnText==='string'&&hangOnText.trim()&&hangOnText.length<=MAX_HANG_ON_TEXT_CHARS)entry.style={styleReminder:reminder,hangOnText};
   }catch{}
   liveFiles.set(file,entry);
  }
- return entry.style?{...entry.style}:{styleReminder:'',hangOnText:fallbackHangOnText};
+ return entry.style?{...entry.style}:neutral;
 }
 // Interaction reads its config on every use, so getters keep the style live.
 // The build's hangOnText is ignored: it is the character's, not the deployment's.

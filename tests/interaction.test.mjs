@@ -216,6 +216,14 @@ test('liveStyle reads the file only when it changed',()=>{
   f.write({reminder:'B',hangOnText:'等等'},1);liveStyle(f.file,'x',read);assert.equal(reads,2);
  }finally{rmSync(f.dir,{recursive:true,force:true});}
 });
+test('liveStyle retries a read that failed',()=>{
+ const f=styleFile({reminder:'A',hangOnText:'等等'});let fail=true;
+ const read=(...a)=>{if(fail){fail=false;throw Object.assign(Error('locked'),{code:'EPERM'});}return readFileSync(...a);};
+ try{
+  assert.deepEqual(liveStyle(f.file,'x',read),{styleReminder:'',hangOnText:'x'},'the failed read gives the neutral style');
+  assert.deepEqual(liveStyle(f.file,'x',read),{styleReminder:'A',hangOnText:'等等'},'the unchanged file is read again');
+ }finally{rmSync(f.dir,{recursive:true,force:true});}
+});
 test('liveStyle falls back to neutral defaults',()=>{
  const f=styleFile();
  try{
