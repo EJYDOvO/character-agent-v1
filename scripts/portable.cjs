@@ -9,9 +9,12 @@ function cardBuildConfig(c,dir){
  if(c.cardPath!==undefined)throw Error('Unknown portable config key "cardPath": use "card"');
  const unknownRules=Object.keys(c.rules??{}).filter(key=>!['system','reminder'].includes(key));
  if(unknownRules.length)throw Error(`Unknown portable rules key ${unknownRules.join(', ')}: expected "system" and "reminder"`);
+ // The character is always named: no template card and no default id.
+ if(c.card===undefined)throw Error('Portable config must name the character card: set "card" (the template is characters/template/card.yaml)');
+ if(c.characterId===undefined)throw Error('Portable config must name the character: set "characterId"');
  const resolve=value=>value===undefined?undefined:path.resolve(dir,value);
  const rules={};if(c.rules?.system!==undefined)rules.systemFile=resolve(c.rules.system);if(c.rules?.reminder!==undefined)rules.reminderFile=resolve(c.rules.reminder);
- return {cardPath:c.card===undefined?path.join(root,'characters','template','card.yaml'):resolve(c.card),rules,...(c.userName!==undefined?{userName:c.userName}:{}),...(c.characterId!==undefined?{characterId:c.characterId}:{})};
+ return {cardPath:resolve(c.card),rules,...(c.userName!==undefined?{userName:c.userName}:{}),characterId:c.characterId};
 }
 // What a private build/pack step printed that the person must see: card
 // warnings always, and on failure the error's first line (not its stack).

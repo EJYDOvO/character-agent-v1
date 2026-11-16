@@ -1,4 +1,4 @@
-const fs=require('node:fs'),path=require('node:path');
+const path=require('node:path');
 // The card settings travel in two parts: characterId for deploy checks and
 // card for loadCard().
 function cardBuildSettings(){const {characterId,...card}=require('./card-source.cjs').cardSettings();return {characterId,card};}
@@ -11,8 +11,8 @@ function managerSettings(value,install){
  return value.enabled?{enabled:true,root:path.join(install,'data').replaceAll('\\','/')}:undefined;
 }
 module.exports=()=>{
- const root=path.resolve(__dirname,'..'),file=process.env.DSH_CHARACTER_BUILD_CONFIG||path.join(root,'private','build-config.json');
- const local=fs.existsSync(file)?JSON.parse(fs.readFileSync(file,'utf8').replace(/^\uFEFF/,'')):{};
+ // One reader for the build config: it must exist and hold only known keys.
+ const local=require('./card-source.cjs').readConfig();
  const install=require('./installation.cjs').install,characterManager=managerSettings(local.characterManager,install);
  const roles=require('./role-settings.cjs').roleSettings(local.roles,{characterManager:!!characterManager});
  const presetId=process.env.DSH_CHARACTER_PRESET_ID||local.presetId||(roles?'character':'qq-character');

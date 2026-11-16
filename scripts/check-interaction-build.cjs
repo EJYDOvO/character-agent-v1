@@ -13,7 +13,7 @@ const optional='# Keep reviewed optional declarations unchanged.\n[]\n';fs.write
 const configs=[],personas=[];
 for(const mode of ['on','off']){
  const community=mode==='on'?[{id:'root-planner-worker',alias:'external-planner'}]:[];
- fs.mkdirSync(path.join(fixture,'private'),{recursive:true});fs.writeFileSync(path.join(fixture,'private/build-config.json'),JSON.stringify({communityWorkerPresets:community,rules:{reminderFile:'fixture-reminder.md'}}));
+ fs.mkdirSync(path.join(fixture,'private'),{recursive:true});fs.writeFileSync(path.join(fixture,'private/build-config.json'),JSON.stringify({characterId:'fixture-character',communityWorkerPresets:community,rules:{reminderFile:'fixture-reminder.md'}}));
  const env={...process.env,DSH_CHARACTER_INTERACTION:mode,DSH_CHARACTER_PRESET_ID:'fixture-character',DSH_CHARACTER_DATA_DIR:path.join(fixture,'data'),DSH_CHARACTER_CARD:path.join(fixture,'fixture.json')};
  const result=spawnSync(process.execPath,[path.join(fixture,'scripts/build.cjs')],{env,cwd:fixture,encoding:'utf8',windowsHide:true});
  assert.equal(result.status,0,result.stderr);
@@ -37,7 +37,7 @@ for(const mode of ['on','off']){
  assert(persona.prefix.includes('## 角色：Fixture\nIsolated build fixture.'),'Persona prefix comes from the card');
  assert(persona.suffix.includes('用户: hi {getvar::x}\nFixture: hello'),'Persona suffix holds the card examples');
  assert.equal(character.config.plugins.find(p=>p.id==='character-memory-tools').config.reminder,'Fixture reminder.');personas.push(persona);
- assert.equal(manifest.characterId,'character-a');assert.equal(manifest.card.spec,'v3');
+ assert.equal(manifest.characterId,'fixture-character');assert.equal(manifest.card.spec,'v3');
  // ensure-build re-reads the files; the build fingerprints the bytes it rendered. Both must agree.
  const revisions=require('./card-source.cjs').cardRevisions({cardPath:path.join(fixture,'fixture.json'),systemRulesPath:null,reminderPath:path.join(fixture,'fixture-reminder.md')});
  assert.equal(manifest.card.revision,revisions.revision);assert.equal(manifest.rulesRevision,revisions.rulesRevision);
@@ -50,7 +50,7 @@ for(const mode of ['on','off']){
  configs.push({mode,creatorPluginsPreserved:true,extrasUnchanged:true,optionalEntry:mode==='on'});
 }
 for(const community of [['fixture-character'],['cordis'],[{id:'one',alias:'worker-general'}],[{id:'one'},'one']]){
- fs.writeFileSync(path.join(fixture,'private/build-config.json'),JSON.stringify({communityWorkerPresets:community,rules:{reminderFile:'fixture-reminder.md'}}));
+ fs.writeFileSync(path.join(fixture,'private/build-config.json'),JSON.stringify({characterId:'fixture-character',communityWorkerPresets:community,rules:{reminderFile:'fixture-reminder.md'}}));
  const failed=spawnSync(process.execPath,[path.join(fixture,'scripts/build.cjs')],{env:{...process.env,DSH_CHARACTER_PRESET_ID:'fixture-character',DSH_CHARACTER_DATA_DIR:path.join(fixture,'data'),DSH_CHARACTER_CARD:path.join(fixture,'fixture.json')},cwd:fixture,encoding:'utf8',windowsHide:true});assert.notEqual(failed.status,0,'Unsafe configuration must reject the build');
 }
 // The Host's own renderer with no prompt variables registered: a reference

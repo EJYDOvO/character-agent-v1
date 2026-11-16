@@ -8,8 +8,9 @@ import {join, resolve} from 'node:path';
 const root = resolve(import.meta.dirname, '..');
 
 // Runs the digest in a child process: pack.cjs calls it with the deployment
-// environment, so the test does too, with an empty build config.
-function digest(env, buildConfig = {}) {
+// environment, so the test does too. The default config names the template.
+const TEMPLATE_CONFIG = {characterId: 'test-a', cardPath: 'characters/template/card.yaml'};
+function digest(env, buildConfig = TEMPLATE_CONFIG) {
   const dir = mkdtempSync(join(tmpdir(), 'source-digest-'));
   const config = join(dir, 'build-config.json');
   writeFileSync(config, JSON.stringify(buildConfig));
