@@ -29,10 +29,11 @@ function fixture({watchdog = true, checkedAgo = 30000, targets = ['next']} = {})
   const root = join(base, 'data');
   const maintenanceDirectory = join(root, 'maintenance');
   mkdirSync(maintenanceDirectory, {recursive: true});
-  for (const id of ['cur', ...targets]) importCard(root, id);
+  importCard(root, 'cur');
   writeFileSync(join(characterDir(root, 'cur'), 'binding.json'), JSON.stringify({...IDENTITY, characterId: 'cur'}));
   writeFileSync(join(characterDir(root, 'cur'), 'conversations.json'), JSON.stringify({sessionIds: {k: 'old-session'}, overrides: {}, presets: {}, lifecycle: {}}));
   symlinkSync(characterDir(root, 'cur'), join(root, 'character-current'), 'junction');
+  for (const id of targets) importCard(root, id); // imported with a current character: the binding gets its identity
   const featuresFile = join(base, 'features.json');
   writeFileSync(featuresFile, JSON.stringify({watchdog: {enabled: watchdog, maxStartsPerHour: 3}}));
   writeFileSync(join(maintenanceDirectory, 'watchdog-state.json'), JSON.stringify({checkedAt: new Date(NOW - checkedAgo).toISOString()}));
@@ -91,13 +92,23 @@ test('prepares only missing files', () => {
 
 test('binding copies identity but not the character', () => {
   const f = fixture();
+  assert.deepEqual(JSON.parse(readFileSync(join(characterDir(f.root, 'next'), 'binding.json'), 'utf8')), {...IDENTITY, characterId: 'next'});
   requestSwitch(f.options());
   assert.deepEqual(JSON.parse(readFileSync(join(characterDir(f.root, 'next'), 'binding.json'), 'utf8')), {...IDENTITY, characterId: 'next'});
 
+  // A complete binding is never rewritten; one without identity makes the target unswitchable.
   const full = fixture();
-  writeFileSync(join(characterDir(full.root, 'next'), 'binding.json'), JSON.stringify({appId: 'x', ownerId: 'y', projectId: 'z', characterId: 'next'}));
+  const file = join(characterDir(full.root, 'next'), 'binding.json');
+  writeFileSync(file, JSON.stringify({appId: 'x', ownerId: 'y', projectId: 'z', characterId: 'next'}));
+  const before = [readFileSync(file, 'utf8'), statSync(file).mtimeMs];
   requestSwitch(full.options());
-  assert.equal(JSON.parse(readFileSync(join(characterDir(full.root, 'next'), 'binding.json'), 'utf8')).appId, 'x');
+  assert.deepEqual([readFileSync(file, 'utf8'), statSync(file).mtimeMs], before);
+
+  const bare = fixture();
+  writeFileSync(join(characterDir(bare.root, 'next'), 'binding.json'), JSON.stringify({characterId: 'next'}));
+  assert.throws(() => requestSwitch(bare.options()), /缺少身份信息/);
+  assert.equal(existsSync(bare.file(REQUEST_FILE)), false);
+  assert.equal(existsSync(join(characterDir(bare.root, 'next'), 'conversations.json')), false);
 });
 
 test('current character files are untouched', () => {

@@ -282,3 +282,42 @@ test('profile warnings are shown at the top', async () => {
     m.unmount();
   }
 });
+
+const approvedAndPending = {...compiled, public: {prefix: 'OLD-PUBLIC-PREFIX', suffix: 'OLD-PUBLIC-SUFFIX', reminder: 'OLD-PUBLIC-REMINDER', hash: 'hash-old'}};
+async function openPublicPreview(m) {
+  m.render();
+  await m.settle();
+  m.find('Button', 'Tasha').props.onClick();
+  m.render();
+  await m.settle();
+  m.nodes().find(n => n.tag === 'SegmentedTabs' && n.props.label === '角色详情').props.onChange('preview');
+  m.render();
+  await m.settle();
+  m.nodes().find(n => n.tag === 'SegmentedTabs' && n.props.label === '预览版本').props.onChange('public');
+  m.render();
+}
+
+test('with an approved and a pending public version the pane shows the pending one and approves its hash', async () => {
+  const m = mounted({...handlers(), preview: () => ({compiled: approvedAndPending})});
+  try {
+    await openPublicPreview(m);
+    assert(m.text.includes('PUBLIC-PREFIX') && m.text.includes('PUBLIC-SUFFIX') && m.text.includes('PUBLIC-REMINDER'));
+    assert(!m.text.includes('OLD-PUBLIC'), 'the approved old text is not shown as the thing to approve');
+    await m.find('Button', '确认公开版').props.onClick();
+    assert.deepEqual(plain(m.requests.find(r => r.operation === 'approvePublic')), {operation: 'approvePublic', id: 'b', hash: 'hash-1'});
+  } finally {
+    m.unmount();
+  }
+});
+
+test('with only an approved public version there is nothing to approve', async () => {
+  const {pendingPublic, ...settled} = approvedAndPending;
+  const m = mounted({...handlers(), preview: () => ({compiled: settled})});
+  try {
+    await openPublicPreview(m);
+    assert(m.text.includes('OLD-PUBLIC-PREFIX'));
+    assert.equal(m.find('Button', '确认公开版'), undefined);
+  } finally {
+    m.unmount();
+  }
+});

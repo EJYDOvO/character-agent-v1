@@ -172,8 +172,7 @@ function createFromUpload(root, {uploadId, id, userName, parseYaml}) {
     writeJsonAtomic(path.join(dir, 'character.json'), settings);
     const {compiled} = compileCharacter({dir, characterId: id, parseYaml});
     writeJsonAtomic(path.join(dir, 'compiled.json'), compiled);
-    // Only the character id: appId, ownerId and projectId are filled in by the first switch to it.
-    writeJsonAtomic(path.join(dir, 'binding.json'), {characterId: id});
+    writeJsonAtomic(path.join(dir, 'binding.json'), bindingFor(root, id));
     writeRegistry(root, {...registry, characters: [...registry.characters, {id, dir: toPosix(dir), addedAt: new Date().toISOString(), archived: false}]});
     return compiled;
   } catch (error) {
@@ -229,6 +228,21 @@ function readCard(root, id, parseYaml) {
   const {raw, format} = readCardFile(file, {parseYaml});
   const {spec, data} = normalizeCard(raw, file);
   return {raw, data, spec, format};
+}
+
+// The identity (app, owner, project) comes from the current character; with no
+// current character (first ever import) only the id is known.
+function bindingFor(root, id) {
+  const current = currentId(root);
+  if (current) {
+    try {
+      const {appId, ownerId, projectId} = JSON.parse(fs.readFileSync(path.join(characterDir(root, current), 'binding.json'), 'utf8'));
+      if ([appId, ownerId, projectId].every(value => typeof value === 'string' && value)) return {appId, ownerId, projectId, characterId: id};
+    } catch {
+      // Falls through to the id-only binding.
+    }
+  }
+  return {characterId: id};
 }
 
 function checkDirectory(root, id, dir) {

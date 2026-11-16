@@ -249,7 +249,7 @@ window.__ModuleLoader__.load({id: 'dsh-character-manager', factory(require) {
     }
 
     function previewPane() {
-      const view = audience === 'public' ? (preview?.public ?? preview?.pendingPublic) : preview && {...preview.owner, reminder: preview.reminder};
+      const view = audience === 'public' ? (preview?.pendingPublic ?? preview?.public) : preview && {...preview.owner, reminder: preview.reminder};
       const pending = audience === 'public' && preview?.pendingPublic;
       return h('div', {className: 'cm-box'},
         h(SegmentedTabs, {className: 'cm-tabs', label: '预览版本', items: [{value: 'owner', label: 'Owner 版'}, {value: 'public', label: '公开版'}], value: audience, onChange: setAudience}),
@@ -257,6 +257,7 @@ window.__ModuleLoader__.load({id: 'dsh-character-manager', factory(require) {
           audience === 'public' && h('div', {className: 'cm-row'}, h('span', {className: 'cm-muted'}, '含「用户」称呼的设定字段：'),
             preview.userFields.length ? preview.userFields.map(name => h(Tag, {key: name}, FIELD_NAMES[name] || name)) : h('span', {className: 'cm-muted'}, '无')),
           audience === 'public' && !preview.public && h('p', {className: 'cm-muted'}, WARNING_HINT.pending),
+          audience === 'public' && view && h('p', {className: 'cm-muted'}, pending ? (preview.public ? '以下是待确认的新公开版（当前生效的是旧版本，确认后才会替换）：' : '以下是待确认的公开版：') : '当前生效的公开版：'),
           view ? h(React.Fragment, null, h('pre', null, view.prefix), h('pre', null, view.suffix), h('pre', null, view.reminder)) : null,
           pending && h('div', {className: 'cm-row'}, btn('确认公开版', approve, {variant: 'primary', disabled: busy || dirty}), dirty && h('span', {className: 'cm-muted'}, '请先保存修改，再确认公开版')),
           h('p', {className: 'cm-muted'}, `Token：Owner ${preview.tokens.owner} · 公开版 ${preview.tokens.public}`),

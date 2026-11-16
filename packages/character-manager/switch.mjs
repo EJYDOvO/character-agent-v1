@@ -36,7 +36,7 @@ export function watchdogReady({maintenanceDirectory, featuresFile, now = Date.no
 
 /**
  * Creates the files of `target` the Host needs to start as that character,
- * for those that do not exist yet. Nothing of `current` is written.
+ * for those that do not exist yet (binding.json is never written here). Nothing of `current` is written.
  * @param {{root: string, target: string, current: string}} options
  */
 export function prepareTarget({root, target, current}) {
@@ -46,13 +46,12 @@ export function prepareTarget({root, target, current}) {
     throw new Error('当前角色的 binding.json 不完整，无法准备目标角色。');
   }
   const {appId, ownerId, projectId} = currentBinding;
-
-  // An import leaves binding.json with only the character id; the identity is added here.
-  const bindingFile = path.join(targetDir, 'binding.json');
-  const binding = readJson(bindingFile);
-  if (!binding || IDENTITY_KEYS.some(key => typeof binding[key] !== 'string' || !binding[key])) {
-    writeJsonAtomic(bindingFile, {appId, ownerId, projectId, characterId: target});
+  // binding.json is written by import and adoption only; a target without identity is not switchable.
+  const targetBinding = readJson(path.join(targetDir, 'binding.json'));
+  if (!targetBinding || IDENTITY_KEYS.some(key => typeof targetBinding[key] !== 'string' || !targetBinding[key])) {
+    throw new Error('目标角色的 binding.json 缺少身份信息，不能切换。');
   }
+
   const conversationsFile = path.join(targetDir, 'conversations.json');
   if (!fs.existsSync(conversationsFile)) {
     writeJsonAtomic(conversationsFile, {overrides: {}, presets: {}, sessionIds: {[`qqbot:${appId}:c2c:${ownerId}`]: randomUUID()}, lifecycle: {}});

@@ -215,3 +215,14 @@ test('export gives CCv3 JSON that keeps extensions', () => {
   assert.deepEqual(exportCard(root, 'b', parseYaml).data.extensions, CARD.data.extensions);
   assert.throws(() => exportCard(root, 'missing', parseYaml), /未注册/);
 });
+
+test('import copies the identity of the current character into binding.json', () => {
+  const root = dataRoot();
+  importBytes(root, 'first', Buffer.from(JSON.stringify(CARD)));
+  // First ever import: no current character, only the id is known.
+  assert.deepEqual(JSON.parse(readFileSync(join(characterDir(root, 'first'), 'binding.json'), 'utf8')), {characterId: 'first'});
+  writeFileSync(join(characterDir(root, 'first'), 'binding.json'), JSON.stringify({appId: 'a', ownerId: 'o', projectId: 'p', characterId: 'first'}));
+  symlinkSync(characterDir(root, 'first'), join(root, 'character-current'), 'junction');
+  importBytes(root, 'second', Buffer.from(JSON.stringify(CARD)));
+  assert.deepEqual(JSON.parse(readFileSync(join(characterDir(root, 'second'), 'binding.json'), 'utf8')), {appId: 'a', ownerId: 'o', projectId: 'p', characterId: 'second'});
+});
