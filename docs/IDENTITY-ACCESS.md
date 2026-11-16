@@ -47,6 +47,15 @@ contact/guest 从空组合独立装配，不从 Owner Preset 继承后靠 Prompt
 
 `qq.allow` 只是平台准入，准入后默认是 guest；没有 `roles.enabled` 时不允许额外准入。公开 Persona 必须是单独审阅过的文件。prepare 写入私有 `identity-owner.json`（Owner 来自同一私有配置），装配 `dsh-identity-access`，QQ 打开 `identityAccess.enabled` 且保持群聊禁用。Owner 在私聊用 `/role list|show|grant contact <principal> [30m|12h|7d]|revoke|block|unblock` 管理。
 
+## 与角色管理一起使用
+
+构建配置开启 `characterManager` 时（见 [MANAGEMENT](MANAGEMENT.md) 的「角色管理」）：
+
+- 公开人设不再来自 `roles.publicPersonaFile`（同时设置会被构建拒绝），而由当前角色生成：同一张卡、同一份规则，关系段换成对其他人的关系，`{{user}}` 换成「对方」，可排除含私人关系的设定字段。Owner 在设置 → 角色管理里预览并确认后才生效；没有确认过的公开版时，Contact / Guest 得到中性回退文本，不读 Owner 版。
+- Contact / Guest 的 Preset 组成不变：仍从空组合装配，只含运行时人设插件（只读公开部分）和 `tool-scope`，工具不可见、不可执行。
+- `identity-access.json`、`identity-owner.json` 放在 `data/account/`，不在角色目录里：授权和封禁属于 QQ 账号与这个 bot，切换角色后仍然有效。Contact / Guest 的会话在角色目录的 `conversations.json` 里，换角色后他们进入新角色自己的新 Session。
+- 旧位置（角色数据目录）已有这两个文件的安装，停机后把它们移到 `data/account/`。
+
 ## 验证
 
 | 层级 | 命令 | 覆盖 |
