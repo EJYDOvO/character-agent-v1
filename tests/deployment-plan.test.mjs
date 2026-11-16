@@ -240,3 +240,13 @@ test('disabled optional task template preserves legacy native Extras and refuses
   else{prepare();const result=JSON.parse(readFileSync(join(f.root,'data/profiles/upgrade-fixture/package.json')));assert(result.dsh.profile.bundles.includes('dsh-plugin-bilibili'));assert(!result.dependencies['dsh-character-long-tasks']);}
  }
 });
+
+test('the character manager package is selected only when its plugins are active',()=>{
+ const persona=[{insert:[{id:'preset-main',config:{plugins:[{id:'persona',name:'dsh-character-manager/runtime-persona.mjs'}]}}]}];
+ const host=[{insert:[{id:'character-manager',name:'dsh-character-manager'}]}];
+ assert(!plan.select({profile:[],core:[],extras:[]}).includes('packages/character-manager'));
+ assert(plan.select({profile:[],core:persona,extras:[]}).includes('packages/character-manager'));
+ assert(plan.select({profile:[],core:host,extras:[]}).includes('packages/character-manager'));
+ assert(!plan.select({profile:[{id:'character-manager',disabled:true}],core:host,extras:[]}).includes('packages/character-manager'));
+ assert(!packages.requiredFolders.includes('packages/character-manager'));
+});

@@ -87,4 +87,12 @@ function cardRevisions({cardPath, systemRulesPath, reminderPath}) {
   return revisionsOf({card: read(cardPath), systemRules: read(systemRulesPath), reminder: read(reminderPath)});
 }
 
-module.exports = {cardSettings, cardRevisions, revisionsOf};
+/**
+ * With the character manager the card is chosen at runtime and nothing of it is
+ * built in, so callers that fingerprint the effective card skip it.
+ */
+function characterManagerEnabled() {
+  return readConfig().characterManager?.enabled === true;
+}
+
+module.exports = {cardSettings, cardRevisions, revisionsOf, characterManagerEnabled};
