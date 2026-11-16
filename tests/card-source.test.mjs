@@ -27,23 +27,52 @@ function withConfig(config, env, fn) {
   }
 }
 
-test('defaults to the template card', () => withConfig({}, {}, () => {
+// A build never picks a character on its own: the template is used only when
+// named, and the character id is never defaulted (the legacy data directory's
+// id was the old default, so a default would bind the template to real memory).
+const TEMPLATE_CONFIG = {characterId: 'test-a', cardPath: 'characters/template/card.yaml'};
+
+test('the template card is used when named', () => withConfig(TEMPLATE_CONFIG, {}, () => {
   assert.deepEqual(cardSettings(), {
-    characterId: 'character-a',
+    characterId: 'test-a',
     cardPath: join(root, 'characters', 'template', 'card.yaml'),
     systemRulesPath: null,
     reminderPath: null,
   });
 }));
 
+test('cardPath and characterId must be given; nothing falls back to the template', () => {
+  withConfig({}, {}, () => assert.throws(() => cardSettings(), /cardPath/));
+  withConfig({characterId: 'test-a'}, {}, () => assert.throws(() => cardSettings(), /cardPath/));
+  withConfig({cardPath: 'characters/template/card.yaml'}, {}, () => assert.throws(() => cardSettings(), /characterId/));
+  // DSH_CHARACTER_CARD names the card as well.
+  const card = join(tmpdir(), 'x.json');
+  withConfig({characterId: 'test-a'}, {DSH_CHARACTER_CARD: card}, () => assert.equal(cardSettings().cardPath, card));
+});
+
+test('a missing build config file fails instead of building the template', () => {
+  withConfig(TEMPLATE_CONFIG, {DSH_CHARACTER_BUILD_CONFIG: join(tmpdir(), 'no-such-dir', 'build-config.json')}, () => {
+    assert.throws(() => cardSettings(), /Build config not found/);
+  });
+});
+
+test('an unknown top-level key fails instead of being ignored', () => {
+  for (const key of ['cardPth', 'rule', 'username', 'dataDir']) {
+    withConfig({...TEMPLATE_CONFIG, [key]: 'x'}, {}, () => assert.throws(() => cardSettings(), new RegExp(`Unknown build config key "${key}"`)));
+  }
+  const {readConfig} = require('../scripts/card-source.cjs');
+  const every = {...TEMPLATE_CONFIG, userName: 'u', rules: {}, presetId: 'qq-character', dataDirectory: 'D:/x', interaction: {}, specialistWorkers: [], communityWorkerPresets: [], roles: {}};
+  withConfig(every, {}, () => assert.equal(readConfig().characterId, 'test-a'));
+});
+
 // loadCard validates it, so check-card and the build apply the same rule.
 test('userName is passed to the card build as configured', () => {
-  withConfig({userName: '{{x}}'}, {}, () => assert.equal(cardSettings().userName, '{{x}}'));
+  withConfig({...TEMPLATE_CONFIG, userName: '{{x}}'}, {}, () => assert.equal(cardSettings().userName, '{{x}}'));
 });
 
 test('interaction.styleReminder is rejected: the reminder comes from rules.reminderFile', () => {
-  withConfig({interaction: {enabled: true, styleReminder: '短句'}}, {}, () => assert.throws(() => cardSettings(), /rules\.reminderFile/));
-  withConfig({interaction: {enabled: true}}, {}, () => assert.doesNotThrow(() => cardSettings()));
+  withConfig({...TEMPLATE_CONFIG, interaction: {enabled: true, styleReminder: '短句'}}, {}, () => assert.throws(() => cardSettings(), /rules\.reminderFile/));
+  withConfig({...TEMPLATE_CONFIG, interaction: {enabled: true}}, {}, () => assert.doesNotThrow(() => cardSettings()));
 });
 
 test('config keys resolve against the repository root; env overrides the card', () => {
@@ -68,10 +97,10 @@ test('the old definition keys are rejected with a pointer to cardPath', () => {
 
 test('invalid values are rejected', () => {
   for (const config of [
-    {characterId: 'Bad Id'},
-    {cardPath: 3},
-    {rules: 'rules.md'},
-    {rules: {systemFile: 5}},
+    {...TEMPLATE_CONFIG, characterId: 'Bad Id'},
+    {...TEMPLATE_CONFIG, cardPath: 3},
+    {...TEMPLATE_CONFIG, rules: 'rules.md'},
+    {...TEMPLATE_CONFIG, rules: {systemFile: 5}},
   ]) {
     withConfig(config, {}, () => assert.throws(() => cardSettings(), Error, JSON.stringify(config)));
   }
@@ -117,7 +146,9 @@ test('portable config maps card settings relative to the config file', () => {
     userName: '小林',
     characterId: 'test-a',
   });
-  assert.deepEqual(cardBuildConfig({}, dir), {cardPath: join(root, 'characters', 'template', 'card.yaml'), rules: {}});
+  // Nothing falls back to the template card or a default character id.
+  assert.throws(() => cardBuildConfig({characterId: 'test-a'}, dir), /"card"/);
+  assert.throws(() => cardBuildConfig({card: 'my/card.png'}, dir), /"characterId"/);
   assert.throws(() => cardBuildConfig({definition: 'persona.yaml'}, dir), /"card"/);
 });
 

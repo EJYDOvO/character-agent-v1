@@ -8,11 +8,11 @@ import {join, resolve} from 'node:path';
 const root = resolve(import.meta.dirname, '..');
 
 // Runs the digest in a child process: pack.cjs calls it with the deployment
-// environment, so the test does too, with an empty build config.
+// environment, so the test does too, with a build config naming the template.
 function digest(env) {
   const dir = mkdtempSync(join(tmpdir(), 'source-digest-'));
   const config = join(dir, 'build-config.json');
-  writeFileSync(config, '{}');
+  writeFileSync(config, JSON.stringify({characterId: 'test-a', cardPath: 'characters/template/card.yaml'}));
   const clean = Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^DSH_/.test(key)));
   const result = spawnSync(process.execPath, ['-e', "console.log(require('./scripts/source-digest.cjs')())"],
     {cwd: root, encoding: 'utf8', env: {...clean, DSH_CHARACTER_BUILD_CONFIG: config, ...env}, windowsHide: true});
