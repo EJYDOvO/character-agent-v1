@@ -1,0 +1,19 @@
+{
+  "name": "dsh-retrieval-d-evaluation",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Research-only retrieval experiments (D phase). Not a runtime package; never packed or deployed.",
+  "engines": { "node": ">=24" },
+  "scripts": {
+    "probes": "node --no-warnings src/audit-probes.mjs",
+    "embed": "node --no-warnings src/embed-cache.mjs",
+    "run": "node --no-warnings --expose-gc src/run.mjs",
+    "consistency": "node --no-warnings --test src/consistency.test.mjs",
+    "perf": "node --no-warnings --expose-gc src/perf.mjs",
+    "report": "node --no-warnings src/report.mjs"
+  },
+  "dependencies": {
+    "@huggingface/transformers": "4.3.2"
+  }
+}
