@@ -7,6 +7,7 @@ import {spawnSync} from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import {createRequire} from 'node:module';
 import {readRegistry, currentId} from '../packages/character-manager/registry.mjs';
 import {readCompiled} from '../packages/character-manager/compiled.mjs';
 import {ensureCompiled, readSettings} from '../packages/character-manager/compile.mjs';
@@ -14,12 +15,13 @@ import {ensureCompiled, readSettings} from '../packages/character-manager/compil
 const root = path.resolve(import.meta.dirname, '..');
 const SCRIPT = path.join(root, 'scripts', 'adopt-character.cjs');
 const BINDING = {appId: 'app-1', ownerId: 'owner-1', projectId: 'project-1', characterId: 'yuha'};
+const {parseOptions, loadModules, adopt: adoptInProcess} = createRequire(import.meta.url)(SCRIPT);
 const ADDED = ['card.json', 'character.json', 'compiled.json', 'reminder.md', 'rules.md'];
 
-function fixture({binding = BINDING} = {}) {
+function fixture({binding = BINDING, dirName = 'character-yuha'} = {}) {
   const base = fs.mkdtempSync(path.join(os.tmpdir(), 'adopt-character-'));
   const data = path.join(base, 'data');
-  const dir = path.join(data, 'character-yuha');
+  const dir = path.join(data, dirName);
   fs.mkdirSync(dir, {recursive: true});
   if (binding) fs.writeFileSync(path.join(dir, 'binding.json'), JSON.stringify(binding));
   fs.writeFileSync(path.join(dir, 'memory.sqlite'), Buffer.from([0x53, 0x51, 0x4c, 0x00, 0xff, 0x01]));
@@ -38,10 +40,25 @@ function fixture({binding = BINDING} = {}) {
   return {base, data, dir, files, cleanup: () => fs.rmSync(base, {recursive: true, force: true})};
 }
 
-function adopt(f, extra = []) {
-  const args = ['--root', f.data, '--id', 'yuha', '--dir', f.dir, '--card', f.files.card, '--rules', f.files.rules,
+function argsFor(f, extra = []) {
+  return ['--root', f.data, '--id', 'yuha', '--dir', f.dir, '--card', f.files.card, '--rules', f.files.rules,
     '--reminder', f.files.reminder, '--user-name', '阿澄', '--hang-on-text', '稍等，我在想。', ...extra];
-  return spawnSync(process.execPath, [SCRIPT, ...args], {cwd: root, encoding: 'utf8', windowsHide: true});
+}
+
+function adopt(f, extra = []) {
+  return spawnSync(process.execPath, [SCRIPT, ...argsFor(f, extra)], {cwd: root, encoding: 'utf8', windowsHide: true});
+}
+
+// Everything adoption may touch: the character directory, registry.json, the characters directory and the link.
+function state(f) {
+  const registry = path.join(f.data, 'characters', 'registry.json');
+  const link = path.join(f.data, 'character-current');
+  return {
+    dir: snapshot(f.dir),
+    registry: fs.existsSync(registry) ? fs.readFileSync(registry, 'utf8') : null,
+    characters: fs.existsSync(path.join(f.data, 'characters')),
+    link: fs.existsSync(link) || (() => { try { fs.lstatSync(link); return true; } catch { return false; } })(),
+  };
 }
 
 function snapshot(dir) {
@@ -181,6 +198,91 @@ test('a card that does not compile leaves the directory and the registry untouch
     assert.deepEqual(snapshot(f.dir), before);
     assert.equal(fs.existsSync(path.join(f.data, 'characters', 'registry.json')), false);
     assert.equal(fs.existsSync(path.join(f.data, 'character-current')), false);
+  } finally {
+    f.cleanup();
+  }
+});
+
+test('a directory outside the allowed locations, or a link, is refused before anything is written', () => {
+  const misplaced = fixture({dirName: 'elsewhere/yuha'});
+  try {
+    // A card that does not compile as well: the location is refused first, before any compile or write.
+    fs.writeFileSync(misplaced.files.card, JSON.stringify({spec: 'chara_card_v3', spec_version: '3.0', data: {name: 'Yuha', description: '字'.repeat(14000)}}));
+    const before = state(misplaced);
+    const result = adopt(misplaced, ['--link']);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /不在允许的位置/);
+    assert.deepEqual(state(misplaced), before);
+  } finally {
+    misplaced.cleanup();
+  }
+  const linked = fixture({dirName: 'stash/character-yuha'});
+  try {
+    const junction = path.join(linked.data, 'character-yuha');
+    fs.symlinkSync(linked.dir, junction, 'junction');
+    const real = snapshot(linked.dir);
+    const result = adopt({...linked, dir: junction}, ['--link']);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /不是普通目录/);
+    assert.deepEqual(snapshot(linked.dir), real);
+    assert.equal(fs.existsSync(path.join(linked.data, 'characters')), false);
+    assert.equal(fs.existsSync(path.join(linked.data, 'character-current')), false);
+  } finally {
+    linked.cleanup();
+  }
+});
+
+test('a failure in register undoes the files already written', async () => {
+  const f = fixture();
+  try {
+    const before = state(f);
+    const modules = await loadModules();
+    const registry = {...modules.registry, register: () => { throw new Error('injected register failure'); }};
+    assert.throws(() => adoptInProcess(parseOptions(argsFor(f, ['--link'])), {...modules, registry}), /injected register failure/);
+    assert.deepEqual(state(f), before);
+  } finally {
+    f.cleanup();
+  }
+});
+
+test('a failed link undoes the registration and the files, and a re-run then succeeds', async () => {
+  const f = fixture();
+  try {
+    // Another character already registered: registry.json must come back byte for byte.
+    const other = path.join(f.data, 'characters', 'other');
+    fs.mkdirSync(other, {recursive: true});
+    fs.writeFileSync(path.join(other, 'binding.json'), JSON.stringify({...BINDING, characterId: 'other'}));
+    const modules = await loadModules();
+    modules.registry.register(f.data, {id: 'other', dir: other});
+    const before = state(f);
+    const failing = {...modules, link: () => { throw new Error('injected link failure'); }};
+    assert.throws(() => adoptInProcess(parseOptions(argsFor(f, ['--link'])), failing), /injected link failure/);
+    assert.deepEqual(state(f), before);
+
+    // A link that points elsewhere after creation is removed again (and only that link).
+    const elsewhere = path.join(f.data, 'elsewhere');
+    fs.mkdirSync(elsewhere);
+    const wrong = {...modules, link: (target, file) => fs.symlinkSync(elsewhere, file, 'junction')};
+    assert.throws(() => adoptInProcess(parseOptions(argsFor(f, ['--link'])), wrong), /没有指向 yuha/);
+    assert.deepEqual(state(f), before);
+    assert(fs.existsSync(elsewhere), 'the link target itself is untouched');
+
+    assert.equal(adopt(f, ['--link']).status, 0);
+    assert.equal(currentId(f.data), 'yuha');
+    assert.deepEqual(readRegistry(f.data).characters.map(entry => entry.id), ['other', 'yuha']);
+  } finally {
+    f.cleanup();
+  }
+});
+
+test('a failure with no registry before leaves no registry or characters directory behind', async () => {
+  const f = fixture();
+  try {
+    const before = state(f);
+    assert.equal(before.registry, null);
+    const modules = await loadModules();
+    assert.throws(() => adoptInProcess(parseOptions(argsFor(f, ['--link'])), {...modules, link: () => { throw new Error('injected'); }}), /injected/);
+    assert.deepEqual(state(f), before);
   } finally {
     f.cleanup();
   }

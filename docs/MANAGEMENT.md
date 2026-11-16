@@ -59,7 +59,7 @@ data/maintenance/character-switch*.json   切换请求、进行中快照、结�
    ```
    node scripts/adopt-character.cjs --root D:/DeepSeek-Harness/data --id yuha --dir D:/DeepSeek-Harness/data/character-yuha --card <卡文件> --rules <rules.md> --reminder <reminder.md> --user-name <称呼> --hang-on-text <等待提示> --link
    ```
-   脚本把卡、规则、提醒复制进目录（目录里已有同名但内容不同的文件即拒绝），写 `character.json`、`compiled.json`，登记到 `registry.json`，并建联接 `data/character-current`（联接已存在即拒绝）。目录没有 `binding.json`，或其中缺 appId / ownerId / projectId、`characterId` 不是该 id，都拒绝且不写任何文件。
+   脚本把卡、规则、提醒复制进目录（目录里已有同名但内容不同的文件即拒绝），写 `character.json`、`compiled.json`，登记到 `registry.json`，并建联接 `data/character-current`（联接已存在即拒绝）。目录没有 `binding.json`，或其中缺 appId / ownerId / projectId、`characterId` 不是该 id，目录不在 `data/characters/<id>` 或 `data/character-<id>`、或本身是联接，都在写入前拒绝且不写任何文件。写入后任何一步失败（含建联接），本次新增的文件、`registry.json` 的改动和本次建的联接都会撤销，可以直接重跑；只有撤销本身也失败时，错误信息会列出需要手动检查的项。
 3. 另存 Profile 原件，再按脚本最后打印的内容替换 Profile 的 `character-identity` 行：`presetId`、`memoryMode` 保持原值，`bindingFile`、`stateFile` 改到 `data/character-current/`。脚本不修改 Profile。
 4. `DeployValidated`。部署后核对 Yuha 的身份、记忆、会话与接入前一致（路径经联接指向同一目录），然后在管理页确认公开版、导入其他角色。
 

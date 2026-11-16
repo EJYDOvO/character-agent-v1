@@ -3,8 +3,9 @@
 // manager. Only new files are added — the card, rules and reminder copied in,
 // character.json and compiled.json — and binding.json, the databases and the
 // conversations stay untouched. Then the directory is registered and, with
-// --link, data/character-current is linked to it. The Profile is not changed:
-// the character-identity lines to replace by hand are printed at the end.
+// --link, data/character-current is linked to it. All of it or nothing: a
+// failure after the first write undoes every step this run took. The Profile
+// is not changed: the character-identity lines to replace by hand are printed.
 //   node scripts/adopt-character.cjs --root <data> --id <id> --dir <existing dir>
 //     --card <file> --rules <file> --reminder <file> --user-name <name>
 //     --hang-on-text <text> [--link]
@@ -20,9 +21,15 @@ const CARD_NAMES = {'.json': 'card.json', '.png': 'card.png', '.yaml': 'card.yam
 const IDENTITY_KEYS = ['appId', 'ownerId', 'projectId'];
 const CURRENT_LINK = 'character-current';
 
-function options(argv) {
+/** The command line as adoption options, or null when it is incomplete. */
+function parseOptions(argv) {
   const string = {type: 'string'};
-  const {values} = parseArgs({args: argv, strict: true, options: {...Object.fromEntries(REQUIRED.map(key => [key, string])), link: {type: 'boolean'}}});
+  let values;
+  try {
+    ({values} = parseArgs({args: argv, strict: true, options: {...Object.fromEntries(REQUIRED.map(key => [key, string])), link: {type: 'boolean'}}}));
+  } catch {
+    return null;
+  }
   if (REQUIRED.some(key => !values[key])) return null;
   return {
     root: path.resolve(values.root),
@@ -34,50 +41,78 @@ function options(argv) {
   };
 }
 
-async function main() {
-  let opts;
-  try {
-    opts = options(process.argv.slice(2));
-  } catch {
-    opts = null;
-  }
-  if (!opts) {
-    console.error(USAGE);
-    return 1;
-  }
+/** The manager modules adoption works with; tests replace single functions to inject failures. */
+async function loadModules() {
   const registry = await import('../packages/character-manager/registry.mjs');
   const {compileCharacter, CARD_FILES} = await import('../packages/character-manager/compile.mjs');
-  const {writeJsonAtomic} = await import('../packages/character-manager/compiled.mjs');
+  const {writeFileAtomic, writeJsonAtomic} = await import('../packages/character-manager/compiled.mjs');
+  return {registry, compileCharacter, CARD_FILES, writeFileAtomic, writeJsonAtomic, link: (target, file) => fs.symlinkSync(target, file, 'junction')};
+}
+
+/**
+ * Adopts the directory or throws with a Chinese reason, leaving the directory,
+ * registry.json and the link as they were.
+ * @returns {import('../packages/character-manager/compiled.mjs').Compiled}
+ */
+function adopt(opts, modules) {
+  const {registry} = modules;
+  const files = plannedFiles(opts, modules.CARD_FILES);
+  check(opts, files, registry);
+  const compiled = compileStaged(opts, files, modules.compileCharacter);
+
+  const undo = [];
   try {
-    const files = plannedFiles(opts, CARD_FILES);
-    check(opts, files, registry);
-    const compiled = compileStaged(opts, files, compileCharacter);
-    const created = [];
-    try {
-      for (const {source, target} of files) {
-        if (fs.existsSync(target)) continue;
-        fs.copyFileSync(source, target, fs.constants.COPYFILE_EXCL);
-        created.push(target);
-      }
-      for (const [name, value] of [['character.json', opts.settings], ['compiled.json', compiled]]) {
-        writeJsonAtomic(path.join(opts.dir, name), value);
-        created.push(path.join(opts.dir, name));
-      }
-      registry.register(opts.root, {id: opts.id, dir: opts.dir});
-    } catch (error) {
-      for (const file of created) fs.rmSync(file, {force: true});
-      throw error;
+    for (const {source, target} of files) {
+      if (fs.existsSync(target)) continue;
+      fs.copyFileSync(source, target, fs.constants.COPYFILE_EXCL);
+      undo.push(() => fs.rmSync(target, {force: true}));
     }
+    for (const [name, value] of [['character.json', opts.settings], ['compiled.json', compiled]]) {
+      const file = path.join(opts.dir, name);
+      undo.push(() => fs.rmSync(file, {force: true}));
+      modules.writeJsonAtomic(file, value);
+    }
+    undo.push(registrySnapshot(opts.root, modules));
+    registry.register(opts.root, {id: opts.id, dir: opts.dir});
     if (opts.link) {
-      fs.symlinkSync(opts.dir, path.join(opts.root, CURRENT_LINK), 'junction');
-      if (registry.currentId(opts.root) !== opts.id) throw new Error(`${CURRENT_LINK} 已创建，但没有指向 ${opts.id}，请检查`);
+      const file = path.join(opts.root, CURRENT_LINK);
+      modules.link(opts.dir, file);
+      // Only the link this run created is removed, and never recursively.
+      undo.push(() => {
+        if (fs.lstatSync(file).isSymbolicLink()) fs.unlinkSync(file);
+      });
+      if (registry.currentId(opts.root) !== opts.id) throw new Error(`${CURRENT_LINK} 没有指向 ${opts.id}`);
     }
-    report(opts, compiled);
-    return 0;
+    return compiled;
   } catch (error) {
-    console.error(`接入失败：${error.message}`);
-    return 1;
+    const left = [];
+    for (const step of undo.reverse()) {
+      try {
+        step();
+      } catch (undoError) {
+        left.push(undoError.message);
+      }
+    }
+    if (left.length) error.message += `；回滚未完成，请手动检查：${left.join('；')}`;
+    throw error;
   }
+}
+
+// Undoing register restores registry.json byte for byte (or removes it, and
+// the characters directory it created, when there was none before).
+function registrySnapshot(root, {registry, writeFileAtomic}) {
+  const file = registry.registryFile(root);
+  const parent = path.dirname(file);
+  const hadParent = fs.existsSync(parent);
+  const before = fs.existsSync(file) ? fs.readFileSync(file) : null;
+  return () => {
+    if (before) {
+      writeFileAtomic(file, before);
+      return;
+    }
+    fs.rmSync(file, {force: true});
+    if (!hadParent && fs.existsSync(parent) && !fs.readdirSync(parent).length) fs.rmdirSync(parent);
+  };
 }
 
 // The card, rules and reminder as they will be named in the character directory.
@@ -96,9 +131,9 @@ function plannedFiles({dir, sources}, cardFiles) {
 // Everything that can be refused is refused here, before the first write.
 function check({root, id, dir, link}, files, registry) {
   if (!registry.validId(id)) throw new Error('角色 id 无效：只能用小写字母、数字和连字符（最长 48 个字符），且不能是 current');
-  if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) throw new Error(`角色目录不存在：${dir}`);
-  const binding = readBinding(dir);
-  if (binding.characterId !== id) throw new Error(`binding.json 的 characterId 不是 ${id}`);
+  // The registry's own rule: allowed location, a real directory under <root>, binding.json of this id.
+  registry.checkCharacterDirectory(root, id, dir);
+  const binding = JSON.parse(fs.readFileSync(path.join(dir, 'binding.json'), 'utf8').replace(/^\uFEFF/, ''));
   const missing = IDENTITY_KEYS.filter(key => typeof binding[key] !== 'string' || !binding[key]);
   if (missing.length) throw new Error(`binding.json 缺少 ${missing.join('、')}，不能接入`);
   if (registry.readRegistry(root).characters.some(entry => entry.id === id)) throw new Error(`角色已注册：${id}`);
@@ -112,17 +147,6 @@ function check({root, id, dir, link}, files, registry) {
     }
   }
   if (link && exists(path.join(root, CURRENT_LINK))) throw new Error(`${CURRENT_LINK} 已存在，不覆盖`);
-}
-
-// binding.json is never written here; adoption requires the complete one the Host already uses.
-function readBinding(dir) {
-  try {
-    const value = JSON.parse(fs.readFileSync(path.join(dir, 'binding.json'), 'utf8').replace(/^\uFEFF/, ''));
-    if (value !== null && typeof value === 'object') return value;
-  } catch {
-    // Reported below.
-  }
-  throw new Error('角色目录缺少有效的 binding.json');
 }
 
 // Compiles a copy in a scratch directory so a card or rules that do not
@@ -151,7 +175,7 @@ function report({root, id, dir, link}, compiled) {
   const current = `${root.replaceAll('\\', '/')}/${CURRENT_LINK}`;
   console.log(`已接入角色 ${id}（${compiled.name}）：${dir.replaceAll('\\', '/')}`);
   console.log(`Owner 版 ${compiled.tokens.owner} token；公开版待 Owner 在管理页确认。`);
-  if (compiled.warnings.length) for (const warning of compiled.warnings) console.log(`⚠ ${warning}`);
+  for (const warning of compiled.warnings) console.log(`⚠ ${warning}`);
   console.log(link ? `${CURRENT_LINK} → ${dir.replaceAll('\\', '/')}` : `未建 ${CURRENT_LINK}（没有 --link）。`);
   console.log('');
   console.log('本脚本不修改 Profile。请在 Profile 中把 character-identity 行整体替换为下面四个键（presetId、memoryMode 保持 Profile 原值），并先另存原件：');
@@ -163,4 +187,20 @@ function report({root, id, dir, link}, compiled) {
   console.log('      memoryMode: <Profile 原值>');
 }
 
-main().then(code => { process.exitCode = code; });
+async function main() {
+  const opts = parseOptions(process.argv.slice(2));
+  if (!opts) {
+    console.error(USAGE);
+    return 1;
+  }
+  try {
+    report(opts, adopt(opts, await loadModules()));
+    return 0;
+  } catch (error) {
+    console.error(`接入失败：${error.message}`);
+    return 1;
+  }
+}
+
+module.exports = {parseOptions, loadModules, adopt};
+if (require.main === module) main().then(code => { process.exitCode = code; });

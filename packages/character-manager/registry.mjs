@@ -69,7 +69,7 @@ export function characterDir(root, id) {
   const entry = readRegistry(root).characters.find(item => item.id === id);
   if (!entry) throw new Error(`角色未注册：${id}`);
   if (entry.archived) throw new Error(`角色已归档：${id}`);
-  return checkDirectory(root, id, entry.dir);
+  return checkCharacterDirectory(root, id, entry.dir);
 }
 
 /** The id of the character the link `<root>/character-current` points at, or null. */
@@ -91,7 +91,7 @@ export function register(root, {id, dir}) {
   if (typeof dir !== 'string' || !dir) throw new Error('角色目录无效');
   const registry = readRegistry(root);
   if (registry.characters.some(entry => entry.id === id)) throw new Error(`角色已存在：${id}`);
-  const checked = checkDirectory(root, id, dir);
+  const checked = checkCharacterDirectory(root, id, dir);
   writeRegistry(root, {...registry, characters: [...registry.characters, {id, dir: checked, addedAt: new Date().toISOString(), archived: false}]});
 }
 
@@ -245,7 +245,13 @@ function bindingFor(root, id) {
   return {characterId: id};
 }
 
-function checkDirectory(root, id, dir) {
+/**
+ * The rule every character directory must meet: `<root>/characters/<id>` or the old
+ * `<root>/character-<id>`, a real directory (not a link) under <root>, holding a
+ * binding.json of this id. Throws a Chinese reason otherwise.
+ * @returns {string} absolute path with forward slashes
+ */
+export function checkCharacterDirectory(root, id, dir) {
   const resolved = path.resolve(dir);
   const allowed = [path.join(root, 'characters', id), path.join(root, `character-${id}`)];
   if (!allowed.some(candidate => samePath(candidate, resolved))) throw new Error(`角色目录不在允许的位置：${id}`);
@@ -298,8 +304,8 @@ function discardUpload(root, uploadId) {
   if (typeof uploadId === 'string' && UPLOAD_ID.test(uploadId)) fs.rmSync(path.join(root, 'characters', UPLOAD_DIR, uploadId), {recursive: true, force: true});
 }
 
-// Where the watchdog helper looks for it too.
-function registryFile(root) {
+/** Where registry.json lives (the watchdog helper looks there too). */
+export function registryFile(root) {
   return path.join(root, 'characters', REGISTRY_FILE);
 }
 
