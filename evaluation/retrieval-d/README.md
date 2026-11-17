@@ -45,7 +45,7 @@ node --no-warnings src/report.mjs                    # results/tables.md
 3. 词表 `dataset/lexicon.json` 的每一组都标注其来源的**开发集**失败查询；没有为保留集查询写的条目。
 4. 所有可调参数（RRF 的 k 与权重、扩展合并方式、相似度下限）只在开发集上选择并写入 `results/tuning.json`；冻结后提交（commit `d927ccf`），保留集只评测一次。
 5. 开发集首轮结果出来后新增的对照组（扩大的 RRF 网格、仅二元组 FTS 融合、相似度下限、标识符置顶、ID 压力集）都在评保留集之前加入，原因记录在 `REPORT.md` §2。ID 压力集单独报告，不进入调参目标。
-6.  由提交  之前的同一工作树生成（因此其  为 true、 指向前一提交）； 在该提交的干净工作树上生成。两个结果文件为节省体积以单行 JSON 存储。
+6. `results/dev.json` 由提交 `d927ccf` 之前的同一工作树生成（因此其 `codeDirty` 为 true、`codeSha` 指向前一提交）；`results/heldout.json` 在该提交的干净工作树上生成。两个结果文件为节省体积以单行 JSON 存储（仅重新序列化，内容未改）。
 7. 基线组直接调用未修改的 `LayeredMemory.recall`；其余各组使用的 FTS 重表达在每次运行中与基线逐查询比对（`baselineEquivalence`，本次 120/120 一致）。
 
 ## 代码结构
