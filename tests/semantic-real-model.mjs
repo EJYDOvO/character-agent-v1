@@ -103,10 +103,15 @@ try{
  const stopped=await fallback('stopped','他平时怎么锻炼身体 failover-a')&&await recover('stopped');
  // (b) worker killed by the OS while it is embedding an indexing batch
  for(let i=0;i<16;i++)store.remember(s0,{kind:'episodic',statement:'崩溃测试记录 '+i+'：物业在年检之前更换了走廊的应急灯。'},{sessionId:s0.sessionId,eventSeq:++seq,origin:'inference'});
- const pid=runtime.provider.pid,inflight=runtime.cycle({force:true});await new Promise(r=>setTimeout(r,40));process.kill(pid);const crashedCycle=await inflight;
- await wait(()=>runtime.provider.state()==='stopped');
- failover.killedMidBatch={indexerReportedError:typeof crashedCycle.error==='string'};
- const killed=await fallback('killed','他平时怎么锻炼身体 failover-b')&&failover.killedMidBatch.indexerReportedError&&await recover('killed');
+ const startsBefore=runtime.provider.usage().starts,pid=runtime.provider.pid,inflight=runtime.cycle({force:true});await new Promise(r=>setTimeout(r,40));process.kill(pid);const crashedCycle=await inflight;
+ // The batch request is retried once on a new worker, so the cycle either completes or reports the
+ // error; either way a new worker must have been started and the index must end up complete.
+ failover.killedMidBatch={cycle:crashedCycle.error?'error':'completed after retry',newWorkerStarted:runtime.provider.usage().starts>startsBefore,retriedAfterExit:runtime.provider.usage().retriedAfterExit??0};
+ // The next query is strictly one of two consistent outcomes: a semantic result from the new worker,
+ // or a counted fallback identical to FTS5 while it is still loading.
+ {const q='他平时怎么锻炼身体 failover-b',before=counters(),got=await store.recallAsync(s0,q,5000),after=counters(),r=after.ranked-before.ranked,n=after.notReady-before.notReady,lex=JSON.stringify(got.map(x=>x.id))===lexicalIds(q);
+  failover.killed={rankedDelta:r,notReadyDelta:n,equalsLexical:lex,outcome:r===1&&n===0?'semantic':r===0&&n===1&&lex?'counted FTS5 fallback':'inconsistent'};}
+ const killed=failover.killed.outcome!=='inconsistent'&&failover.killedMidBatch.newWorkerStarted&&await recover('killed');
  for(;;){const r=await runtime.cycle({force:true});if(r.error)throw Error(r.error);if(!r.embedded)break;}
  failover.indexCompleteAfterCrash=store.semanticCandidates(s0).every(r=>runtime.index.current(r));
  report.failover={...failover,ok:stopped&&killed&&failover.indexCompleteAfterCrash};
