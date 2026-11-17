@@ -76,7 +76,9 @@ function build(config, env = {}) {
   return {core, manifest, host: id => core.find(row => row.id === id), preset, plugin, text: JSON.stringify(core)};
 }
 
+// Without the manager the build must name its character (the card comes from DSH_CHARACTER_CARD).
 const offConfig = {
+  characterId: 'off-character',
   rules: {systemFile: join(template, 'rules.md'), reminderFile: join(template, 'reminder.md')},
   interaction: {enabled: true, hangOnText: '构建里的等待提示'},
 };
@@ -102,7 +104,7 @@ test('manager off keeps the current build', () => {
   assert.equal(interaction.styleReminder, reminder);
   assert.equal(interaction.hangOnText, '构建里的等待提示');
   assert(!('compiledFile' in interaction));
-  assert.equal(built.manifest.characterId, 'character-a');
+  assert.equal(built.manifest.characterId, 'off-character');
   assert.equal(built.manifest.card.spec, 'v3');
   assert(!('characterManager' in built.manifest) && !('characterManager' in built.manifest.settings));
 });
