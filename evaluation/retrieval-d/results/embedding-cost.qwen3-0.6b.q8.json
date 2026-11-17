@@ -1,0 +1,30 @@
+{
+ "model": "qwen3-0.6b",
+ "dtype": "q8",
+ "modelVersion": "onnx-community/Qwen3-Embedding-0.6B-ONNX@c25a394dd583:q8",
+ "node": "v24.13.0",
+ "cpu": "AMD Ryzen 9 6900HX with Radeon Graphics",
+ "threads": 16,
+ "executionProvider": "cpu (onnxruntime-node)",
+ "loadMs": 2162,
+ "docs": {
+  "count": 546,
+  "totalMs": 39314,
+  "msPerDoc": 72,
+  "chars": 28910
+ },
+ "singleDocUpdate": {
+  "count": 40,
+  "p50Ms": 52.22,
+  "p95Ms": 67
+ },
+ "queries": {
+  "count": 200,
+  "p50Ms": 98.76,
+  "p95Ms": 123.29,
+  "meanMs": 101.79
+ },
+ "wallMs": 64294,
+ "cpuMs": 495891,
+ "peakRssMB": 2946
+}

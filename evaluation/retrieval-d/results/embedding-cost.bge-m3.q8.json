@@ -1,0 +1,30 @@
+{
+ "model": "bge-m3",
+ "dtype": "q8",
+ "modelVersion": "Xenova/bge-m3@4de132583038:q8",
+ "node": "v24.13.0",
+ "cpu": "AMD Ryzen 9 6900HX with Radeon Graphics",
+ "threads": 16,
+ "executionProvider": "cpu (onnxruntime-node)",
+ "loadMs": 2568,
+ "docs": {
+  "count": 546,
+  "totalMs": 21720,
+  "msPerDoc": 39.78,
+  "chars": 28910
+ },
+ "singleDocUpdate": {
+  "count": 40,
+  "p50Ms": 29.83,
+  "p95Ms": 39.21
+ },
+ "queries": {
+  "count": 200,
+  "p50Ms": 24.75,
+  "p95Ms": 35.44,
+  "meanMs": 26.58
+ },
+ "wallMs": 31115,
+ "cpuMs": 227094,
+ "peakRssMB": 1320
+}

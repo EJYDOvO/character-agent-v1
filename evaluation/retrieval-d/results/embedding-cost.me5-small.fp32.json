@@ -1,0 +1,30 @@
+{
+ "model": "me5-small",
+ "dtype": "fp32",
+ "modelVersion": "Xenova/multilingual-e5-small@761b726dd34f:fp32",
+ "node": "v24.13.0",
+ "cpu": "AMD Ryzen 9 6900HX with Radeon Graphics",
+ "threads": 16,
+ "executionProvider": "cpu (onnxruntime-node)",
+ "loadMs": 2013,
+ "docs": {
+  "count": 546,
+  "totalMs": 4065,
+  "msPerDoc": 7.44,
+  "chars": 28910
+ },
+ "singleDocUpdate": {
+  "count": 40,
+  "p50Ms": 8.05,
+  "p95Ms": 8.75
+ },
+ "queries": {
+  "count": 200,
+  "p50Ms": 6.94,
+  "p95Ms": 8.68,
+  "meanMs": 7.22
+ },
+ "wallMs": 8050,
+ "cpuMs": 49626,
+ "peakRssMB": 1092
+}

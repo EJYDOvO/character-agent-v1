@@ -1,0 +1,3643 @@
+{
+ "kind": "query",
+ "model": {
+  "model": "qwen2.5:7b",
+  "digest": "845dbda0ea48ed749caafd9e6037047aa19acfcfd82e704d7ca97d631a0b697e",
+  "parameterSize": "7.6B",
+  "quantization": "Q4_K_M",
+  "family": "qwen2",
+  "ollama": "0.40.16"
+ },
+ "options": {
+  "temperature": 0,
+  "seed": 7,
+  "top_p": 1,
+  "num_predict": 220,
+  "num_ctx": 4096
+ },
+ "prompt": "You prepare keyword search terms for a bilingual (Chinese and English) personal memory store.\nThe store holds short facts about one user and is searched by exact word overlap, so a fact written with different words or in the other language is missed.\nGiven one user message, output JSON {\"terms\": [...]} with at most 12 short search terms:\n- synonyms and alternative everyday wordings of the key concepts in the message;\n- the translation of each key concept into the other language (Chinese <-> English).\nRules: terms only, 1-4 words each, no sentences. Do not answer the message. Do not invent names, numbers, dates or facts. Do not repeat words that are already in the message.",
+ "promptSha256": "d7fd8874d56118286bdd76bf052fd9d877b89def8395f1256b239fdb121091d4",
+ "items": {
+  "bd3298d5c684bc8e67e85537127bee3358d243dee1bca41d0576b6e57de8bdb6": {
+   "text": "ATL-2317",
+   "terms": [
+    "ATL",
+    "2317",
+    "flight",
+    "航班"
+   ],
+   "stats": {
+    "wallMs": 526,
+    "promptTokens": 164,
+    "outputTokens": 20,
+    "evalMs": 356
+   }
+  },
+  "6ef5c4c5e7cd0f950b509ebc0f1bcd9ced3a678e4da22547847e43dbc0f4ea05": {
+   "text": "KAPPA-42 蓝图",
+   "terms": [
+    "KAPPA-42",
+    "蓝图",
+    "plan",
+    "blueprint"
+   ],
+   "stats": {
+    "wallMs": 415,
+    "promptTokens": 167,
+    "outputTokens": 22,
+    "evalMs": 367
+   }
+  },
+  "f7e5e0040453248f8677b55473cd887c0f5fc1ed6464fac568ddea08e41c03a1": {
+   "text": "PostgreSQL 版本",
+   "terms": [
+    "数据库",
+    "PostgreSQL",
+    "版本",
+    "release"
+   ],
+   "stats": {
+    "wallMs": 331,
+    "promptTokens": 162,
+    "outputTokens": 17,
+    "evalMs": 282
+   }
+  },
+  "c35f9f00f79842e486ef9ecf15ce375b4b1501f62d576ec165ed526160bfba3a": {
+   "text": "ap-southeast-1",
+   "terms": [
+    "ap-southeast-1",
+    "亚太",
+    "新加坡"
+   ],
+   "stats": {
+    "wallMs": 345,
+    "promptTokens": 163,
+    "outputTokens": 18,
+    "evalMs": 297
+   }
+  },
+  "31a99d1d7c69bcb1f759f119de5bd330c5c6f6c9cdc6cf0763a13049bfc638d8": {
+   "text": "Pentax 67",
+   "terms": [
+    "相机",
+    "照相机",
+    "Pentax",
+    "67",
+    "镜头",
+    "相机机身"
+   ],
+   "stats": {
+    "wallMs": 504,
+    "promptTokens": 163,
+    "outputTokens": 27,
+    "evalMs": 456
+   }
+  },
+  "33f1e14e2e0f08799c840fc8719d717d51aa3482ba8f1844ff63c4cba09a0d90": {
+   "text": "生产环境 网关端口",
+   "terms": [
+    "生产环境",
+    "测试环境",
+    "网关",
+    "接口",
+    "端口",
+    "端口号",
+    "gateway",
+    "port",
+    "port number"
+   ],
+   "stats": {
+    "wallMs": 680,
+    "promptTokens": 165,
+    "outputTokens": 37,
+    "evalMs": 629
+   }
+  },
+  "2df5a0911fc069be28d484f49edef58e8832298c14676dbdcab6e2bc7a866f25": {
+   "text": "林夏",
+   "terms": [
+    "林夏",
+    "Lin Xia"
+   ],
+   "stats": {
+    "wallMs": 251,
+    "promptTokens": 159,
+    "outputTokens": 12,
+    "evalMs": 195
+   }
+  },
+  "f31a5398ca20f3918c8039ab2d7d43532dcc46f991e104a21476f8560f282f06": {
+   "text": "ruff 的行宽设的是多少来着",
+   "terms": [
+    "行宽",
+    "宽度",
+    "ruff",
+    "布局"
+   ],
+   "stats": {
+    "wallMs": 347,
+    "promptTokens": 167,
+    "outputTokens": 18,
+    "evalMs": 299
+   }
+  },
+  "8c36eb11eff321590a3c5ae235fbbf36af66ac7709c36bc9fea91ce9c0eb531c": {
+   "text": "限流 每分钟",
+   "terms": [
+    "限流",
+    "每分钟",
+    "限制",
+    "流量",
+    "速率",
+    "速度",
+    "per minute",
+    "rate",
+    "speed"
+   ],
+   "stats": {
+    "wallMs": 624,
+    "promptTokens": 163,
+    "outputTokens": 34,
+    "evalMs": 575
+   }
+  },
+  "55140efeeca37efdfc820584a3d8b4eb982b96df9a91bf10c9c6680bcf6178ac": {
+   "text": "HHKB",
+   "terms": [
+    "键盘",
+    "机械键盘",
+    "HHKB",
+    "键盘爱好者"
+   ],
+   "stats": {
+    "wallMs": 368,
+    "promptTokens": 159,
+    "outputTokens": 19,
+    "evalMs": 311
+   }
+  },
+  "dc1956b7b7e74fc8e058c133d25a313cf346cde1caca33bfaf1955289c93840e": {
+   "text": "Bill Evans 那张专辑",
+   "terms": [
+    "Bill Evans",
+    "专辑",
+    "唱片",
+    "record",
+    "music"
+   ],
+   "stats": {
+    "wallMs": 377,
+    "promptTokens": 164,
+    "outputTokens": 20,
+    "evalMs": 328
+   }
+  },
+  "56849a5facce01bf1c9206dabe44de30b80637426d3077d45971fde496f50814": {
+   "text": "02:00 UTC backup",
+   "terms": [
+    "backup",
+    "02:00",
+    "UTC",
+    "凌晨2点"
+   ],
+   "stats": {
+    "wallMs": 414,
+    "promptTokens": 164,
+    "outputTokens": 22,
+    "evalMs": 367
+   }
+  },
+  "cade0e7f41e1cefe01a0cd9fa7c1c8c924cd64248dce344b4d22455111e11d94": {
+   "text": "远足",
+   "terms": [
+    "徒步",
+    "郊游",
+    "野餐",
+    "自然",
+    "风景",
+    "户外",
+    "远足"
+   ],
+   "stats": {
+    "wallMs": 530,
+    "promptTokens": 159,
+    "outputTokens": 28,
+    "evalMs": 473
+   }
+  },
+  "8d8b1650d42bbc98586335a7a004ea1362990649e1461c89d0de11d2cce532de": {
+   "text": "他有什么忌口的",
+   "terms": [
+    "忌口",
+    "忌食",
+    "食物",
+    "饮食",
+    "不吃",
+    "avoid",
+    "prohibited",
+    "food"
+   ],
+   "stats": {
+    "wallMs": 570,
+    "promptTokens": 162,
+    "outputTokens": 31,
+    "evalMs": 523
+   }
+  },
+  "431ece152ff3c6f1403f230801eae8f01c2c42cd08540555638d771d304de1f2": {
+   "text": "宠物叫什么名字",
+   "terms": [
+    "宠物名字",
+    "宠物名",
+    "animal name"
+   ],
+   "stats": {
+    "wallMs": 311,
+    "promptTokens": 161,
+    "outputTokens": 16,
+    "evalMs": 264
+   }
+  },
+  "8d32935ecf024284e9476192353f01bf67e5128cb57ac0b2fb9372910fba71cf": {
+   "text": "几点上床休息",
+   "terms": [
+    "睡觉",
+    "休息",
+    "就寝",
+    "bedtime",
+    "入睡",
+    "晚安"
+   ],
+   "stats": {
+    "wallMs": 478,
+    "promptTokens": 161,
+    "outputTokens": 25,
+    "evalMs": 425
+   }
+  },
+  "925c511acd3a139040990bbbeb2dbd3d7ff4850a5a23f7e4d7237c3885712484": {
+   "text": "故乡是哪里",
+   "terms": [
+    "家乡",
+    "出生地",
+    "祖籍",
+    "老家",
+    "根",
+    "origin",
+    "birthplace",
+    "homeland"
+   ],
+   "stats": {
+    "wallMs": 602,
+    "promptTokens": 160,
+    "outputTokens": 32,
+    "evalMs": 541
+   }
+  },
+  "6d22bd01ec3aded3ea0c7f82ac7bdfd9eea2cc99e8d2740befaee45478f0d1f0": {
+   "text": "上线之前要走哪些流程",
+   "terms": [
+    "上线",
+    "发布",
+    "pre-release",
+    "测试",
+    "审核",
+    "审查",
+    "check",
+    "approval",
+    "流程",
+    "procedure"
+   ],
+   "stats": {
+    "wallMs": 637,
+    "promptTokens": 163,
+    "outputTokens": 35,
+    "evalMs": 589
+   }
+  },
+  "8141592179d0b195ed533fbe149cee41553dee7d7022784361e6ed91ac7d25ab": {
+   "text": "平时该怎么喊他",
+   "terms": [
+    "平时",
+    "怎么",
+    "喊他",
+    "称呼",
+    "名字",
+    "昵称",
+    "怎么叫",
+    "他的名字",
+    "他的称呼",
+    "怎么喊"
+   ],
+   "stats": {
+    "wallMs": 724,
+    "promptTokens": 161,
+    "outputTokens": 40,
+    "evalMs": 677
+   }
+  },
+  "a90bcad3226e489d911e35492e1ab36a9145c3d1d07bde91b62ef81adf95f1ce": {
+   "text": "乘飞机时他爱选哪种位子",
+   "terms": [
+    "飞机座位",
+    "机舱位置",
+    "偏好座位",
+    "经济舱",
+    "商务舱",
+    "靠窗",
+    "过道",
+    "中文",
+    "English"
+   ],
+   "stats": {
+    "wallMs": 696,
+    "promptTokens": 166,
+    "outputTokens": 39,
+    "evalMs": 649
+   }
+  },
+  "eecdd73776ed75dd8cfbf5c9529074caf0b77ac819baa18bd7e0be2c4fe1a965": {
+   "text": "大夫嘱咐过他什么",
+   "terms": [
+    "医生嘱咐",
+    "注意休息",
+    "按时服药",
+    "定期检查",
+    "清淡饮食"
+   ],
+   "stats": {
+    "wallMs": 480,
+    "promptTokens": 163,
+    "outputTokens": 26,
+    "evalMs": 433
+   }
+  },
+  "5885bc99a5fcc18505ec5caf881fd48d7934c8a839d94457b4e6ad8eeb8e9ea9": {
+   "text": "每个月服务器开销的上限",
+   "terms": [
+    "每月",
+    "服务器",
+    "开销",
+    "上限",
+    "成本",
+    "费用",
+    "最高",
+    "限额",
+    "预算",
+    "开支",
+    "上限（英文）",
+    "monthly limit"
+   ],
+   "stats": {
+    "wallMs": 854,
+    "promptTokens": 163,
+    "outputTokens": 45,
+    "evalMs": 807
+   }
+  },
+  "d14787ecd475f5f48d357773bb874fb70dbe7622934e634a5f3344325a1fe234": {
+   "text": "cycling",
+   "terms": [
+    "骑行",
+    "骑车",
+    "自行车",
+    "运动",
+    "锻炼",
+    "出行",
+    "旅行",
+    "健身",
+    "户外",
+    "活动",
+    "锻炼身体",
+    "exercise"
+   ],
+   "stats": {
+    "wallMs": 751,
+    "promptTokens": 159,
+    "outputTokens": 42,
+    "evalMs": 696
+   }
+  },
+  "a24b41ee4cb852ba6cf2a8f4438bd77cb7e13367de48f236ccf637b66a4b6970": {
+   "text": "how does he get to work",
+   "terms": [
+    "通勤方式",
+    "上班方式"
+   ],
+   "stats": {
+    "wallMs": 257,
+    "promptTokens": 163,
+    "outputTokens": 13,
+    "evalMs": 209
+   }
+  },
+  "b6fdb7e7ad6ef68ae242c6b7fbf505d640ce3391da16b9109f2be9fbee13286a": {
+   "text": "which code editing software is he fond of",
+   "terms": [
+    "code editing",
+    "software",
+    "fond",
+    "prefers",
+    "programming",
+    "tools",
+    "喜欢",
+    "偏好"
+   ],
+   "stats": {
+    "wallMs": 571,
+    "promptTokens": 165,
+    "outputTokens": 31,
+    "evalMs": 520
+   }
+  },
+  "3ff5da8a94b90fc85b39eefe8c7ff4b2a3e9164230128613ebd5338c8d7373b9": {
+   "text": "Is he okay with dairy?",
+   "terms": [
+    "dairy",
+    "milk",
+    "okay",
+    "agree",
+    "允许",
+    "同意"
+   ],
+   "stats": {
+    "wallMs": 450,
+    "promptTokens": 163,
+    "outputTokens": 24,
+    "evalMs": 404
+   }
+  },
+  "5dcbc15a33a7f614e8799a5318fc9dd85ce54c71d634f0f9e04a58cdb86cafaf": {
+   "text": "when is his next teeth checkup",
+   "terms": [
+    "next",
+    "checkup",
+    "dentist",
+    "appointment",
+    "口腔检查",
+    "牙科检查"
+   ],
+   "stats": {
+    "wallMs": 499,
+    "promptTokens": 164,
+    "outputTokens": 27,
+    "evalMs": 450
+   }
+  },
+  "10d9255fe9ee7e8ef45567a9b14d66749a2b7ac5923293188cfa3085af0bd60d": {
+   "text": "rules for merging code",
+   "terms": [
+    "合并",
+    "代码",
+    "整合",
+    "连接",
+    "合并代码",
+    "代码整合",
+    "代码连接",
+    "代码合并",
+    "merge",
+    "code merge",
+    "code integration",
+    "code connection"
+   ],
+   "stats": {
+    "wallMs": 841,
+    "promptTokens": 161,
+    "outputTokens": 47,
+    "evalMs": 794
+   }
+  },
+  "4facd0408d88d34972629364499fc12848ce6ca68b64bde217ef34c367717849": {
+   "text": "does he mind being rung up out of the blue",
+   "terms": [
+    "mind",
+    "ring",
+    "call",
+    "contact",
+    "unexpected",
+    "突然",
+    "意外",
+    "不知所措"
+   ],
+   "stats": {
+    "wallMs": 548,
+    "promptTokens": 168,
+    "outputTokens": 30,
+    "evalMs": 502
+   }
+  },
+  "7f87a02e37de95a06eb494a630e3987d26e7f6d959fbede84379ac511852ac2b": {
+   "text": "how long are DB snapshots retained",
+   "terms": [
+    "DB snapshots",
+    "retention",
+    "duration",
+    "期限",
+    "时长"
+   ],
+   "stats": {
+    "wallMs": 407,
+    "promptTokens": 163,
+    "outputTokens": 22,
+    "evalMs": 360
+   }
+  },
+  "b324dd4745127266378177970000af624bf183f4cc1b8f6d7b9fae748896df5f": {
+   "text": "他喜欢用什么编辑器",
+   "terms": [
+    "文本编辑器",
+    "代码编辑器",
+    "写代码",
+    "编辑软件",
+    "写文章",
+    "使用编辑器",
+    "文本处理",
+    "代码写作",
+    "写程序",
+    "写文档",
+    "编辑工具",
+    "写作业"
+   ],
+   "stats": {
+    "wallMs": 966,
+    "promptTokens": 163,
+    "outputTokens": 55,
+    "evalMs": 919
+   }
+  },
+  "e6a162c5f2551a90b21a414f38b82df6845b5ba8a517fe540db55031a0fbce85": {
+   "text": "乳糖不耐受",
+   "terms": [
+    "乳糖",
+    "不耐受",
+    "lactose",
+    "intolerance"
+   ],
+   "stats": {
+    "wallMs": 405,
+    "promptTokens": 162,
+    "outputTokens": 22,
+    "evalMs": 359
+   }
+  },
+  "cd6bb92700d3b1be72c3636b009127abca7401202fe4d83147fcda519b7bd9c3": {
+   "text": "上游接口超时时间是多少",
+   "terms": [
+    "接口超时",
+    "上游接口",
+    "timeout",
+    "超时时间"
+   ],
+   "stats": {
+    "wallMs": 391,
+    "promptTokens": 163,
+    "outputTokens": 21,
+    "evalMs": 344
+   }
+  },
+  "6e7f1457aaf0029d95070733b6dc7a4e29ada77ad53711f04012e2d2306c7c42": {
+   "text": "每天的站会几点开",
+   "terms": [
+    "每天",
+    "站会",
+    "几点",
+    "开始",
+    "会议",
+    "晨会",
+    "上午",
+    "早上",
+    "几点钟",
+    "何时",
+    "什么时候"
+   ],
+   "stats": {
+    "wallMs": 724,
+    "promptTokens": 163,
+    "outputTokens": 40,
+    "evalMs": 674
+   }
+  },
+  "b595a5483b932858e7dbb66ce3d241705d50ca6ab37dbd9a9f20c946e3143577": {
+   "text": "他带的两个新人叫什么",
+   "terms": [
+    "新员工",
+    "名字",
+    "Chinese: new employees",
+    "English: new employees"
+   ],
+   "stats": {
+    "wallMs": 431,
+    "promptTokens": 164,
+    "outputTokens": 23,
+    "evalMs": 383
+   }
+  },
+  "239eb565b839e5217530886027f0853b4d5ecafff50ec849902c6832160aea7a": {
+   "text": "集成测试不稳定怎么办",
+   "terms": [
+    "集成测试",
+    "不稳定",
+    "测试失败",
+    "重现问题",
+    "代码变更",
+    "环境因素",
+    "测试用例",
+    "测试脚本",
+    "测试结果",
+    "测试报告",
+    "测试策略",
+    "测试环境"
+   ],
+   "stats": {
+    "wallMs": 940,
+    "promptTokens": 161,
+    "outputTokens": 53,
+    "evalMs": 894
+   }
+  },
+  "59ccd14f824358d63b3f2d6f62650d156bc7edb668ce85e58f1b0fe8d24be38c": {
+   "text": "What is he allergic to?",
+   "terms": [
+    "allergy",
+    "过敏"
+   ],
+   "stats": {
+    "wallMs": 221,
+    "promptTokens": 163,
+    "outputTokens": 11,
+    "evalMs": 173
+   }
+  },
+  "5b2de358b9b96ad0f0271483a95ae1862b1efc568dbaa3eb9dedd772a7af4ac0": {
+   "text": "Where does his sister live?",
+   "terms": [
+    "sister",
+    "live",
+    "where",
+    "reside",
+    "居所",
+    "住所"
+   ],
+   "stats": {
+    "wallMs": 457,
+    "promptTokens": 163,
+    "outputTokens": 25,
+    "evalMs": 410
+   }
+  },
+  "c828c2b909faa3077f0f794f2f268c8dbb6349efc5cac3fafa6b36536cd221f3": {
+   "text": "weekend hiking",
+   "terms": [
+    "weekend",
+    "hiking",
+    "weekend hike",
+    "mountain walk",
+    "outdoor activity",
+    "weekend trek",
+    "山间徒步",
+    "户外活动"
+   ],
+   "stats": {
+    "wallMs": 747,
+    "promptTokens": 160,
+    "outputTokens": 41,
+    "evalMs": 688
+   }
+  },
+  "af6e39c5d45fa521a9452a7b89ddaa3a7280e481b60d5866fe99cec40b1975e1": {
+   "text": "When is the Atlas 2.0 release deadline?",
+   "terms": [
+    "Atlas",
+    "2.0",
+    "release",
+    "deadline",
+    "日期",
+    "期限"
+   ],
+   "stats": {
+    "wallMs": 440,
+    "promptTokens": 168,
+    "outputTokens": 24,
+    "evalMs": 394
+   }
+  },
+  "158263591d0b6f4c6abf354f7ad76050acc7010f180a37622fd58a98bc76b4a2": {
+   "text": "What is the rule for naming branches?",
+   "terms": [
+    "branch naming",
+    "branch rules",
+    "naming convention",
+    "branch name",
+    "命名规则",
+    "命名规范"
+   ],
+   "stats": {
+    "wallMs": 529,
+    "promptTokens": 165,
+    "outputTokens": 29,
+    "evalMs": 481
+   }
+  },
+  "075c5a187219f2397aedf9809547d12cd5b71b1b0eb4befe791fad4b011d0e89": {
+   "text": "How long do we keep audit logs?",
+   "terms": [
+    "audit logs",
+    "duration",
+    "retention",
+    "期限",
+    "时长"
+   ],
+   "stats": {
+    "wallMs": 413,
+    "promptTokens": 165,
+    "outputTokens": 22,
+    "evalMs": 366
+   }
+  },
+  "d5fc9b17243e814a6d7b912c63c3f884c1450906249d241062063abce61f1a84": {
+   "text": "今晚想点个外卖，有什么推荐吗",
+   "terms": [
+    "外卖",
+    "晚餐",
+    "推荐",
+    "美食",
+    "餐厅",
+    "点餐",
+    "夜宵",
+    "中餐",
+    "西餐",
+    "快餐",
+    "小吃"
+   ],
+   "stats": {
+    "wallMs": 790,
+    "promptTokens": 166,
+    "outputTokens": 44,
+    "evalMs": 743
+   }
+  },
+  "fbd2b64fdea4fde8ea1e8aaaf8daf59317cada8ea5bf90263af3f04898c6cef1": {
+   "text": "周六天气不错，有什么活动建议",
+   "terms": [
+    "周六",
+    "天气",
+    "不错",
+    "活动",
+    "建议",
+    "晴朗",
+    "外出",
+    "散步",
+    "打球",
+    "kuaile",
+    "yueduan",
+    "chuchu"
+   ],
+   "stats": {
+    "wallMs": 884,
+    "promptTokens": 164,
+    "outputTokens": 47,
+    "evalMs": 836
+   }
+  },
+  "b4572ebd026bacbc096210c98bc16dfee0732050d0607d718ceeb724132a74d8": {
+   "text": "想给他挑个礼物，哪天送合适",
+   "terms": [
+    "送礼",
+    "合适时间",
+    "礼物选择",
+    "送礼物"
+   ],
+   "stats": {
+    "wallMs": 374,
+    "promptTokens": 167,
+    "outputTokens": 20,
+    "evalMs": 327
+   }
+  },
+  "a9ebba6cc939cdd5731464ef30a7db36f837447be3c96ec5086569063c9d7419": {
+   "text": "I want to book a flight for him, anything I should know?",
+   "terms": [
+    "book",
+    "flight",
+    "reserve",
+    "ticket",
+    "boarding",
+    "pass",
+    "护照",
+    "passenger",
+    "预订",
+    "机票",
+    "登机牌"
+   ],
+   "stats": {
+    "wallMs": 818,
+    "promptTokens": 171,
+    "outputTokens": 43,
+    "evalMs": 768
+   }
+  },
+  "d33a84c9d1c2ed4ffd0cba66f81c57951c4b0bc83d7950394438a7470d6035be": {
+   "text": "帮他约一个周三下午的评审会",
+   "terms": [
+    "周三下午",
+    "评审会",
+    "预约",
+    "帮助"
+   ],
+   "stats": {
+    "wallMs": 347,
+    "promptTokens": 165,
+    "outputTokens": 18,
+    "evalMs": 298
+   }
+  },
+  "ed5b826b031a87999e3d88cfa7ca35c6d2b645b6c634e9a08d64337fd4fee921": {
+   "text": "数据库挂了该通知谁",
+   "terms": [
+    "数据库",
+    "hang",
+    "通知",
+    "谁"
+   ],
+   "stats": {
+    "wallMs": 309,
+    "promptTokens": 163,
+    "outputTokens": 16,
+    "evalMs": 262
+   }
+  },
+  "f637c6ff6b7256d7566b0a903036a546afaec41b3b801d1eb77112061d9f12a6": {
+   "text": "Can we ship the hotfix this Friday evening?",
+   "terms": [
+    "hotfix",
+    "fix",
+    "ship",
+    "Friday",
+    "evening"
+   ],
+   "stats": {
+    "wallMs": 395,
+    "promptTokens": 167,
+    "outputTokens": 21,
+    "evalMs": 348
+   }
+  },
+  "198ec4d6f704c3b53c7542263edb514fd114b254700d8440b475394e221ac9bc": {
+   "text": "半夜想到一个点子，现在发消息给他行吗",
+   "terms": [
+    "半夜",
+    "晚上",
+    "午夜",
+    "点子",
+    "想法",
+    "主意",
+    "凌晨",
+    "消息",
+    "发消息",
+    "现在",
+    "合适",
+    "适当"
+   ],
+   "stats": {
+    "wallMs": 770,
+    "promptTokens": 169,
+    "outputTokens": 43,
+    "evalMs": 720
+   }
+  },
+  "4452fa485586072f660c2a78325d392a52080fd26fa73891901255285c5681f9": {
+   "text": "带他去游乐园玩什么项目好",
+   "terms": [
+    "游乐园",
+    "游乐项目",
+    "刺激项目",
+    "亲子项目",
+    "过山车",
+    "旋转木马",
+    "摩天轮",
+    "Chinese",
+    "amusement park",
+    "rides",
+    "family fun",
+    "roller coaster"
+   ],
+   "stats": {
+    "wallMs": 1001,
+    "promptTokens": 166,
+    "outputTokens": 54,
+    "evalMs": 954
+   }
+  },
+  "2fdcff0156b62ede8913adf178a712c1bef9d56f1823a2b56eecc05d243a8d5c": {
+   "text": "I am picking a film for Friday night, any constraints?",
+   "terms": [
+    "film",
+    "选择",
+    "约束",
+    "限制"
+   ],
+   "stats": {
+    "wallMs": 308,
+    "promptTokens": 169,
+    "outputTokens": 16,
+    "evalMs": 258
+   }
+  },
+  "2d79b715bdba566048ca72218e656044c12998ec76214dc714bf28d912169cb6": {
+   "text": "他喜欢喝奶茶吗",
+   "terms": [
+    "他喜欢",
+    "喝奶茶",
+    "奶茶",
+    "喜欢",
+    "茶",
+    "饮料",
+    "喜好",
+    "茶饮",
+    "milk tea",
+    "tea",
+    "drink"
+   ],
+   "stats": {
+    "wallMs": 761,
+    "promptTokens": 162,
+    "outputTokens": 42,
+    "evalMs": 707
+   }
+  },
+  "6a3367747aac12b4028392b0b736cfec067cba56c48a518807fff6bf9cd325b6": {
+   "text": "谁对海鲜过敏",
+   "terms": [
+    "海鲜过敏",
+    "seafood allergy"
+   ],
+   "stats": {
+    "wallMs": 263,
+    "promptTokens": 161,
+    "outputTokens": 13,
+    "evalMs": 211
+   }
+  },
+  "d7bed8467d22d14bbf569735d3de28b1738b240d415a0abf3a8fe9ce57a235cd": {
+   "text": "用户自己哪天在家办公",
+   "terms": [
+    "在家办公",
+    "远程工作",
+    "居家办公",
+    "work from home",
+    "远程办公"
+   ],
+   "stats": {
+    "wallMs": 464,
+    "promptTokens": 163,
+    "outputTokens": 25,
+    "evalMs": 418
+   }
+  },
+  "20088327fb42548f4212f613abb339617e68a6892f8c319ed6654136de25d2e2": {
+   "text": "周衡哪几天远程",
+   "terms": [
+    "周衡",
+    "远程",
+    "哪几天",
+    "何时",
+    "工作",
+    "学习",
+    "远程工作",
+    "远程学习",
+    "什么时候",
+    "哪天",
+    "远程上班",
+    "远程上课"
+   ],
+   "stats": {
+    "wallMs": 843,
+    "promptTokens": 162,
+    "outputTokens": 47,
+    "evalMs": 795
+   }
+  },
+  "4cfae0a1701c49d16da43e11f909948c53715516677db3bf959732a2ddd18400": {
+   "text": "谁爱看恐怖片",
+   "terms": [
+    "喜欢",
+    "恐怖电影",
+    "惊悚片",
+    "害怕",
+    "刺激",
+    "恐怖",
+    "观看"
+   ],
+   "stats": {
+    "wallMs": 570,
+    "promptTokens": 162,
+    "outputTokens": 31,
+    "evalMs": 524
+   }
+  },
+  "752ff199f1019a1f8658ce865228eb783833841d32a3037141b0d17c7c95a3da": {
+   "text": "Orion 什么时候发布",
+   "terms": [
+    "Orion",
+    "发布",
+    "launch",
+    "发射",
+    "release"
+   ],
+   "stats": {
+    "wallMs": 377,
+    "promptTokens": 162,
+    "outputTokens": 20,
+    "evalMs": 331
+   }
+  },
+  "5ddc6443324e69c4b1eb7e9d67eb5b81b0f25a0a950e1db203b0196c3d3a868a": {
+   "text": "预发环境端口",
+   "terms": [
+    "预发环境",
+    "测试环境",
+    "pre-release",
+    "test"
+   ],
+   "stats": {
+    "wallMs": 379,
+    "promptTokens": 162,
+    "outputTokens": 20,
+    "evalMs": 331
+   }
+  },
+  "846d263e0115aba36d1c734cf7635580d0da3be631e1072280accda4f7c6a169": {
+   "text": "他还在跑步吗",
+   "terms": [
+    "还在",
+    "跑步",
+    "跑步中",
+    "跑步吗",
+    "继续跑步",
+    "跑步状态"
+   ],
+   "stats": {
+    "wallMs": 482,
+    "promptTokens": 161,
+    "outputTokens": 26,
+    "evalMs": 435
+   }
+  },
+  "11242414e358c4e790350fd32f79b03f58f19c79857166255b2dc81b3bf84e4b": {
+   "text": "他会弹吉他吗",
+   "terms": [
+    "会弹",
+    "吉他",
+    "music",
+    "乐器",
+    "play",
+    "guitar"
+   ],
+   "stats": {
+    "wallMs": 447,
+    "promptTokens": 161,
+    "outputTokens": 24,
+    "evalMs": 400
+   }
+  },
+  "e0ed73b9043bcdd44b38ea083a8af9ce7106334177b9ae25b9fdd29fcd68bd19": {
+   "text": "健身房在哪",
+   "terms": [
+    "健身房位置",
+    "哪里",
+    "运动场所"
+   ],
+   "stats": {
+    "wallMs": 302,
+    "promptTokens": 159,
+    "outputTokens": 15,
+    "evalMs": 245
+   }
+  },
+  "d3e44103a8fa546c22fe6d64762f78cb8a36f88b4834b901790396949a62a835": {
+   "text": "他现在住在哪个城市",
+   "terms": [
+    "他",
+    "现在",
+    "住",
+    "哪个",
+    "城市",
+    "哪里",
+    "所在",
+    "都市",
+    "居所"
+   ],
+   "stats": {
+    "wallMs": 588,
+    "promptTokens": 162,
+    "outputTokens": 32,
+    "evalMs": 540
+   }
+  },
+  "35cfdf9c2122b1f8b8267dffe2b5cb720dbc02b3dbe7f0ee18b8a5c6802bff88": {
+   "text": "他以前住哪",
+   "terms": [
+    "他",
+    "以前",
+    "住",
+    "哪里",
+    "地址",
+    "地方",
+    "居所",
+    "住所",
+    "dwelling",
+    "address"
+   ],
+   "stats": {
+    "wallMs": 667,
+    "promptTokens": 161,
+    "outputTokens": 36,
+    "evalMs": 607
+   }
+  },
+  "46ca20584f167c441052b0a8a8faa8924cec32c08d7411553df8407b5998f16c": {
+   "text": "他平时爱听什么音乐",
+   "terms": [
+    "流行音乐",
+    "古典音乐",
+    "摇滚音乐",
+    "中文歌曲",
+    "英文歌曲",
+    "轻音乐",
+    "爵士音乐",
+    "电子音乐",
+    "喜欢",
+    "爱好"
+   ],
+   "stats": {
+    "wallMs": 762,
+    "promptTokens": 163,
+    "outputTokens": 42,
+    "evalMs": 715
+   }
+  },
+  "4e764c20b1c238107b37f66565591b023206b52de1f927c2efdc23e79f5b2ee3": {
+   "text": "羽毛球是星期几",
+   "terms": [
+    "羽毛球",
+    "星期几",
+    "星期一",
+    "星期二",
+    "星期三",
+    "星期四",
+    "星期五",
+    "星期六",
+    "星期日",
+    "羽球",
+    "tennis",
+    "badminton"
+   ],
+   "stats": {
+    "wallMs": 949,
+    "promptTokens": 161,
+    "outputTokens": 52,
+    "evalMs": 900
+   }
+  },
+  "2c228ac95187c3ab38ebac9762f8163ce871372d5a98c1609a74ba2be5555ef3": {
+   "text": "和经理的一对一例会现在是什么时候",
+   "terms": [
+    "一对一例会",
+    "经理",
+    "现在",
+    "何时"
+   ],
+   "stats": {
+    "wallMs": 348,
+    "promptTokens": 167,
+    "outputTokens": 18,
+    "evalMs": 300
+   }
+  },
+  "67d2e90b615eec132c22068c27e49759513d3b50ae7c74153de55c0aff962e5c": {
+   "text": "去年秋天去哪里旅行了",
+   "terms": [
+    "去年秋天",
+    "旅行",
+    "去哪"
+   ],
+   "stats": {
+    "wallMs": 298,
+    "promptTokens": 162,
+    "outputTokens": 15,
+    "evalMs": 249
+   }
+  },
+  "40d2b32ee99ae937eadc2a16f7413949e38b7bc39c29c796a051372eceb6116c": {
+   "text": "接下来有什么出行计划",
+   "terms": [
+    "旅行",
+    "trip",
+    "出游",
+    "outing",
+    "计划",
+    "plan"
+   ],
+   "stats": {
+    "wallMs": 421,
+    "promptTokens": 161,
+    "outputTokens": 22,
+    "evalMs": 372
+   }
+  },
+  "15c099b624b47e1f3e33fd463729b1cd41ee2b5ab8ec27044931539f05c0dff8": {
+   "text": "上次说的日语考试目标",
+   "terms": [
+    "日语考试",
+    "目标",
+    "目的",
+    "目标考试",
+    "日语目标",
+    "学习目标"
+   ],
+   "stats": {
+    "wallMs": 525,
+    "promptTokens": 163,
+    "outputTokens": 28,
+    "evalMs": 477
+   }
+  },
+  "23fd8c08fe414948e46bfec646b0d90d5848abd900491e492809a355ba3d5aa2": {
+   "text": "黑胶唱片收藏",
+   "terms": [
+    "黑胶",
+    "唱片",
+    "音乐",
+    "收藏",
+    "Vinyl",
+    "records"
+   ],
+   "stats": {
+    "wallMs": 438,
+    "promptTokens": 161,
+    "outputTokens": 23,
+    "evalMs": 390
+   }
+  },
+  "639699d63cd9baf55325d93ac874766bd20958293be447aa8ba0ca840aa2bebd": {
+   "text": "Nimbus 端口",
+   "terms": [
+    "Nimbus",
+    "端口",
+    "云服务",
+    "接口",
+    "入口",
+    "连接",
+    "gateway",
+    "interface",
+    "entry",
+    "link"
+   ],
+   "stats": {
+    "wallMs": 701,
+    "promptTokens": 163,
+    "outputTokens": 38,
+    "evalMs": 652
+   }
+  },
+  "663fbc7ac029be55c6a2d5cc4695e4cda1ad35d9192d25f44603306df9a6fcc4": {
+   "text": "Tessa 叫他什么",
+   "terms": [
+    "Tessa",
+    "叫他",
+    "称呼",
+    "名字",
+    "昵称",
+    "Tessa calls him",
+    "how Tessa calls him"
+   ],
+   "stats": {
+    "wallMs": 639,
+    "promptTokens": 163,
+    "outputTokens": 35,
+    "evalMs": 592
+   }
+  },
+  "ab217851876026e19466bbff5ac69fd09c77a45de0de209f03a782e710c05cb0": {
+   "text": "预发环境的网关端口",
+   "terms": [
+    "预发环境",
+    "测试环境",
+    "gateway",
+    "端口",
+    "port",
+    "网关端口",
+    "pre-release",
+    "testing"
+   ],
+   "stats": {
+    "wallMs": 665,
+    "promptTokens": 165,
+    "outputTokens": 36,
+    "evalMs": 617
+   }
+  },
+  "3317315f6b14e4d71f592ea37f2eddfd67f1e1d6a11e6b7237dec03d4add3b0b": {
+   "text": "他喝什么咖啡",
+   "terms": [
+    "他",
+    "喝",
+    "咖啡",
+    "茶",
+    "牛奶",
+    "豆浆",
+    "espresso",
+    "latte",
+    "milk",
+    "soy milk"
+   ],
+   "stats": {
+    "wallMs": 715,
+    "promptTokens": 161,
+    "outputTokens": 39,
+    "evalMs": 668
+   }
+  },
+  "e136fb559b1e144e21c577d6b5c58dc8aa368be79a10fff32f6efa7c0bd8e25a": {
+   "text": "测试端口",
+   "terms": [
+    "测试",
+    "端口",
+    "检查",
+    "验证",
+    "ping",
+    "检查连通",
+    "test",
+    "port",
+    "verify",
+    "connection"
+   ],
+   "stats": {
+    "wallMs": 689,
+    "promptTokens": 160,
+    "outputTokens": 37,
+    "evalMs": 629
+   }
+  },
+  "b537cdf980410430c9e1f0f672e26c3b03fe575e6df9730160be08d266091e65": {
+   "text": "默认分支和评审规则",
+   "terms": [
+    "默认分支",
+    "main分支",
+    "默认分支名",
+    "代码审查",
+    "代码评审",
+    "pull请求",
+    "代码合并",
+    "提交规则",
+    "代码规范",
+    "代码检查"
+   ],
+   "stats": {
+    "wallMs": 826,
+    "promptTokens": 162,
+    "outputTokens": 45,
+    "evalMs": 773
+   }
+  },
+  "6bb2c2c6e04b354dedd7a515434b6610527c1ad8a869f23f2b7da74b134ede57": {
+   "text": "他女儿上几年级",
+   "terms": [
+    "女儿年级",
+    "女儿几年级",
+    "女儿学年",
+    "女儿读书几年级"
+   ],
+   "stats": {
+    "wallMs": 451,
+    "promptTokens": 162,
+    "outputTokens": 24,
+    "evalMs": 402
+   }
+  },
+  "4c93236b9e533956710d2c85a1852002c0ffa52616e2170b140a89bb98fd90ae": {
+   "text": "前任叫什么",
+   "terms": [
+    "前任",
+    "前男友",
+    "前夫",
+    "前伴侣",
+    "前对象",
+    "前男友名字",
+    "前夫名字",
+    "前伴侣名字",
+    "前对象名字"
+   ],
+   "stats": {
+    "wallMs": 793,
+    "promptTokens": 160,
+    "outputTokens": 43,
+    "evalMs": 734
+   }
+  },
+  "856ba4ccb50b68a0343e860122d3959f5445c2f647b73185aea9db38b2774bfa": {
+   "text": "他现在月薪多少",
+   "terms": [
+    "月薪",
+    "工资",
+    "收入",
+    "每月",
+    "月收入",
+    "月薪多少",
+    "每月工资"
+   ],
+   "stats": {
+    "wallMs": 592,
+    "promptTokens": 161,
+    "outputTokens": 32,
+    "evalMs": 544
+   }
+  },
+  "b9ea660f8bd2e2cafc10f86bccda40c8e4febe54e04521b5dd78bdc7b72616ff": {
+   "text": "Northwind Labs",
+   "terms": [
+    "Northwind",
+    "Labs",
+    "科技公司",
+    "研发中心"
+   ],
+   "stats": {
+    "wallMs": 379,
+    "promptTokens": 160,
+    "outputTokens": 19,
+    "evalMs": 318
+   }
+  },
+  "3b855ca9d9c8a19240849ee16e968ddd7170eb88f99e5f8080c71dada7de6d18": {
+   "text": "地库维修期间车停哪",
+   "terms": [
+    "车库",
+    "维修",
+    "停车",
+    "地点",
+    "哪里",
+    "停放",
+    "位置"
+   ],
+   "stats": {
+    "wallMs": 465,
+    "promptTokens": 164,
+    "outputTokens": 25,
+    "evalMs": 418
+   }
+  },
+  "9276ed9fc604f10a70100f05d980d60ddf126bfa720fef8c312ce65874434a14": {
+   "text": "office guest network name",
+   "terms": [
+    "work",
+    "visitor",
+    "Wi-Fi",
+    "接入点",
+    "网络"
+   ],
+   "stats": {
+    "wallMs": 404,
+    "promptTokens": 161,
+    "outputTokens": 21,
+    "evalMs": 358
+   }
+  },
+  "8ddcf7e4d0e5be07013cb31c4dd0eeb5bfe5a72d83f6166c5d50bea400be713b": {
+   "text": "对外接口限流现在是多少",
+   "terms": [
+    "对外接口",
+    "限流",
+    "当前",
+    "设置"
+   ],
+   "stats": {
+    "wallMs": 351,
+    "promptTokens": 163,
+    "outputTokens": 18,
+    "evalMs": 302
+   }
+  },
+  "e2f673340a161300a7ad55e010105de8238d3084d4d875677c3136132a91128d": {
+   "text": "VS Code light theme",
+   "terms": [
+    "code editor",
+    "light theme",
+    "VS Code",
+    "dark mode",
+    "interface",
+    "software",
+    "development",
+    "编辑器",
+    "主题",
+    "代码",
+    "亮色主题",
+    "黑暗模式"
+   ],
+   "stats": {
+    "wallMs": 876,
+    "promptTokens": 161,
+    "outputTokens": 48,
+    "evalMs": 828
+   }
+  },
+  "1ce33c2fd6964ca53b8f717e8fc1cdbcbb87a54a8d3e87a75bd3afad8ee9549e": {
+   "text": "工位现在在几楼",
+   "terms": [
+    "工位",
+    "楼层",
+    "几楼",
+    "位置",
+    "楼层号",
+    "办公室",
+    "Workplace",
+    "Floor",
+    "Location"
+   ],
+   "stats": {
+    "wallMs": 626,
+    "promptTokens": 163,
+    "outputTokens": 34,
+    "evalMs": 578
+   }
+  },
+  "a9f824cf7e114acfb70e2e3cb6eb3a0963090133cedc808de280a252b458a0ff": {
+   "text": "入职第三天要做什么",
+   "terms": [
+    "入职",
+    "第一天",
+    "培训",
+    "熟悉",
+    "工作",
+    "了解",
+    "公司",
+    "三天",
+    "开始"
+   ],
+   "stats": {
+    "wallMs": 572,
+    "promptTokens": 162,
+    "outputTokens": 31,
+    "evalMs": 524
+   }
+  },
+  "8f75b00d6522deadad0a1ec1efd15b3a8fca577e8ee86413671d73693c4121d3": {
+   "text": "支付回调超时的根因是什么",
+   "terms": [
+    "支付回调",
+    "超时",
+    "根因",
+    "原因",
+    "timeout",
+    "root cause"
+   ],
+   "stats": {
+    "wallMs": 491,
+    "promptTokens": 165,
+    "outputTokens": 26,
+    "evalMs": 444
+   }
+  },
+  "ad759420480603cb9f26e3b630cbcc8e5db5549cba0e3015ba9831d63523a66f": {
+   "text": "What time did the ryokan lock its door?",
+   "terms": [
+    "旅馆",
+    "ryokan",
+    "关门",
+    "时间",
+    "晚上",
+    "睡觉",
+    "关闭",
+    "大门",
+    "宵禁",
+    "就寝",
+    "关门时间"
+   ],
+   "stats": {
+    "wallMs": 775,
+    "promptTokens": 168,
+    "outputTokens": 42,
+    "evalMs": 721
+   }
+  },
+  "dd9be6fac86521be89be6c7123433e4e82fe2bc78e5b82d067af86d9c696c6d9": {
+   "text": "哎我刚才开完会回来有点懵，然后那个，我想问一下啊就是我们之前是不是聊过那个看板查询的缓存到底是存多久来着，我记得好像是十几分钟的样子",
+   "terms": [
+    "开会回来",
+    "懵",
+    "看板查询",
+    "缓存",
+    "多久",
+    "十几分钟"
+   ],
+   "stats": {
+    "wallMs": 527,
+    "promptTokens": 198,
+    "outputTokens": 27,
+    "evalMs": 463
+   }
+  },
+  "01664b14844265685c630c10e4d17e871aa86d771f03c2a2859ee87ff91af249": {
+   "text": "so anyway, random question while I am waiting for the build — do you remember what I said about which region our product…",
+   "terms": [
+    "production cluster",
+    "region",
+    "standby",
+    "mix up",
+    "remember",
+    "location"
+   ],
+   "stats": {
+    "wallMs": 480,
+    "promptTokens": 194,
+    "outputTokens": 25,
+    "evalMs": 416
+   }
+  },
+  "b3af8e7e43f8112c4144a074f5bb485c207505596caf46d9f2ef9fd2c9cab212": {
+   "text": "红烧肉他自己加了什么",
+   "terms": [
+    "自己",
+    "加料",
+    "酱油",
+    "糖",
+    "葱",
+    "加了",
+    "料",
+    "调味",
+    "加"
+   ],
+   "stats": {
+    "wallMs": 777,
+    "promptTokens": 164,
+    "outputTokens": 43,
+    "evalMs": 730
+   }
+  },
+  "4a43ca33651727ef8f76bcc28b0ebaf0b2d6893586738cb4a908e35f7786f7a8": {
+   "text": "今天真的好困啊昨晚又没睡好，对了帮我想想我之前说的那个每周五要发的东西是啥格式来着，就是给团队的那个",
+   "terms": [
+    "今天",
+    "困",
+    "昨晚",
+    "没睡好",
+    "周五",
+    "发",
+    "团队",
+    "格式"
+   ],
+   "stats": {
+    "wallMs": 562,
+    "promptTokens": 192,
+    "outputTokens": 30,
+    "evalMs": 503
+   }
+  },
+  "c4944d54f731ec3ddf96ac69649823617ecd1f97e4118b1cad85111a6b8f9bb0": {
+   "text": "他最喜欢的足球队是哪支",
+   "terms": [
+    "最喜欢的",
+    "足球队",
+    "哪支"
+   ],
+   "stats": {
+    "wallMs": 296,
+    "promptTokens": 164,
+    "outputTokens": 15,
+    "evalMs": 248
+   }
+  },
+  "858c108fe775c689b4d956cafe4b5d7b1357fb680c98c22f5ff77acbd02196aa": {
+   "text": "What is his blood type?",
+   "terms": [
+    "blood type",
+    "血型"
+   ],
+   "stats": {
+    "wallMs": 244,
+    "promptTokens": 163,
+    "outputTokens": 12,
+    "evalMs": 196
+   }
+  },
+  "98d9cfcf9af20c0d91688095e09f6f42113340cfd48930d4aaafc2bbfb7031e5": {
+   "text": "量子计算的最新进展",
+   "terms": [
+    "量子计算",
+    "quantum computing",
+    "最新进展",
+    "latest advances"
+   ],
+   "stats": {
+    "wallMs": 403,
+    "promptTokens": 162,
+    "outputTokens": 21,
+    "evalMs": 355
+   }
+  },
+  "ae25c4bceb75bdc9e0d3007f84a498395cab726c62f26ee858d77cb2be501dab": {
+   "text": "明天上海的天气怎么样",
+   "terms": [
+    "明天",
+    "上海",
+    "天气",
+    "怎么样",
+    "晴朗",
+    "多云",
+    "阴天",
+    "下雨",
+    "气温",
+    "度",
+    "Celsius",
+    "Fahrenheit"
+   ],
+   "stats": {
+    "wallMs": 786,
+    "promptTokens": 162,
+    "outputTokens": 43,
+    "evalMs": 738
+   }
+  },
+  "33c9592532675c047a9473db57e279b0bf0200b84c619443e821c1127af218a1": {
+   "text": "区块链 钱包",
+   "terms": [
+    "区块链",
+    "blockchain",
+    "钱包",
+    "wallet"
+   ],
+   "stats": {
+    "wallMs": 330,
+    "promptTokens": 162,
+    "outputTokens": 17,
+    "evalMs": 279
+   }
+  },
+  "b1b39b14ee94fd54c0e9ded2c617bdee9b578b4aedffb0aa682a88b3ac689b06": {
+   "text": "Who won the chess tournament?",
+   "terms": [
+    "chess",
+    "tournament",
+    "win",
+    "champion",
+    "王者",
+    "冠军"
+   ],
+   "stats": {
+    "wallMs": 447,
+    "promptTokens": 163,
+    "outputTokens": 24,
+    "evalMs": 400
+   }
+  },
+  "df34c436f1bcda348a733683abc42725989a9268640490799ccbdb213768ab4c": {
+   "text": "他孩子的幼儿园在哪",
+   "terms": [
+    "幼儿园",
+    "学校",
+    "孩子",
+    "地址",
+    "位置",
+    "在哪",
+    "where"
+   ],
+   "stats": {
+    "wallMs": 471,
+    "promptTokens": 161,
+    "outputTokens": 25,
+    "evalMs": 422
+   }
+  },
+  "6a01508e38c33706366144b07f61c729983c3d3032a26a1e9696f6aefc54c558": {
+   "text": "ATL-2291",
+   "terms": [
+    "ATL",
+    "2291",
+    "flight",
+    "number"
+   ],
+   "stats": {
+    "wallMs": 384,
+    "promptTokens": 164,
+    "outputTokens": 20,
+    "evalMs": 336
+   }
+  },
+  "e998d857e5637aa94c02419c98be82013f1571b2f4be936b9c79eae57c17dd2f": {
+   "text": "8443",
+   "terms": [
+    "number",
+    "八千四百四十三"
+   ],
+   "stats": {
+    "wallMs": 295,
+    "promptTokens": 161,
+    "outputTokens": 15,
+    "evalMs": 248
+   }
+  },
+  "e7da226bc8794ae9e993dd8df64d91da2754fa0e928e8683eeb0bbe9f593d7bd": {
+   "text": "WezTerm fish",
+   "terms": [
+    "WezTerm",
+    "fish",
+    "terminal",
+    "software",
+    "程序",
+    "软件"
+   ],
+   "stats": {
+    "wallMs": 457,
+    "promptTokens": 161,
+    "outputTokens": 24,
+    "evalMs": 410
+   }
+  },
+  "1e92553ddeda2ba56347b892b322e9f5d35f2b43245aaa251b345d75e6917698": {
+   "text": "eu-central-1 standby",
+   "terms": [
+    "eu-central-1",
+    "standby",
+    "备用",
+    "待机"
+   ],
+   "stats": {
+    "wallMs": 404,
+    "promptTokens": 162,
+    "outputTokens": 21,
+    "evalMs": 355
+   }
+  },
+  "a55e168720580020041a10370dbcfd2bccc44308479968b260f59fd730d62129": {
+   "text": "N3 考试",
+   "terms": [
+    "考试",
+    "考试成绩",
+    "考试准备",
+    "N3",
+    "日语",
+    "语言水平"
+   ],
+   "stats": {
+    "wallMs": 509,
+    "promptTokens": 163,
+    "outputTokens": 27,
+    "evalMs": 461
+   }
+  },
+  "de304a4c54050f031624f55adfedd15aec02eba55e2ea1091bd0e68015bdb0d5": {
+   "text": "#atlas-oncall",
+   "terms": [
+    "on-call",
+    "值班",
+    "待命",
+    "轮班"
+   ],
+   "stats": {
+    "wallMs": 366,
+    "promptTokens": 162,
+    "outputTokens": 19,
+    "evalMs": 320
+   }
+  },
+  "b13c6c7b907b8efb645e53eb3992a6c22ac41ef88dfa8e61a51f0177e7a56cd3": {
+   "text": "Mira Okafor",
+   "terms": [
+    "Mira",
+    "Okafor",
+    "名字",
+    "name",
+    "个人",
+    "personal",
+    "记忆",
+    "memory",
+    "存储",
+    "store",
+    "回忆",
+    "memories"
+   ],
+   "stats": {
+    "wallMs": 806,
+    "promptTokens": 162,
+    "outputTokens": 44,
+    "evalMs": 759
+   }
+  },
+  "8b4f30764279e6659e2ff044e1f50b4a2c240a028dc51ce3e8775905bf3d3bda": {
+   "text": "年糕 疫苗",
+   "terms": [
+    "年糕",
+    "糯米糕",
+    "疫苗",
+    "免疫针",
+    "防疫针"
+   ],
+   "stats": {
+    "wallMs": 432,
+    "promptTokens": 163,
+    "outputTokens": 23,
+    "evalMs": 384
+   }
+  },
+  "4a04eae51185499a9b5f14c48d835fd45f527a713a0ef14b88d3300f818de6f6": {
+   "text": "squash merge",
+   "terms": [
+    "merge",
+    "squash",
+    "git",
+    "commit",
+    "cherry",
+    "pick",
+    "rebase",
+    "冲突",
+    "合并",
+    "提交"
+   ],
+   "stats": {
+    "wallMs": 686,
+    "promptTokens": 160,
+    "outputTokens": 37,
+    "evalMs": 626
+   }
+  },
+  "f59107ac9fc27dd507b6cf3aac2a423cbf9df0b4241f241635abfaad8b9c250d": {
+   "text": "Sony WH-1000XM5",
+   "terms": [
+    "Sony",
+    "WH-1000XM5",
+    "noise",
+    "canceling",
+    "头戴式",
+    "耳机",
+    "降噪"
+   ],
+   "stats": {
+    "wallMs": 658,
+    "promptTokens": 166,
+    "outputTokens": 36,
+    "evalMs": 611
+   }
+  },
+  "98d99d0571a9a636e1edd2feda0d5821fa6d3fbe02a59501a8577932ee8e1425": {
+   "text": "测试包的 -test.N 后缀是怎么回事",
+   "terms": [
+    "测试",
+    "包",
+    "测试文件",
+    "测试用例",
+    "后缀",
+    "标识",
+    "英文",
+    "测试标记",
+    "测试名称"
+   ],
+   "stats": {
+    "wallMs": 731,
+    "promptTokens": 168,
+    "outputTokens": 40,
+    "evalMs": 684
+   }
+  },
+  "208ab053a76eb4cb13941dfa13c9b81afb825ac3ea6f50bf07b961693c9e7c6e": {
+   "text": "三万元 预算",
+   "terms": [
+    "三万元",
+    "预算",
+    "三万",
+    "经费",
+    "资金",
+    "费用",
+    "开支",
+    "预算$",
+    "budget$",
+    "经费$",
+    "资金$",
+    "费用$"
+   ],
+   "stats": {
+    "wallMs": 829,
+    "promptTokens": 163,
+    "outputTokens": 43,
+    "evalMs": 782
+   }
+  },
+  "2798c88023394ed6ebf56ed6e5125882c6813eac156559b86236f4c187fcbfb7": {
+   "text": "他平时怎么锻炼身体",
+   "terms": [
+    "平时",
+    "锻炼",
+    "身体",
+    "运动",
+    "健身",
+    "跑步",
+    "打球",
+    "游泳",
+    "走路",
+    "锻炼方法",
+    "体育活动",
+    "健康"
+   ],
+   "stats": {
+    "wallMs": 774,
+    "promptTokens": 162,
+    "outputTokens": 42,
+    "evalMs": 727
+   }
+  },
+  "3fe958f8fa4e93d64628f84308899d0f54dbd6b79b1a0a64fd4888e116e1e2ef": {
+   "text": "猫咪多大了",
+   "terms": [
+    "猫咪年龄",
+    "多大"
+   ],
+   "stats": {
+    "wallMs": 244,
+    "promptTokens": 161,
+    "outputTokens": 12,
+    "evalMs": 197
+   }
+  },
+  "06f0a2939bcf6027857e7e67d71ebfeb69396615403eca5e5b0d84d07d029cb7": {
+   "text": "他有没有吸烟的习惯",
+   "terms": [
+    "吸烟",
+    "习惯",
+    "是否有",
+    "不吸烟"
+   ],
+   "stats": {
+    "wallMs": 333,
+    "promptTokens": 161,
+    "outputTokens": 17,
+    "evalMs": 285
+   }
+  },
+  "34cf3760473ee3bf2f4d2f373abc138c3323374dea989aeb597f869079552ef1": {
+   "text": "入睡前会翻什么读物",
+   "terms": [
+    "睡前",
+    "读物",
+    "书籍",
+    "小说",
+    "故事",
+    "睡前故事",
+    "bedtime",
+    "readings",
+    "books",
+    "novels"
+   ],
+   "stats": {
+    "wallMs": 718,
+    "promptTokens": 164,
+    "outputTokens": 39,
+    "evalMs": 671
+   }
+  },
+  "6e8f0161d49d32e6ddbbdb95b1519f36f9e28222623afe481e219dc9698cd298": {
+   "text": "爹妈那边多久联系一次",
+   "terms": [
+    "父母",
+    "家人",
+    "联系",
+    "多久",
+    "一次"
+   ],
+   "stats": {
+    "wallMs": 370,
+    "promptTokens": 163,
+    "outputTokens": 19,
+    "evalMs": 323
+   }
+  },
+  "fb6e3f60a9c5d527e52172cbe06f1ea8acf036240d282fdf71d06ced549bd48a": {
+   "text": "一般多久理一次发",
+   "terms": [
+    "理发",
+    "剪发",
+    "多久",
+    "频率",
+    "一个月",
+    "一次",
+    "两周",
+    "每周",
+    "理发店",
+    "美容院",
+    "头发"
+   ],
+   "stats": {
+    "wallMs": 735,
+    "promptTokens": 162,
+    "outputTokens": 40,
+    "evalMs": 686
+   }
+  },
+  "653a315b6f9113e083056104a9885fd8d39ae8ebcbd2df848949cef05c233f12": {
+   "text": "出故障之后的总结什么时候交",
+   "terms": [
+    "总结",
+    "报告",
+    "提交",
+    "时间",
+    "故障",
+    "维修",
+    "after故障",
+    "submit",
+    "report",
+    "time"
+   ],
+   "stats": {
+    "wallMs": 638,
+    "promptTokens": 164,
+    "outputTokens": 35,
+    "evalMs": 591
+   }
+  },
+  "03439100325bc8dfd017abdbcfebea31231d6b94c5ec8821f9f181d5193c4121": {
+   "text": "夏天冷气开多少度",
+   "terms": [
+    "夏天",
+    "冷气",
+    "温度",
+    "26度",
+    "28度",
+    "舒适",
+    "凉爽",
+    "空调",
+    "高温",
+    "低温"
+   ],
+   "stats": {
+    "wallMs": 735,
+    "promptTokens": 163,
+    "outputTokens": 40,
+    "evalMs": 682
+   }
+  },
+  "890939ab6d18a9e25f5397baa8302148d35a4113fca0063a2cda7e21e0e26718": {
+   "text": "包裹应该送到哪儿",
+   "terms": [
+    "送货地址",
+    "收件地址",
+    "住址",
+    "地址"
+   ],
+   "stats": {
+    "wallMs": 368,
+    "promptTokens": 161,
+    "outputTokens": 19,
+    "evalMs": 320
+   }
+  },
+  "6ab8a6b4a8e1ca0b900c5278565d32617c444c8669e2da4554df7a887b728cb8": {
+   "text": "站在很高的地方他会害怕吗",
+   "terms": [
+    "高处",
+    "害怕",
+    "恐惧",
+    "高空",
+    "vertigo",
+    "高处恐惧"
+   ],
+   "stats": {
+    "wallMs": 489,
+    "promptTokens": 163,
+    "outputTokens": 26,
+    "evalMs": 441
+   }
+  },
+  "3f48400ff547e32920b977ca9967d0cf3a1eab8742d74e9f2d95bcd07904db1c": {
+   "text": "what kind of screen setup does he have",
+   "terms": [
+    "monitor",
+    "显示器",
+    "size",
+    "尺寸",
+    "resolution",
+    "分辨率",
+    "setup",
+    "配置",
+    "cable",
+    "线缆",
+    "connection",
+    "连接方式"
+   ],
+   "stats": {
+    "wallMs": 789,
+    "promptTokens": 165,
+    "outputTokens": 43,
+    "evalMs": 741
+   }
+  },
+  "fc27fc40311488d801295303627c6b9d4b42f732b5a458a884845082fad38ca5": {
+   "text": "does he eat anything first thing in the day",
+   "terms": [
+    "breakfast",
+    "morning meal",
+    "first meal",
+    "早饭",
+    "早餐"
+   ],
+   "stats": {
+    "wallMs": 448,
+    "promptTokens": 166,
+    "outputTokens": 24,
+    "evalMs": 401
+   }
+  },
+  "d662038943b506974a4ba8fb7662aca60c0e7577d30fb84d9987b5f1cbe226df": {
+   "text": "how picky is he about PR size",
+   "terms": [
+    "picky",
+    "PR size",
+    "attention to detail",
+    "careful",
+    "precise",
+    "严格",
+    "注意细节",
+    "谨慎",
+    "精确"
+   ],
+   "stats": {
+    "wallMs": 692,
+    "promptTokens": 165,
+    "outputTokens": 38,
+    "evalMs": 645
+   }
+  },
+  "a7d38090e97a14a66f72652ecc5faf0178e77f3462f568cf7b8e4998fa2f2caa": {
+   "text": "when does the observability provider agreement come up for renewal",
+   "terms": [
+    "observability",
+    "provider",
+    "agreement",
+    "renewal",
+    "expire",
+    "end",
+    "期限",
+    "到期",
+    "终止",
+    "续约"
+   ],
+   "stats": {
+    "wallMs": 702,
+    "promptTokens": 168,
+    "outputTokens": 38,
+    "evalMs": 653
+   }
+  },
+  "1053c97122f36b00db5126a91eee0bb41185557549fd99b4bf3277ec63e08428": {
+   "text": "who fills in on code sign-off when Zhou Heng is away",
+   "terms": [
+    "code sign-off",
+    "fill in",
+    "Zhou Heng",
+    "away",
+    "替代",
+    "签-off",
+    "代签"
+   ],
+   "stats": {
+    "wallMs": 617,
+    "promptTokens": 170,
+    "outputTokens": 33,
+    "evalMs": 566
+   }
+  },
+  "fbaddba60bb36b4193db8a6fa8c6bce98de82d436a9a155ff49b39ff573c736d": {
+   "text": "uptime target",
+   "terms": [
+    "system",
+    "availability",
+    "reliability",
+    "uptime",
+    "down",
+    "service",
+    "performance",
+    "目标",
+    "可用性",
+    "运行时间"
+   ],
+   "stats": {
+    "wallMs": 698,
+    "promptTokens": 159,
+    "outputTokens": 38,
+    "evalMs": 640
+   }
+  },
+  "2b92317563218c6fe6bacabc649313e979685ad731f320ac38b5f99fd5b8861d": {
+   "text": "does he doze off after eating at noon",
+   "terms": [
+    "sleep",
+    "nap",
+    "doze",
+    "afternoon",
+    "noon",
+    "eat",
+    "siesta",
+    "drowsy",
+    "postprandial"
+   ],
+   "stats": {
+    "wallMs": 889,
+    "promptTokens": 166,
+    "outputTokens": 49,
+    "evalMs": 840
+   }
+  },
+  "499aa25ff4ac429b96047a36ad16cc7034eb3a08ae01300ffc5990b898daab81": {
+   "text": "what noise-cancelling gear does he use at his desk",
+   "terms": [
+    "noise-cancelling",
+    "gear",
+    "desk",
+    "headphones",
+    "earphones",
+    "earbuds",
+    "耳机",
+    "消噪",
+    "消音"
+   ],
+   "stats": {
+    "wallMs": 796,
+    "promptTokens": 169,
+    "outputTokens": 44,
+    "evalMs": 745
+   }
+  },
+  "13526e65c80c7ef23abebe735edaad6f2bbc2d1859325544b3fffc5ee70a1433": {
+   "text": "他显示器是什么配置",
+   "terms": [
+    "显示器配置",
+    "电脑配置",
+    "屏幕分辨率",
+    "显卡型号",
+    "显示器品牌"
+   ],
+   "stats": {
+    "wallMs": 465,
+    "promptTokens": 161,
+    "outputTokens": 25,
+    "evalMs": 419
+   }
+  },
+  "2bf5bc645d97facb3a2bf13deead2265ac465dce38f1bf41e3e96979048fa974": {
+   "text": "报销单什么时候截止",
+   "terms": [
+    "报销",
+    "截止",
+    "日期",
+    "结束",
+    "时间",
+    "最后",
+    "期限",
+    "截止日期"
+   ],
+   "stats": {
+    "wallMs": 537,
+    "promptTokens": 161,
+    "outputTokens": 29,
+    "evalMs": 489
+   }
+  },
+  "7e07a88387ecd1089bd9e8b05b911caac0103d54f75f4384e070b20e94bfe784": {
+   "text": "他周末做什么志愿活动",
+   "terms": [
+    "周末",
+    "志愿活动",
+    "做",
+    "什么"
+   ],
+   "stats": {
+    "wallMs": 333,
+    "promptTokens": 162,
+    "outputTokens": 17,
+    "evalMs": 284
+   }
+  },
+  "fec14178ec182c7d9c3cd9f91145ae2fc927188d66038de14bf1d593a0de3b35": {
+   "text": "新功能上线的灰度策略",
+   "terms": [
+    "灰度测试",
+    "逐步发布",
+    "新功能测试",
+    "部分用户",
+    "限量发布",
+    "功能上线"
+   ],
+   "stats": {
+    "wallMs": 566,
+    "promptTokens": 164,
+    "outputTokens": 30,
+    "evalMs": 514
+   }
+  },
+  "ba236bf66097b6e55d1f23549bb3135acfe08b67b200b7552cdea564e5749522": {
+   "text": "他在学什么编程语言",
+   "terms": [
+    "编程语言",
+    "学习",
+    "计算机"
+   ],
+   "stats": {
+    "wallMs": 279,
+    "promptTokens": 162,
+    "outputTokens": 14,
+    "evalMs": 231
+   }
+  },
+  "61a8461adee276dc5d159be803a8129f53275dc3c8675668ff7ed87de2b22160": {
+   "text": "设计文档要按什么模板写",
+   "terms": [
+    "文档模板",
+    "设计规范",
+    "项目文档",
+    "技术文档",
+    "需求分析",
+    "功能描述",
+    "模板结构",
+    "编写格式",
+    "中文模板",
+    "英文模板"
+   ],
+   "stats": {
+    "wallMs": 807,
+    "promptTokens": 164,
+    "outputTokens": 44,
+    "evalMs": 758
+   }
+  },
+  "e6d5496eac5a1fbb7e0fdd1f6bde8bccb8a6cd3c72c9321af87cd3a9a0b8b2eb": {
+   "text": "What does he drink in the morning?",
+   "terms": [
+    "morning drink",
+    "breakfast beverage",
+    "morning beverage",
+    "drink morning",
+    "朝饮",
+    "早餐饮料"
+   ],
+   "stats": {
+    "wallMs": 578,
+    "promptTokens": 165,
+    "outputTokens": 31,
+    "evalMs": 530
+   }
+  },
+  "f7c2d7afd4fe9e9b7adf53345635ac061dc33cc7bb94be7879eb8ec0cd080a4b": {
+   "text": "Does he own a car or have a driving licence?",
+   "terms": [
+    "car",
+    "driving licence",
+    "own",
+    "have",
+    "vehicle",
+    "license",
+    "持有",
+    "拥有",
+    "驾照",
+    "汽车"
+   ],
+   "stats": {
+    "wallMs": 663,
+    "promptTokens": 168,
+    "outputTokens": 36,
+    "evalMs": 615
+   }
+  },
+  "d7ebacf70d1e7a1438c1efb2576f4cafd5a5d999f3bbafde86a749ed9da11a59": {
+   "text": "Which days does he work from home?",
+   "terms": [
+    "work",
+    "home",
+    "weekday",
+    "Saturday",
+    "Sunday",
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "休息日",
+    "工作日"
+   ],
+   "stats": {
+    "wallMs": 760,
+    "promptTokens": 165,
+    "outputTokens": 42,
+    "evalMs": 713
+   }
+  },
+  "476b296a26b69675e0337de6be6be11fc5a55dc468c5286ce7bfc47955375672": {
+   "text": "How long is the dashboard query cache TTL?",
+   "terms": [
+    "dashboard",
+    "query",
+    "cache",
+    "TTL",
+    "time",
+    "to",
+    "live",
+    "有效期",
+    "生存时间"
+   ],
+   "stats": {
+    "wallMs": 613,
+    "promptTokens": 166,
+    "outputTokens": 33,
+    "evalMs": 566
+   }
+  },
+  "fa663da33caedf70288b14db82ddce8704bc239f38d83fa4618e15a220f32b24": {
+   "text": "What is the name of his cat?",
+   "terms": [
+    "cat's name",
+    "宠物名字"
+   ],
+   "stats": {
+    "wallMs": 259,
+    "promptTokens": 165,
+    "outputTokens": 13,
+    "evalMs": 212
+   }
+  },
+  "84caca2f21674d2edf365fb04fd6db1289d8b046de734a6e7d965328dbe0191b": {
+   "text": "When should reminders be sent?",
+   "terms": [
+    "提醒",
+    "提醒时间",
+    "发送时间",
+    "定时",
+    "设定时间",
+    "提醒时刻",
+    "通知时间",
+    "提醒发送",
+    "提醒设置",
+    "定时提醒",
+    "提醒安排"
+   ],
+   "stats": {
+    "wallMs": 899,
+    "promptTokens": 163,
+    "outputTokens": 50,
+    "evalMs": 851
+   }
+  },
+  "d05538d307271d8c354ab879346e78efdbfbad4e3d910fb3fa2f6c02825c4db5": {
+   "text": "请他吃饭选哪家馆子合适",
+   "terms": [
+    "请客吃饭",
+    "合适餐馆",
+    "选择餐厅",
+    "good restaurant",
+    "suitable place"
+   ],
+   "stats": {
+    "wallMs": 487,
+    "promptTokens": 165,
+    "outputTokens": 26,
+    "evalMs": 436
+   }
+  },
+  "69c7a647e466470b00795749906366ab1fa85d17ae6d4b25654849724d9880ab": {
+   "text": "他今天肠胃闹毛病，午饭帮他订点啥",
+   "terms": [
+    "肠胃不适",
+    "肚子疼",
+    "午饭",
+    "晚餐",
+    "清淡",
+    "粥",
+    "面条",
+    "肠胃",
+    "stomach",
+    "abdomen",
+    "light",
+    "congee"
+   ],
+   "stats": {
+    "wallMs": 858,
+    "promptTokens": 168,
+    "outputTokens": 47,
+    "evalMs": 810
+   }
+  },
+  "faebd81aa67adb0a3a2b8a94e5d175c5f060564fbc61ab8135d2f7e71734fc8e": {
+   "text": "We are planning a team offsite at a lake, will he enjoy kayaking?",
+   "terms": [
+    "team offsite",
+    "lake",
+    "kayaking",
+    "enjoy",
+    "plan",
+    "trip",
+    "outdoor",
+    "activity",
+    "he",
+    "will",
+    "like",
+    "paddle"
+   ],
+   "stats": {
+    "wallMs": 844,
+    "promptTokens": 174,
+    "outputTokens": 47,
+    "evalMs": 793
+   }
+  },
+  "d288b4d71aaa2f25a6b89433b9074f279da848806c07845c07a7650937aab803": {
+   "text": "已经夜里十一点半了，他是不是该躺下了",
+   "terms": [
+    "夜里",
+    "十一点半",
+    "躺下",
+    "睡觉",
+    "休息",
+    "晚安",
+    "bedtime",
+    "sleep",
+    "rest",
+    "go to bed"
+   ],
+   "stats": {
+    "wallMs": 752,
+    "promptTokens": 169,
+    "outputTokens": 41,
+    "evalMs": 699
+   }
+  },
+  "b0a718fec3fa3aed22ca6969ff9e6893c9e4d2304900da15063444fd5c6e88c3": {
+   "text": "去星巴克帮他带一杯，要注意什么",
+   "terms": [
+    "带",
+    "买",
+    "咖啡",
+    "注意",
+    "支付",
+    "礼貌",
+    "询问",
+    "中文",
+    "order",
+    "service",
+    "cup",
+    "饮料"
+   ],
+   "stats": {
+    "wallMs": 729,
+    "promptTokens": 165,
+    "outputTokens": 40,
+    "evalMs": 680
+   }
+  },
+  "069466b87d073c71613eb3d9605d7551c000a471e0bfa60cbf361eaef8c9608c": {
+   "text": "I need to send him a long status update, how should I format it?",
+   "terms": [
+    "status update",
+    "long format",
+    "write message",
+    "formal tone",
+    "informal tone",
+    "structure content",
+    "Chinese",
+    "English",
+    "organize ideas",
+    "clearly express",
+    "use examples"
+   ],
+   "stats": {
+    "wallMs": 908,
+    "promptTokens": 173,
+    "outputTokens": 50,
+    "evalMs": 856
+   }
+  },
+  "ecd5805899963666a7fd92688b03b95274467b0cd05d5a1102a69a4510c385c1": {
+   "text": "他出差一周，家里有什么要照看的",
+   "terms": [
+    "出差",
+    "一周",
+    "家里",
+    "照看",
+    "需要",
+    "留意",
+    "关注",
+    "照顾",
+    "看护",
+    "留意事项",
+    "关注点",
+    "看护事项"
+   ],
+   "stats": {
+    "wallMs": 835,
+    "promptTokens": 167,
+    "outputTokens": 46,
+    "evalMs": 787
+   }
+  },
+  "f243f307f2f50248e00c66f6ae1c5d873aab7d2d9393a8c0e61653f7dfabd559": {
+   "text": "改了付款相关的代码，合并前还差什么",
+   "terms": [
+    "付款",
+    "代码",
+    "合并",
+    "测试",
+    "审核",
+    "修改",
+    "提交",
+    "差异",
+    "检查",
+    "功能",
+    "支付",
+    "结算"
+   ],
+   "stats": {
+    "wallMs": 737,
+    "promptTokens": 168,
+    "outputTokens": 40,
+    "evalMs": 677
+   }
+  },
+  "c560d42832c4daa17772f0cf5f6d1cbc5794abdd7964ef8c0a4e13be9bc21516": {
+   "text": "The pipeline went red on the Microsoft build agent for no obvious reason",
+   "terms": [
+    "pipeline",
+    "build",
+    "agent",
+    "red",
+    "Microsoft",
+    "失败",
+    "管道",
+    "构建",
+    "代理",
+    "变红"
+   ],
+   "stats": {
+    "wallMs": 651,
+    "promptTokens": 170,
+    "outputTokens": 35,
+    "evalMs": 600
+   }
+  },
+  "b0575e31de34831f9bc9f634821917bf04ddc99eb4f5701f893d64932457253e": {
+   "text": "给他寄东西写哪个地址",
+   "terms": [
+    "寄送地址",
+    "收件地址",
+    "写信地址",
+    "送达地址",
+    "寄包裹",
+    "寄件地址"
+   ],
+   "stats": {
+    "wallMs": 593,
+    "promptTokens": 163,
+    "outputTokens": 32,
+    "evalMs": 546
+   }
+  },
+  "f4733f886cc8365e78ee16639d0394da0542d465c06ab29c4d996c77ac73a472": {
+   "text": "他喝酒吗",
+   "terms": [
+    "喝酒",
+    "饮",
+    "酒精",
+    "饮料",
+    "是否",
+    "饮酒"
+   ],
+   "stats": {
+    "wallMs": 429,
+    "promptTokens": 160,
+    "outputTokens": 22,
+    "evalMs": 366
+   }
+  },
+  "b9fb1588b82a48d46423cf57f7fc5c9de47d937ac52b545e95458b1f3ac98c59": {
+   "text": "谁吃素",
+   "terms": [
+    "素食者",
+    "吃素"
+   ],
+   "stats": {
+    "wallMs": 255,
+    "promptTokens": 160,
+    "outputTokens": 12,
+    "evalMs": 194
+   }
+  },
+  "75a2eecd2572ba56b5ea1a865dee2f28e9bf2526464f2edaaf46b332badb2dd9": {
+   "text": "邻居家的狗叫什么",
+   "terms": [
+    "邻居",
+    "dog",
+    "小狗",
+    "宠物"
+   ],
+   "stats": {
+    "wallMs": 312,
+    "promptTokens": 163,
+    "outputTokens": 16,
+    "evalMs": 264
+   }
+  },
+  "b9e7c7ee3551eb7eff34cc863c6b66e7e679571053981445a4503b56e4473a3a": {
+   "text": "Atlas 的截止日期",
+   "terms": [
+    "截止日期",
+    "deadline",
+    "Atlas项目",
+    "最后期限"
+   ],
+   "stats": {
+    "wallMs": 364,
+    "promptTokens": 161,
+    "outputTokens": 19,
+    "evalMs": 318
+   }
+  },
+  "475d42dc3c30d98af8e457d82c91be0335b45f35b04c391da8cbed44e0767aa0": {
+   "text": "Orion 是做什么的",
+   "terms": [
+    "Orion",
+    "猎户座",
+    "星座",
+    "天体",
+    "空间"
+   ],
+   "stats": {
+    "wallMs": 435,
+    "promptTokens": 162,
+    "outputTokens": 23,
+    "evalMs": 388
+   }
+  },
+  "b4fd324869c9734d5dcd9cc860a4ebd3a1b8f77a773695f9b679b7537491e982": {
+   "text": "生产端口和镜像端口分别是多少",
+   "terms": [
+    "生产端口",
+    "mirror port",
+    "镜像端口",
+    "production port"
+   ],
+   "stats": {
+    "wallMs": 438,
+    "promptTokens": 167,
+    "outputTokens": 23,
+    "evalMs": 389
+   }
+  },
+  "1385a24a2f6b3ab9bc552fd3641142e3efd44f0f0240e0f53d035abd5060fc8c": {
+   "text": "他不看哪类电影",
+   "terms": [
+    "不看",
+    "电影",
+    "类型",
+    "电影类型",
+    "电影种类",
+    "电影类别",
+    "不喜欢"
+   ],
+   "stats": {
+    "wallMs": 541,
+    "promptTokens": 163,
+    "outputTokens": 29,
+    "evalMs": 494
+   }
+  },
+  "e017cb82a1a8315ada6fae13bd4104f1e0ce07465e41f23a6ec5d323f61d0e54": {
+   "text": "Does he like winter outdoor trips?",
+   "terms": [
+    "冬天",
+    "户外",
+    "旅行",
+    "喜欢",
+    "不喜欢"
+   ],
+   "stats": {
+    "wallMs": 367,
+    "promptTokens": 164,
+    "outputTokens": 19,
+    "evalMs": 319
+   }
+  },
+  "1ff1b444b2af16e467925a70e9f9651f3464fa58f9c357916ded2660d1838a00": {
+   "text": "他会游泳吗",
+   "terms": [
+    "会游泳",
+    "swim",
+    "是否会",
+    "can swim"
+   ],
+   "stats": {
+    "wallMs": 380,
+    "promptTokens": 160,
+    "outputTokens": 19,
+    "evalMs": 319
+   }
+  },
+  "578622c0ce3f7d0c1423db9d0c7e4097bb95fae590043b6f411ea68bf8539386": {
+   "text": "生日是哪天",
+   "terms": [
+    "生日",
+    "birth day",
+    "出生日期",
+    "date of birth"
+   ],
+   "stats": {
+    "wallMs": 386,
+    "promptTokens": 161,
+    "outputTokens": 20,
+    "evalMs": 338
+   }
+  },
+  "91b524911ea1a20b1a58e9b2a42aac7161cf8fe7a1ca945ae278d436713b73f8": {
+   "text": "租约什么时候到期",
+   "terms": [
+    "租约到期",
+    "lease end",
+    "何时",
+    "when"
+   ],
+   "stats": {
+    "wallMs": 367,
+    "promptTokens": 161,
+    "outputTokens": 19,
+    "evalMs": 320
+   }
+  },
+  "db513ba6f68d6a0f6877209ac0d922cb6efae199deef60803b48da924398f045": {
+   "text": "他搬家之后住哪",
+   "terms": [
+    "搬家后",
+    "住哪里",
+    "新地址",
+    "新住所",
+    "搬到哪里",
+    "新家",
+    "居所",
+    "住址",
+    "搬迁后",
+    "何处居住",
+    "新居",
+    "住处"
+   ],
+   "stats": {
+    "wallMs": 923,
+    "promptTokens": 162,
+    "outputTokens": 51,
+    "evalMs": 875
+   }
+  },
+  "26660b2d4201ae0a8a3bc6c6d9a970c9545f5dab5e229b95444a7a2ff6c396d5": {
+   "text": "他看电影的长期口味",
+   "terms": [
+    "电影",
+    "影片",
+    "影视作品",
+    "watch",
+    "see",
+    "view"
+   ],
+   "stats": {
+    "wallMs": 430,
+    "promptTokens": 162,
+    "outputTokens": 23,
+    "evalMs": 382
+   }
+  },
+  "16a8334359d71a1ba89d10712c4592e987756efbfda2ce22b778fc8595807878": {
+   "text": "Atlas 2.0 现在定在哪天发布",
+   "terms": [
+    "Atlas 2.0",
+    "发布",
+    "release",
+    "日期",
+    "date"
+   ],
+   "stats": {
+    "wallMs": 436,
+    "promptTokens": 170,
+    "outputTokens": 23,
+    "evalMs": 386
+   }
+  },
+  "3d03c0576d45b2eeebecfe5bd5fbbe25c3bcb9b7373e1e76eb510b4cc9893163": {
+   "text": "他一般几点起床",
+   "terms": [
+    "起床时间",
+    "早晨几点",
+    "早上几点",
+    "起床时刻",
+    "早晨时间",
+    "早上时间"
+   ],
+   "stats": {
+    "wallMs": 524,
+    "promptTokens": 161,
+    "outputTokens": 28,
+    "evalMs": 477
+   }
+  },
+  "c6e121100b97000cc6c4ad7c18de5c366fda499e3ce7e66ef5bdb4bc9c429f75": {
+   "text": "他第一份工作是做什么的",
+   "terms": [
+    "第一份工作",
+    "职业",
+    "职位",
+    "工作内容",
+    "做什么"
+   ],
+   "stats": {
+    "wallMs": 646,
+    "promptTokens": 164,
+    "outputTokens": 35,
+    "evalMs": 599
+   }
+  },
+  "d93784366b0362857c3471de201f799270032409db8d7ac855bf33c5593c6983": {
+   "text": "明年有什么要参加的会议或演讲",
+   "terms": [
+    "会议",
+    "演讲",
+    "参加",
+    "明年"
+   ],
+   "stats": {
+    "wallMs": 317,
+    "promptTokens": 165,
+    "outputTokens": 16,
+    "evalMs": 268
+   }
+  },
+  "3aeb8eef61da8b32956db6800140b4fb3e393c40aaf51c49f758a9f4af50830d": {
+   "text": "十月有什么安排",
+   "terms": [
+    "十月",
+    "October",
+    "计划",
+    "安排",
+    "活动",
+    "events"
+   ],
+   "stats": {
+    "wallMs": 433,
+    "promptTokens": 160,
+    "outputTokens": 22,
+    "evalMs": 372
+   }
+  },
+  "e677034da52c13a262c94013ec76239dbae0cd58f748956d182ca12aa28f4a69": {
+   "text": "Vespa scooter",
+   "terms": [
+    "Vespa",
+    "scooter",
+    "motorbike",
+    "意大利摩托车",
+    "电动滑板车"
+   ],
+   "stats": {
+    "wallMs": 524,
+    "promptTokens": 161,
+    "outputTokens": 28,
+    "evalMs": 478
+   }
+  },
+  "0b9122e503760a5eb702af88de69b6dbfff5e448625e98563f941093bd53d594": {
+   "text": "PMP 认证考试准备得怎么样",
+   "terms": [
+    "PMP认证",
+    "项目管理",
+    "考试准备",
+    "考试状态"
+   ],
+   "stats": {
+    "wallMs": 403,
+    "promptTokens": 166,
+    "outputTokens": 21,
+    "evalMs": 355
+   }
+  },
+  "18f4f21f3d9e20ae156bbaa13698f5394f2f1d9060c8a52e317fc801ae3dfa11": {
+   "text": "《雾港》写到哪了",
+   "terms": [
+    "雾港",
+    "写到",
+    "哪里"
+   ],
+   "stats": {
+    "wallMs": 298,
+    "promptTokens": 165,
+    "outputTokens": 15,
+    "evalMs": 250
+   }
+  },
+  "01a6129ec264fbd3b67722fbb39de4170b49fd2d825e1755128ee4443ac8b4ed": {
+   "text": "Nimbus 用什么许可证",
+   "terms": [
+    "Nimbus",
+    "许可证",
+    "license",
+    "开源"
+   ],
+   "stats": {
+    "wallMs": 332,
+    "promptTokens": 163,
+    "outputTokens": 17,
+    "evalMs": 284
+   }
+  },
+  "07aa57687133bd3f5b84492f31e7e9fdf8e6f5b0f7934ec9d982a4780ae49378": {
+   "text": "他希望别人怎么称呼他",
+   "terms": [
+    "希望",
+    "称呼",
+    "名字",
+    "姓氏",
+    "Mr",
+    "Ms",
+    "称呼他"
+   ],
+   "stats": {
+    "wallMs": 508,
+    "promptTokens": 163,
+    "outputTokens": 27,
+    "evalMs": 460
+   }
+  },
+  "4eebfea14396aa83bd669cbfe5fa39d0f3f0aa8ea1f711a659a9f0325f29f740": {
+   "text": "What editor does he prefer?",
+   "terms": [
+    "editor",
+    "偏好",
+    "文本编辑器",
+    "文字处理"
+   ],
+   "stats": {
+    "wallMs": 368,
+    "promptTokens": 163,
+    "outputTokens": 19,
+    "evalMs": 319
+   }
+  },
+  "ba686142f2fc29b88c7b86d3899b24b4f904c4b39ecb581774fb8ee0b7fb6204": {
+   "text": "睡前有什么约定",
+   "terms": [
+    "睡前",
+    "睡觉前",
+    "约定",
+    "承诺",
+    "安排",
+    "事先",
+    "事先约定",
+    "睡觉约定",
+    "睡前承诺",
+    "事先安排",
+    "睡前安排"
+   ],
+   "stats": {
+    "wallMs": 864,
+    "promptTokens": 160,
+    "outputTokens": 47,
+    "evalMs": 804
+   }
+  },
+  "0c81788efb14678488d65689e6319b23be9204c5f0e398de466b6a824681b929": {
+   "text": "Nimbus 1.0 什么时候发布",
+   "terms": [
+    "Nimbus 1.0",
+    "发布",
+    "release",
+    "发布时间",
+    "time",
+    "发布时间点",
+    "date"
+   ],
+   "stats": {
+    "wallMs": 568,
+    "promptTokens": 166,
+    "outputTokens": 31,
+    "evalMs": 520
+   }
+  },
+  "1042e73c183a0c5c07c31baaeec47463c9326fa9afabda9b9a6caf780dd81337": {
+   "text": "他是不是在吃抗焦虑的药",
+   "terms": [
+    "他",
+    "吃药",
+    "抗焦虑",
+    "药物",
+    "medicine",
+    "anxiety",
+    "medication"
+   ],
+   "stats": {
+    "wallMs": 539,
+    "promptTokens": 165,
+    "outputTokens": 29,
+    "evalMs": 489
+   }
+  },
+  "b24ef281160efb182ebb42ff5910514cf18d5a98b495e214aff8f816ffabc9c7": {
+   "text": "天府三街",
+   "terms": [
+    "天府",
+    "三街",
+    "天府三街",
+    "Tianfu",
+    "Sanjie",
+    "San Jie"
+   ],
+   "stats": {
+    "wallMs": 585,
+    "promptTokens": 160,
+    "outputTokens": 31,
+    "evalMs": 525
+   }
+  },
+  "da65d994f42218b324e6f0beaa110b62fadeea320c724b551189d5c9719de8ec": {
+   "text": "小时候的外号",
+   "terms": [
+    "童年",
+    "小名",
+    "昵称",
+    "别名",
+    "绰号",
+    "小时候",
+    "童年时期"
+   ],
+   "stats": {
+    "wallMs": 545,
+    "promptTokens": 161,
+    "outputTokens": 30,
+    "evalMs": 498
+   }
+  },
+  "2f9a888ac4f89f7331888f5a3fd2818f89afa558055b402d02749fb4409577d6": {
+   "text": "表弟什么时候走",
+   "terms": [
+    "表弟",
+    "弟弟",
+    "亲戚",
+    "离开",
+    "出发",
+    "何时",
+    "什么时候"
+   ],
+   "stats": {
+    "wallMs": 479,
+    "promptTokens": 161,
+    "outputTokens": 26,
+    "evalMs": 434
+   }
+  },
+  "23e2e76ec3d8a73a5779b72d5f17cdfb79182d8d4ee42c10e622e086a44dd819": {
+   "text": "国庆封版时间",
+   "terms": [
+    "国庆",
+    "National Day",
+    "假期",
+    "holiday",
+    "封版",
+    "shutdown",
+    "时间",
+    "time",
+    "假期时间",
+    "holiday time"
+   ],
+   "stats": {
+    "wallMs": 693,
+    "promptTokens": 161,
+    "outputTokens": 38,
+    "evalMs": 645
+   }
+  },
+  "f53a0f8e2be5795483b3540576cb9e62302a94e1682189d2a5b699eaf64bf025": {
+   "text": "预发网关端口现在是多少",
+   "terms": [
+    "预发网关",
+    "端口",
+    "现在",
+    "多少"
+   ],
+   "stats": {
+    "wallMs": 381,
+    "promptTokens": 165,
+    "outputTokens": 20,
+    "evalMs": 334
+   }
+  },
+  "b355bbea6fa9583b9c8e50f812c1a4d49935dc62c51b76c61c1ae578d26a320b": {
+   "text": "N4 考试",
+   "terms": [
+    "考试",
+    "考试成绩",
+    "考试准备",
+    "考试复习",
+    "考试日期"
+   ],
+   "stats": {
+    "wallMs": 431,
+    "promptTokens": 163,
+    "outputTokens": 23,
+    "evalMs": 384
+   }
+  },
+  "7de89ea394a2721c5f1711ec8c4239d7bf085b26439114b275275301b0f8f5a7": {
+   "text": "Who reviews payment changes while Zhou Heng is on leave?",
+   "terms": [
+    "审查",
+    "支付",
+    "变更",
+    "代理",
+    "审批",
+    "替换",
+    "审核",
+    "批准",
+    "审查人",
+    "审查者",
+    "代理人员"
+   ],
+   "stats": {
+    "wallMs": 728,
+    "promptTokens": 169,
+    "outputTokens": 40,
+    "evalMs": 677
+   }
+  },
+  "ef5702125e984d5f1c80bd0559bdbb5b4d4b8419d18103e8618f6f46b5face2a": {
+   "text": "季度规划会最后决定了什么",
+   "terms": [
+    "季度",
+    "规划会",
+    "决定",
+    "项目",
+    "目标",
+    "策略",
+    "计划",
+    "会议",
+    "结束",
+    "成果",
+    "总结",
+    "决策"
+   ],
+   "stats": {
+    "wallMs": 744,
+    "promptTokens": 163,
+    "outputTokens": 41,
+    "evalMs": 698
+   }
+  },
+  "a9a531d5add98d9944b610552ff999d97c58aea8982debdd0bdd274f107cd747": {
+   "text": "海蓝档案 原始事件编号",
+   "terms": [
+    "海蓝",
+    "档案",
+    "原始",
+    "事件",
+    "编号",
+    "文件",
+    "记录",
+    "事件号",
+    "档案号"
+   ],
+   "stats": {
+    "wallMs": 612,
+    "promptTokens": 166,
+    "outputTokens": 34,
+    "evalMs": 565
+   }
+  },
+  "8c7bea0e13ce1004425042509b28b49eb46650715675ef5a944e2041ee46092d": {
+   "text": "证书轮换之后的临时措施",
+   "terms": [
+    "证书更新",
+    "临时方案",
+    "过渡措施",
+    "安全策略",
+    "证书管理",
+    "临时证书",
+    "安全更新"
+   ],
+   "stats": {
+    "wallMs": 583,
+    "promptTokens": 164,
+    "outputTokens": 32,
+    "evalMs": 536
+   }
+  },
+  "fe2d251cca4f41654a95d1d6bd30ce532a37c856de4debd8e44821faa30f3e1b": {
+   "text": "啊对了突然想起来一件事情想跟你确认一下，就是那个我们对外的接口不是有个调用频率的限制嘛，我有点忘了具体数字是多少了你帮我回忆一下",
+   "terms": [
+    "接口调用",
+    "频率限制",
+    "具体数字",
+    "对外接口",
+    "调用次数",
+    "限制频率",
+    "接口限制",
+    "频率数字",
+    "对外频率",
+    "接口次数",
+    "限制次数",
+    "频率标准"
+   ],
+   "stats": {
+    "wallMs": 981,
+    "promptTokens": 194,
+    "outputTokens": 54,
+    "evalMs": 919
+   }
+  },
+  "2f743db355eec6777c694ee29b0b581185c3a4b8de2e45805782e425a75b3fe9": {
+   "text": "ok this is going to sound silly but I honestly cannot remember, and I have asked like three people already — which day o…",
+   "terms": [
+    "expense",
+    "hand in",
+    "day",
+    "month",
+    "remember",
+    "people",
+    "asked",
+    "three",
+    "supposed"
+   ],
+   "stats": {
+    "wallMs": 629,
+    "promptTokens": 194,
+    "outputTokens": 34,
+    "evalMs": 569
+   }
+  },
+  "99b8a88cb6401c09c43756f684c809e23615f014efbbd328249e935806a523dc": {
+   "text": "刚跟朋友聊到宠物的话题聊了半天，说起来我家那位每年什么时候要去打针来着，我老是记不住这个时间",
+   "terms": [
+    "宠物",
+    "打针",
+    "时间",
+    "朋友",
+    "每年",
+    "记得"
+   ],
+   "stats": {
+    "wallMs": 441,
+    "promptTokens": 186,
+    "outputTokens": 23,
+    "evalMs": 383
+   }
+  },
+  "69665211e00028e98153e630e3c13c25728c766ad4c87c07083cfcfab920bf88": {
+   "text": "新人入职的安全培训在哪登记",
+   "terms": [
+    "新员工",
+    "入职",
+    "安全培训",
+    "登记",
+    "报名",
+    "签到",
+    "注册",
+    "参加",
+    "培训",
+    "安全教育",
+    "入职手续",
+    "安全须知"
+   ],
+   "stats": {
+    "wallMs": 848,
+    "promptTokens": 163,
+    "outputTokens": 47,
+    "evalMs": 797
+   }
+  },
+  "f7413f40c57c79255842b397b462d075a230ea088a15f09a6fe6661c172266f9": {
+   "text": "他支持哪支篮球队",
+   "terms": [
+    "他",
+    "支持",
+    "篮球队",
+    "篮球",
+    "球队",
+    "喜欢",
+    "爱好",
+    "nba",
+    "cba",
+    "篮球运动员",
+    "篮球比赛"
+   ],
+   "stats": {
+    "wallMs": 738,
+    "promptTokens": 163,
+    "outputTokens": 41,
+    "evalMs": 692
+   }
+  },
+  "edca9117e8104825403abca40c646922ae2c7ad6893f78ec8859c8e360eb54b2": {
+   "text": "What is his favourite colour?",
+   "terms": [
+    "喜欢",
+    "喜爱",
+    "最喜欢",
+    "颜色",
+    "颜",
+    "色"
+   ],
+   "stats": {
+    "wallMs": 414,
+    "promptTokens": 163,
+    "outputTokens": 22,
+    "evalMs": 368
+   }
+  },
+  "c2d9d0d6363e509fc64b2bfaf4ea3059f937309a33de1a2848aa8dddf5c530e8": {
+   "text": "火星探测器什么时候发射",
+   "terms": [
+    "火星探测器",
+    "发射",
+    "火星",
+    "探测"
+   ],
+   "stats": {
+    "wallMs": 344,
+    "promptTokens": 162,
+    "outputTokens": 18,
+    "evalMs": 298
+   }
+  },
+  "0bc6a2217f31a5e4551d1e7ffb7cc3b4e68c53cde9065c25bab9a4c5ef5b1323": {
+   "text": "今天股市行情怎么样",
+   "terms": [
+    "今天",
+    "股市",
+    "行情",
+    "怎么样",
+    "how",
+    "is",
+    "the",
+    "stock",
+    "market",
+    "today"
+   ],
+   "stats": {
+    "wallMs": 621,
+    "promptTokens": 161,
+    "outputTokens": 34,
+    "evalMs": 574
+   }
+  },
+  "18e8164d7062d9a6f9d60625864082536b62f9a471eafa52615189a01188da11": {
+   "text": "kubernetes helm chart",
+   "terms": [
+    "Kubernetes",
+    "helm",
+    "chart",
+    "应用",
+    "部署",
+    "manifest",
+    "资源",
+    "模板",
+    "package"
+   ],
+   "stats": {
+    "wallMs": 595,
+    "promptTokens": 161,
+    "outputTokens": 32,
+    "evalMs": 543
+   }
+  },
+  "4e0464711e9e7065dc06ac0ee76336893fd7b1bdc7aa36fe77f52de75cc42c0e": {
+   "text": "Which university did his manager attend?",
+   "terms": [
+    "manager university",
+    "工作院校",
+    "就读大学"
+   ],
+   "stats": {
+    "wallMs": 311,
+    "promptTokens": 164,
+    "outputTokens": 16,
+    "evalMs": 263
+   }
+  },
+  "a9777bb1664a7f2b82a60e38ba1111df170df03ed8ab7b9bb48bcbfa161e8229": {
+   "text": "他养的鱼缸里有几条鱼",
+   "terms": [
+    "鱼缸",
+    "几条鱼",
+    "养鱼",
+    "宠物鱼",
+    "水族箱"
+   ],
+   "stats": {
+    "wallMs": 482,
+    "promptTokens": 167,
+    "outputTokens": 26,
+    "evalMs": 435
+   }
+  }
+ },
+ "cost": {
+  "items": 200,
+  "meanWallMs": 553,
+  "meanPromptTokens": 164,
+  "meanOutputTokens": 30,
+  "note": "local GPU inference; latency is not representative of a hosted model"
+ }
+}

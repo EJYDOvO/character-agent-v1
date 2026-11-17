@@ -1,0 +1,30 @@
+{
+ "model": "embeddinggemma",
+ "dtype": "q8",
+ "modelVersion": "onnx-community/embeddinggemma-300m-ONNX@5090578d9565:q8",
+ "node": "v24.13.0",
+ "cpu": "AMD Ryzen 9 6900HX with Radeon Graphics",
+ "threads": 16,
+ "executionProvider": "cpu (onnxruntime-node)",
+ "loadMs": 1684,
+ "docs": {
+  "count": 546,
+  "totalMs": 25226,
+  "msPerDoc": 46.2,
+  "chars": 28910
+ },
+ "singleDocUpdate": {
+  "count": 40,
+  "p50Ms": 154.58,
+  "p95Ms": 167.89
+ },
+ "queries": {
+  "count": 240,
+  "p50Ms": 153.44,
+  "p95Ms": 167.56,
+  "meanMs": 154.83
+ },
+ "wallMs": 70539,
+ "cpuMs": 487297,
+ "peakRssMB": 1642
+}

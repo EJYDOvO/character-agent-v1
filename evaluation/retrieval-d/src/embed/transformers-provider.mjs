@@ -3,7 +3,7 @@ import os from 'node:os';import path from 'node:path';
 import {MODELS,RERANKERS,modelVersion} from './models.mjs';
 export const cacheDir=process.env.RETRIEVAL_D_MODEL_CACHE??path.join(os.homedir(),'.cache','dsh-retrieval-d','models');
 let tf;
-async function lib(){if(!tf){tf=await import('@huggingface/transformers');tf.env.cacheDir=cacheDir;tf.env.allowLocalModels=false;if(process.env.RETRIEVAL_D_OFFLINE==='1')tf.env.allowRemoteModels=false;}return tf;}
+async function lib(){if(!tf){tf=await import('@huggingface/transformers');tf.env.cacheDir=cacheDir;tf.env.allowLocalModels=false;}return tf;}
 export async function createEmbedder(name,{dtype='fp32',batchSize=8}={}){
  const spec=MODELS[name];if(!spec)throw Error('Unknown embedding model '+name);
  const {pipeline,AutoModel,AutoTokenizer}=await lib(),started=performance.now();
