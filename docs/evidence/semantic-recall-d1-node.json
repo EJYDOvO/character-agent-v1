@@ -1,0 +1,226 @@
+{
+ "at": "2026-11-17T06:39:01.451Z",
+ "runtime": "v24.13.0",
+ "electron": null,
+ "platform": "win32 x64",
+ "cpu": "AMD Ryzen 9 6900HX with Radeon Graphics",
+ "noise": 300,
+ "synthetic": true,
+ "productionRead": false,
+ "modelVersion": "Xenova/bge-m3@4de132583038:q8",
+ "minScore": 0.469,
+ "index": {
+  "records": 523,
+  "buildMs": 58080,
+  "msPerRecord": 111.1,
+  "workerLoadMs": 3019,
+  "bytes": 6286888
+ },
+ "quality": {
+  "dev": {
+   "lexical": {
+    "queries": 100,
+    "answerable": 83,
+    "recallAt1": 0.44,
+    "recallAt5": 0.576,
+    "rowsWhenAnswerable": 15.8,
+    "rowsWhenNothingRelevant": 13.5,
+    "violations": 0,
+    "p50Ms": 13.38,
+    "p95Ms": 85.92,
+    "recallAt5ByCategory": {
+     "exact": 1,
+     "syn-zh": 0.3,
+     "syn-en": 0.38,
+     "xling": 0.08,
+     "semantic": 0.18,
+     "hardneg": 0.9,
+     "temporal": 0.63,
+     "acl": 1,
+     "lifecycle": 1,
+     "long-noise": 1
+    }
+   },
+   "semantic": {
+    "queries": 100,
+    "answerable": 83,
+    "recallAt1": 0.735,
+    "recallAt5": 0.926,
+    "rowsWhenAnswerable": 11.9,
+    "rowsWhenNothingRelevant": 4.5,
+    "violations": 0,
+    "p50Ms": 31.73,
+    "p95Ms": 60.19,
+    "recallAt5ByCategory": {
+     "exact": 1,
+     "syn-zh": 0.95,
+     "syn-en": 0.75,
+     "xling": 0.96,
+     "semantic": 0.68,
+     "hardneg": 1,
+     "temporal": 1,
+     "acl": 1,
+     "lifecycle": 1,
+     "long-noise": 1
+    }
+   },
+   "identifierStress": {
+    "lexical": {
+     "queries": 20,
+     "answerable": 20,
+     "recallAt1": 1,
+     "recallAt5": 1,
+     "rowsWhenAnswerable": 1,
+     "rowsWhenNothingRelevant": null,
+     "violations": 0,
+     "p50Ms": 0.6,
+     "p95Ms": 1.08,
+     "recallAt5ByCategory": {
+      "id-stress": 1
+     }
+    },
+    "semantic": {
+     "queries": 20,
+     "answerable": 20,
+     "recallAt1": 1,
+     "recallAt5": 1,
+     "rowsWhenAnswerable": 19.9,
+     "rowsWhenNothingRelevant": null,
+     "violations": 0,
+     "p50Ms": 26.35,
+     "p95Ms": 31.98,
+     "recallAt5ByCategory": {
+      "id-stress": 1
+     }
+    }
+   }
+  },
+  "heldout": {
+   "lexical": {
+    "queries": 100,
+    "answerable": 83,
+    "recallAt1": 0.534,
+    "recallAt5": 0.633,
+    "rowsWhenAnswerable": 15.7,
+    "rowsWhenNothingRelevant": 14.7,
+    "violations": 0,
+    "p50Ms": 13.97,
+    "p95Ms": 66.41,
+    "recallAt5ByCategory": {
+     "exact": 1,
+     "syn-zh": 0.5,
+     "syn-en": 0.25,
+     "xling": 0,
+     "semantic": 0.5,
+     "hardneg": 0.95,
+     "temporal": 0.75,
+     "acl": 1,
+     "lifecycle": 1,
+     "long-noise": 1
+    }
+   },
+   "semantic": {
+    "queries": 100,
+    "answerable": 83,
+    "recallAt1": 0.845,
+    "recallAt5": 0.954,
+    "rowsWhenAnswerable": 12.3,
+    "rowsWhenNothingRelevant": 4,
+    "violations": 0,
+    "p50Ms": 32.3,
+    "p95Ms": 52.55,
+    "recallAt5ByCategory": {
+     "exact": 1,
+     "syn-zh": 0.97,
+     "syn-en": 0.88,
+     "xling": 1,
+     "semantic": 0.75,
+     "hardneg": 1,
+     "temporal": 1,
+     "acl": 1,
+     "lifecycle": 1,
+     "long-noise": 1
+    }
+   },
+   "identifierStress": {
+    "lexical": {
+     "queries": 20,
+     "answerable": 20,
+     "recallAt1": 0.25,
+     "recallAt5": 1,
+     "rowsWhenAnswerable": 20,
+     "rowsWhenNothingRelevant": null,
+     "violations": 0,
+     "p50Ms": 47.56,
+     "p95Ms": 60.26,
+     "recallAt5ByCategory": {
+      "id-stress": 1
+     }
+    },
+    "semantic": {
+     "queries": 20,
+     "answerable": 20,
+     "recallAt1": 1,
+     "recallAt5": 1,
+     "rowsWhenAnswerable": 20,
+     "rowsWhenNothingRelevant": null,
+     "violations": 0,
+     "p50Ms": 40.47,
+     "p95Ms": 60.41,
+     "recallAt5ByCategory": {
+      "id-stress": 1
+     }
+    }
+   }
+  }
+ },
+ "perTurn": {
+  "messages": 40,
+  "semanticContextUsed": 40,
+  "ingressToVectorP50Ms": 33.86,
+  "ingressToVectorP95Ms": 62.04,
+  "contextP50Ms": 4.73,
+  "contextP95Ms": 12.11,
+  "lexicalContextP50Ms": 19.81,
+  "lexicalContextP95Ms": 71.4
+ },
+ "lifecycle": {
+  "newRecordBeforeIndexing": true,
+  "newRecordSemanticAfterIndexing": true,
+  "correctionReturnsOnlyNewText": true,
+  "forgottenGoneImmediately": true,
+  "foreignScopeTextNotReturned": true
+ },
+ "failover": {
+  "afterWorkerKillEqualsLexical": true,
+  "recoveredOnNextQuery": true
+ },
+ "status": {
+  "mode": "active",
+  "modelVersion": "Xenova/bge-m3@4de132583038:q8",
+  "minScore": 0.469,
+  "vectors": 523,
+  "provider": "ready",
+  "counters": {
+   "prepared": 287,
+   "prepareTimeouts": 1,
+   "prepareErrors": 1,
+   "breakerSkips": 0,
+   "ranked": 286,
+   "notReady": 1,
+   "lowCoverage": 0,
+   "empty": 12,
+   "errors": 0,
+   "invalidated": 8
+  },
+  "lastError": "Embedding worker error",
+  "indexer": {
+   "indexed": 524,
+   "removed": 0,
+   "cycles": 11,
+   "lastError": null
+  }
+ },
+ "hostRssMB": 70,
+ "ok": true
+}

@@ -1,0 +1,72 @@
+// Optional semantic recall for the layered Memory Core (D1). Not declared by any bundle: it runs only
+// when a Profile row adds it, and with mode 'off' (the default) it attaches nothing at all.
+//
+//   mode: off     nothing is loaded; recall is byte-for-byte the FTS5 path
+//         shadow  vectors are built and compared, but every caller still receives the FTS5 result
+//         active  dense ranking + exact identifier pin + similarity floor; FTS5 on any failure
+//
+// The Memory Core stays the only authority: it decides which rows are valid for a trusted handle,
+// re-reads every returned row, and owns identity, ACL, provenance, conflicts, revisions, expiry and
+// forgetting. This plugin owns a model, a derived sidecar index and an indexer. Nothing else.
+import path from 'node:path';
+import {resolveModel} from './models.mjs';
+import {VectorIndex} from './vector-index.mjs';
+import {SemanticRanker} from './ranker.mjs';
+import {createProvider} from './provider.mjs';
+
+export const name='memory-semantic';
+export const inject=['dshMemory'];
+
+const number=(value,fallback,min,max)=>{const n=value??fallback;if(!Number.isFinite(n)||n<min||n>max)throw Error('Invalid semantic recall setting');return n;};
+const unitVector=(v,dim)=>{if(!(v instanceof Float32Array)||v.length!==dim)return null;let n=0;for(const x of v){if(!Number.isFinite(x))return null;n+=x*x;}n=Math.sqrt(n);if(!(n>0))return null;return v.map(x=>x/n);};
+
+// Usable without cordis (tests, evaluation): returns the attached runtime, or null for mode off.
+export function attach(store,config={},{provider:injected,logger}={}){
+ const mode=config.mode??'off';
+ if(!['off','shadow','active'].includes(mode))throw Error('Invalid semantic recall mode');
+ if(mode==='off')return null;
+ for(const method of ['setSemanticRanker','semanticCandidates','semanticOrphans','activeContexts'])if(typeof store?.[method]!=='function')throw Error('Memory Core without semantic recall support: '+method);
+ if(typeof config.indexFile!=='string'||!path.isAbsolute(config.indexFile))throw Error('An explicit absolute indexFile is required');
+ const model=resolveModel(config.model),provider=injected??createProvider(config.provider,model);
+ const index=new VectorIndex(config.indexFile,model.version,model.dim);
+ const ranker=new SemanticRanker({mode,index,provider,model,topK:number(config.topK,50,1,64),minCoverage:number(config.minCoverage,0.9,0,1),prepareTimeoutMs:number(config.prepareTimeoutMs,250,10,5000)});
+ const batch=number(config.indexBatch,16,1,64),interval=number(config.indexIntervalMs,5000,200,3600000),sweepEvery=number(config.sweepIntervalMs,600000,1000,86400000);
+ const state={busy:false,closed:false,lastSweep:0,indexed:0,removed:0,cycles:0,lastIndexError:null};
+ // One indexer step. Every row is an independent atomic upsert, so stopping anywhere is safe; the
+ // statement comes from Core for a handle Core itself considers live, and is re-checked before the
+ // write so a correction or forget that happened during the model call is never overwritten.
+ async function cycle(){
+  if(state.busy||state.closed)return {skipped:true};state.busy=true;
+  try{
+   state.cycles++;let embedded=0;
+   if(Date.now()-state.lastSweep>=sweepEvery){state.lastSweep=Date.now();for(const id of store.semanticOrphans(index.entries())){index.remove(id);state.removed++;}}
+   for(const ctx of store.activeContexts()){
+    if(state.closed||embedded>=batch)break;
+    let rows;try{rows=store.semanticCandidates(ctx);}catch{continue;}
+    const todo=rows.filter(r=>!index.current(r)).slice(0,batch-embedded);if(!todo.length)continue;
+    const vectors=await provider.embed(todo.map(r=>r.statement),'document');
+    if(state.closed)break;
+    let live;try{live=new Map(store.semanticCandidates(ctx).map(r=>[r.id,r]));}catch{continue;}
+    todo.forEach((row,i)=>{const now=live.get(row.id),vector=unitVector(vectors[i],model.dim);if(now&&now.fingerprint===row.fingerprint&&vector){index.upsert(row.id,now.revision,now.fingerprint,vector);embedded++;}});
+   }
+   index.flushRebinds();state.indexed+=embedded;state.lastIndexError=null;if(mode==='shadow')ranker.persist();
+   return {embedded};
+  }catch(error){state.lastIndexError=String(error?.message??error).slice(0,160);return {error:state.lastIndexError};}
+  finally{state.busy=false;}
+ }
+ const status=ranker.status.bind(ranker);
+ ranker.status=()=>({...status(),indexer:{indexed:state.indexed,removed:state.removed,cycles:state.cycles,lastError:state.lastIndexError}});
+ store.setSemanticRanker(ranker);
+ const timer=setInterval(()=>void cycle(),interval);timer.unref?.();
+ logger?.info?.('Semantic recall '+mode+' with '+model.version);
+ return {mode,model,ranker,index,provider,cycle,
+  close(){if(state.closed)return;state.closed=true;clearInterval(timer);try{store.setSemanticRanker(null);}catch{}ranker.persist();try{provider.close?.();}catch{}try{index.close();}catch{}}};
+}
+
+export function apply(ctx,config={}){
+ // A broken model, runtime or index must never stop the Host or Memory: report and stay on FTS5.
+ let runtime=null;
+ try{runtime=attach(ctx.get('dshMemory'),config,{logger:ctx.logger});}
+ catch(error){ctx.logger?.warn?.('Semantic recall disabled: '+String(error?.message??error).slice(0,200));}
+ ctx.effect(()=>()=>{runtime?.close();});
+}

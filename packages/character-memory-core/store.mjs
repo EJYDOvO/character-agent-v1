@@ -2,10 +2,14 @@ import { DatabaseSync } from 'node:sqlite';
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { tokenizeText } from './tokenize.mjs';
+import { tokenizeText, selectiveTokens } from './tokenize.mjs';
 const normalize=text=>text.normalize('NFKC').toLowerCase();
 const terms=text=>[...new Set(tokenizeText(normalize(text)))];
 export function recallTerms(query){if(typeof query!=='string'||query.length>200)throw Error('Invalid query');return terms(query).slice(0,64);}
+// Semantic recall helpers. Identifier terms are Latin/digit tokens of at least three characters that
+// contain a digit ("atl-2317" -> "2317", "w1137", "8443"): exact matches of these are pinned first.
+export const selectiveRecallTerms=query=>typeof query==='string'&&query.length<=200?[...new Set(selectiveTokens(normalize(query)))].slice(0,64):[];
+export const identifierTerms=query=>selectiveRecallTerms(query).filter(t=>t.length>=3&&/[0-9]/.test(t)&&/^[a-z0-9_]+$/.test(t)).slice(0,16);
 export const similarity=(a,b)=>{const x=new Set(terms(a)),y=new Set(terms(b));return [...x].filter(t=>y.has(t)).length/Math.max(1,new Set([...x,...y]).size);};
 export const relevance=(row,query)=>(query&&normalize(row.statement).includes(normalize(query))?2:0)+similarity(query,row.statement)+(row.confidence??0.5)*0.1-(row.rank??0);
 const hash = text => createHash('sha256').update(text.normalize('NFKC').trim()).digest('hex');
