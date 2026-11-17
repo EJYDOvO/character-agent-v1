@@ -76,7 +76,8 @@ export class SubprocessProvider{
 
 // Alternative: an OpenAI-compatible /v1/embeddings endpoint (a local Ollama or llama.cpp server).
 // Sending memory text to another machine is a data-boundary decision, so only loopback addresses are
-// accepted unless `allowRemote: true` is set explicitly.
+// accepted unless `allowRemote: true` is set explicitly, and redirects are refused (a loopback endpoint
+// answering 307 would otherwise forward the request body to whatever host it names).
 export class HttpProvider{
  constructor({baseUrl,modelName,model,allowRemote=false,requestTimeoutMs=30000,headers={}}){
   const url=new URL(baseUrl);
@@ -90,7 +91,7 @@ export class HttpProvider{
  async embed(texts,kind){
   const prefix=kind==='query'?this.model.queryPrefix??'':this.model.documentPrefix??'';
   try{
-   const response=await fetch(this.endpoint,{method:'POST',headers:{'content-type':'application/json',...this.headers},body:JSON.stringify({model:this.modelName,input:texts.map(t=>prefix+t)}),signal:AbortSignal.timeout(this.requestTimeoutMs)});
+   const response=await fetch(this.endpoint,{method:'POST',headers:{'content-type':'application/json',...this.headers},body:JSON.stringify({model:this.modelName,input:texts.map(t=>prefix+t)}),signal:AbortSignal.timeout(this.requestTimeoutMs),redirect:'error'});
    if(!response.ok)throw Error('Embedding endpoint HTTP '+response.status);
    const body=await response.json(),rows=[...(body.data??[])].sort((a,b)=>(a.index??0)-(b.index??0));
    if(rows.length!==texts.length)throw Error('Embedding endpoint returned a different number of vectors');

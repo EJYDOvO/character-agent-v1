@@ -26,14 +26,18 @@ export class VectorIndex{
   catch(error){
    // A damaged sidecar holds nothing that cannot be recomputed: discard it and start empty rather than
    // leave semantic recall broken. Anything else (permissions, locked file) is reported to the caller.
-   if(file===':memory:'||!/malformed|not a database|corrupt/i.test(String(error?.message)))throw error;
+   if(file===':memory:'||error?.code==='FOREIGN_DATABASE'||!/malformed|not a database|corrupt/i.test(String(error?.message)))throw error;
    try{this.#db?.close();}catch{}
    for(const suffix of ['','-wal','-shm'])rmSync(file+suffix,{force:true});
    this.#vectors.clear();this.#open(file);this.recreated=true;
   }
  }
  #open(file){
-  this.#db=new DatabaseSync(file);this.#db.exec(SCHEMA);
+  this.#db=new DatabaseSync(file);
+  // Only an empty file or this plugin's own index is adopted; another database is never written to.
+  const foreign=this.#db.prepare("SELECT name FROM sqlite_master WHERE type IN ('table','view') AND name NOT LIKE 'sqlite_%' AND name NOT IN ('vectors','meta')").all();
+  if(foreign.length){this.#db.close();throw Object.assign(Error('indexFile is not a semantic vector index (it holds other tables); refusing to use it'),{code:'FOREIGN_DATABASE'});}
+  this.#db.exec(SCHEMA);
   if(this.#db.prepare('PRAGMA quick_check').get()?.quick_check!=='ok')throw Error('database disk image is malformed');
   // Vectors of another model version are never comparable with this one: drop them.
   if(this.#db.prepare('DELETE FROM vectors WHERE model_version!=? OR dim!=?').run(this.#model,this.dim).changes)this.#dirty=true;
@@ -58,7 +62,9 @@ export class VectorIndex{
  }
  // Make removals durable outside the main file too: fold the WAL back and truncate it.
  scrub(){if(!this.#dirty)return false;this.#db.exec('PRAGMA wal_checkpoint(TRUNCATE)');this.#dirty=false;return true;}
- entries(){return [...this.#vectors].map(([id,e])=>({id,revision:e.revision,contentHash:e.contentHash}));}
+ // What is persisted, not what is cached: a row whose DELETE failed after its in-memory entry was
+ // dropped is still listed here, so the orphan sweep finds it and retries.
+ entries(){return this.#db.prepare('SELECT memory_id id,revision,content_hash contentHash FROM vectors WHERE model_version=?').all(this.#model).map(r=>({id:r.id,revision:r.revision,contentHash:r.contentHash}));}
  // true when the entry describes exactly this content. A revision that changed without a content change
  // (confirm, restore) keeps the same vector by construction: it is re-bound, not re-embedded.
  current(key){

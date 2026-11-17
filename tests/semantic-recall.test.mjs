@@ -356,3 +356,138 @@ test('a removed vector leaves no copy in the sidecar file or its write-ahead log
   assert(!bytes().includes(needle),'freed pages are overwritten and the WAL is truncated');
  }finally{w.close();}
 });
+
+// ---------------------------------------------------------------- integration audit (on main after PR #25)
+
+test('a sidecar DELETE that fails after the in-memory entry is gone is retried until the row is off disk',async()=>{
+ const {DatabaseSync}=await import('node:sqlite');
+ const w=world();try{
+  const secret=w.add(w.a,'用户最近开始学习潜水。');w.add(w.a,'用户周末通常去郊外徒步。');await w.sync();
+  const onDisk=()=>{const db=new DatabaseSync(w.indexFile);try{return db.prepare('SELECT count(*) n FROM vectors WHERE memory_id=?').get(secret.id).n;}finally{db.close();}};
+  assert.equal(onDisk(),1);
+  // Another connection holds the write lock: the sidecar DELETE fails (SQLITE_BUSY after busy_timeout).
+  const lock=new DatabaseSync(w.indexFile);lock.exec('PRAGMA busy_timeout=0;BEGIN EXCLUSIVE');
+  try{w.store.forget(w.a,secret.id,secret.revision);}finally{lock.exec('ROLLBACK');lock.close();}
+  const s=w.store.layersStatus(w.a).semantic;assert.equal(s.counters.invalidateErrors,1,'the failure is counted');assert(s.lastError);
+  assert.equal(w.store.get(w.a,secret.id).status,'forgotten','Core state is unaffected by the sidecar failure');
+  assert.equal(onDisk(),1,'precondition: the row is still on disk');
+  assert.deepEqual(await w.store.recallAsync(w.a,'scuba diving',5000),[],'never returned in the meantime');
+  await w.runtime.cycle({force:true});
+  assert.equal(onDisk(),0,'the retry removes the persisted row even though the in-memory entry was already gone');
+ }finally{w.close();}
+});
+
+test('indexFile can never be the Memory Core database or another SQLite database',async()=>{
+ const {DatabaseSync}=await import('node:sqlite');
+ const w=world({mode:'off'});try{
+  const dbFile=path.join(w.dir,'memory.sqlite'),tables=()=>w.store.db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all().map(r=>r.name);
+  const before=tables(),attempt=file=>attach(w.store,{mode:'active',indexFile:file,model:MODEL,indexIntervalMs:3600000},{provider:fakeProvider()});
+  assert.throws(()=>attempt(dbFile),/Memory Core database/);
+  assert.throws(()=>attempt(path.join(w.dir,'.','sub','..','memory.sqlite')),/Memory Core database/);
+  for(const suffix of ['-wal','-shm','-journal'])assert.throws(()=>attempt(dbFile+suffix),/Memory Core database/);
+  // Hard link and directory junction: different path strings, same file.
+  const link=path.join(w.dir,'alias.sqlite');fs.linkSync(dbFile,link);assert.throws(()=>attempt(link),/Memory Core database/);
+  const junction=path.join(w.dir,'junction');fs.symlinkSync(w.dir,junction,'junction');assert.throws(()=>attempt(path.join(junction,'memory.sqlite')),/Memory Core database/);
+  assert.deepEqual(tables(),before,'the Memory Core schema is untouched');
+  // Any other existing SQLite file (for example coordination.sqlite) is refused, not adopted or deleted.
+  const other=path.join(w.dir,'coordination.sqlite'),db=new DatabaseSync(other);db.exec("CREATE TABLE outbox(id TEXT);INSERT INTO outbox VALUES('keep')");db.close();
+  assert.throws(()=>attempt(other),/not a semantic vector index/);
+  const again=new DatabaseSync(other);try{assert.deepEqual(again.prepare("SELECT name FROM sqlite_master WHERE type='table'").all().map(r=>r.name),['outbox']);assert.equal(again.prepare('SELECT id FROM outbox').get().id,'keep');}finally{again.close();}
+ }finally{w.close();}
+});
+
+test('the HTTP provider never follows a redirect, so loopback-only cannot be bypassed',async()=>{
+ const http=await import('node:http');const hits=[];
+ const remote=http.createServer((req,res)=>{let body='';req.on('data',c=>body+=c);req.on('end',()=>{hits.push(body);res.end(JSON.stringify({data:[{index:0,embedding:[1,0,0,0,0,0,0,0]}]}));});});
+ await new Promise(r=>remote.listen(0,'127.0.0.1',r));
+ const local=http.createServer((req,res)=>{res.writeHead(307,{location:`http://127.0.0.1:${remote.address().port}/v1/embeddings`});res.end();});
+ await new Promise(r=>local.listen(0,'127.0.0.1',r));
+ try{
+  const p=new HttpProvider({baseUrl:`http://127.0.0.1:${local.address().port}`,modelName:'m',model:MODEL,requestTimeoutMs:2000});
+  await assert.rejects(()=>p.embed(['用户的私人记忆'],'query'));
+  assert.equal(hits.length,0,'the memory text must not reach the redirect target');
+ }finally{local.close();remote.close();}
+});
+
+test('the per-turn context can wait, with a bound, for a query vector that is still being computed',async()=>{
+ let release;const slow=fakeProvider();const w=world({provider:slow,config:{prepareTimeoutMs:400}});try{
+  w.store.remember(w.a,{kind:'episodic',statement:'上次去山里徒步时下了大雨。'},{sessionId:'session-a',eventSeq:900,origin:'inference'});await w.sync();
+  const embed=slow.embed;slow.embed=(texts,kind)=>kind==='query'?new Promise(r=>{release=()=>r(texts.map(conceptVector));}):embed(texts,kind);
+  // The query shares no character with the record, so FTS5 alone cannot find it.
+  const turn=w.bind('session-turn');w.store.noteInput(turn,{sessionId:'session-turn',eventSeq:1,messageId:'u1',origin:'direct_user',text:'想要远足'});
+  assert(!w.store.context(turn).includes('下了大雨'),'synchronous context before the vector exists: FTS5');
+  setTimeout(()=>release(),40);
+  assert.equal(await w.store.awaitSemanticContext(turn),true,'waits and reports that the vector became ready');
+  assert(w.store.context(turn).includes('下了大雨'),'recomputed context is semantic');
+  assert.equal(await w.store.awaitSemanticContext(turn),false,'nothing to wait for once ready');
+  // Bounded: a provider that never answers costs at most prepareTimeoutMs.
+  slow.embed=()=>new Promise(()=>{});w.store.noteInput(turn,{sessionId:'session-turn',eventSeq:2,messageId:'u2',origin:'direct_user',text:'新的问题：周末去哪里远足'});
+  const t=performance.now();assert.equal(await w.store.awaitSemanticContext(turn),false);assert(performance.now()-t<700);
+  const c=w.store.layersStatus(turn).semantic.counters;assert.equal(c.contextWaits,2);assert.equal(c.contextRecovered,1);
+  // No ranker / no topic: returns immediately.
+  assert.equal(await w.store.awaitSemanticContext(w.a),false);
+  // A worker that is not loaded is not waited for at all.
+  slow.state=()=>'starting';w.store.noteInput(turn,{sessionId:'session-turn',eventSeq:3,messageId:'u3',origin:'direct_user',text:'冷启动时的问题'});
+  const t2=performance.now();assert.equal(await w.store.awaitSemanticContext(turn),false);assert(performance.now()-t2<50);assert.equal(w.store.layersStatus(turn).semantic.counters.contextWaitSkipped,1);
+ }finally{w.close();}
+});
+
+// ---------------------------------------------------------------- default-on contract
+
+test('a normal Character build declares semantic recall in active mode; off and shadow stay explicit choices',async()=>{
+ const {createRequire}=await import('node:module'),require=createRequire(import.meta.url);
+ const {semanticSettings,semanticRow}=require('../scripts/semantic-settings.cjs');
+ const install=path.resolve(os.tmpdir(),'install-root'),dataDirectory='C:/x/character',s=semanticSettings(undefined,{install,dataDirectory});
+ assert.equal(s.mode,'active');assert.equal(s.indexFile,dataDirectory+'/memory-vectors.sqlite');
+ const slash=p=>p.split(path.sep).join('/');
+ assert.equal(s.runtimeDir,slash(path.join(install,'data','semantic-recall','runtime')));assert.equal(s.modelDir,slash(path.join(install,'data','semantic-recall','models')));
+ const row=semanticRow(s);assert.equal(row.name,'dsh-memory-semantic');assert.equal(row.config.mode,'active');assert.equal(row.config.provider.kind,'subprocess');
+ for(const mode of ['off','shadow'])assert.equal(semanticRow(semanticSettings({mode},{install,dataDirectory})).config.mode,mode);
+ for(const bad of [{mode:'on'},{runtimeDir:'relative'},{threads:-1},{model:'x'},[]])assert.throws(()=>semanticSettings(bad,{install,dataDirectory}));
+ // The package is part of every Character installation: required by packaging and selected by deployment.
+ const plan=require('../scripts/package-plan.cjs');assert(plan.requiredFolders.includes('packages/memory-semantic'));
+ assert(require('../scripts/deployment-plan.cjs').select({profile:[],core:[],extras:[]}).includes('packages/memory-semantic'));
+ assert.match(fs.readFileSync(new URL('../scripts/build.cjs',import.meta.url),'utf8'),/semanticRow\(settings\.semanticRecall\)/);
+ assert.match(fs.readFileSync(new URL('../scripts/portable.cjs',import.meta.url),'utf8'),/'dsh-memory-semantic'\]\)/);
+});
+
+test('without a mode the plugin runs active; a missing model leaves Memory on FTS5 and says why',async()=>{
+ const {apply}=await import('../packages/memory-semantic/index.mjs');
+ const w=world({mode:'off'});try{
+  w.add(w.a,'预发环境的网关端口是 7805。');
+  const effects=[],warnings=[],ctx={get:k=>k==='dshMemory'?w.store:undefined,logger:{warn:m=>warnings.push(m),info(){}},effect:f=>effects.push(f())};
+  // Exactly what the generated Core row looks like on a machine where nothing was provisioned.
+  apply(ctx,{indexFile:path.join(w.dir,'memory-vectors.sqlite'),provider:{kind:'subprocess',runtimeDir:path.join(w.dir,'no-runtime'),modelDir:path.join(w.dir,'no-models')}});
+  const s=w.store.layersStatus(w.a).semantic;
+  assert.equal(s.mode,'unavailable');assert.equal(s.requested,'active');assert.match(s.reason,/not provisioned/);assert.match(warnings[0],/unavailable, using FTS5/);
+  for(const q of ['网关端口','port'])assert.deepEqual(await w.store.recallAsync(w.a,q,5000),w.store.recall(w.a,q,5000),'exact FTS5 result');
+  assert.equal(await w.store.awaitSemanticContext(w.a),false);assert.equal(fs.existsSync(path.join(w.dir,'memory-vectors.sqlite')),false);
+  for(const dispose of effects)dispose?.();assert.deepEqual(w.store.layersStatus(w.a).semantic,{mode:'off'},'unloading restores the original state');
+  // Explicit off attaches nothing and reports nothing.
+  apply(ctx,{mode:'off',indexFile:path.join(w.dir,'memory-vectors.sqlite')});assert.deepEqual(w.store.layersStatus(w.a).semantic,{mode:'off'});
+  // With a working provider and no mode, the plugin is active.
+  const runtime=attach(w.store,{indexFile:path.join(w.dir,'v2.sqlite'),model:MODEL,indexIntervalMs:3600000},{provider:fakeProvider()});try{assert.equal(runtime.mode,'active');}finally{runtime.close();}
+ }finally{w.close();}
+});
+
+test('merge invalidates both vectors; the surviving record is re-embedded and the merged one never returns',async()=>{
+ const w=world();try{
+  const a=w.add(w.a,'用户周末通常去郊外徒步。'),b=w.store.remember(w.a,{kind:'semantic',statement:'用户周末通常去郊外徒步！'},{sessionId:'session-a',eventSeq:700,origin:'inference'});await w.sync();
+  assert.equal(w.runtime.index.size,2);
+  w.store.merge(w.a,a.id,b.id,w.store.get(w.a,a.id).revision,b.revision);
+  assert(!w.runtime.index.entries().some(e=>e.id===b.id),'merged record has no vector');
+  // Core invalidates both sides of a merge, so until the indexer re-embeds the survivor the result is
+  // exactly the FTS5 one (no stale vector is used).
+  assert.deepEqual(await w.store.recallAsync(w.a,'hiking',5000),w.store.recall(w.a,'hiking',5000));
+  await w.sync();assert(w.runtime.index.entries().some(e=>e.id===a.id));assert(!w.runtime.index.entries().some(e=>e.id===b.id));
+  assert.deepEqual(w.ids(await w.store.recallAsync(w.a,'hiking',5000)),[a.id]);
+ }finally{w.close();}
+});
+
+test('the archived research evaluation set is byte-identical to the frozen PR #26 dataset',async()=>{
+ const {createHash}=await import('node:crypto'),dir=new URL('./fixtures/semantic-eval/',import.meta.url);
+ const manifest=JSON.parse(fs.readFileSync(new URL('MANIFEST.json',dir),'utf8'));
+ for(const [name,sha]of Object.entries(manifest.sha256))assert.equal(createHash('sha256').update(fs.readFileSync(new URL(name,dir))).digest('hex'),sha,name+' changed: never edit the held-out split or its labels');
+ const {queries}=await import(new URL('queries.mjs',dir).href),freeze=JSON.parse(fs.readFileSync(new URL('FREEZE.json',dir),'utf8'));
+ assert.equal(queries.filter(q=>q.split==='heldout').length,freeze.queries.heldout);assert.equal(queries.filter(q=>q.split==='dev').length,freeze.queries.dev);
+});

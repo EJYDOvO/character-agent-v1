@@ -24,6 +24,8 @@ function buildStepReport(script,result){
  const error=result.error?.message??lines.find(line=>line.trim()&&!warnings.includes(line)&&!/^\s+at /.test(line))?.replace(/^\w*Error: /,'');
  return {warnings,failure:`Private Character ${script} failed; no running Profile was modified${error?': '+error:' (exit '+result.status+')'}`};
 }
+// semanticRecall of a portable config: runtimeDir/modelDir are relative to the config file.
+function portableSemantic(value,dir){if(!value||typeof value!=='object'||Array.isArray(value))return value;return Object.fromEntries(Object.entries(value).map(([k,v])=>[k,['runtimeDir','modelDir'].includes(k)&&typeof v==='string'?path.resolve(dir,v):v]));}
 function prepare(file,home,qqtk){
  const q=toolkit(qqtk),c=q.config(file),rt=q.runtime(c);assert(!path.resolve(home).startsWith(root+path.sep)&&path.resolve(home)!==root,'Home must be outside Character source');q.freshHome(home);const rel=c.dataDirectory||'character',data=path.resolve(home,rel);assert(data.startsWith(path.resolve(home)+path.sep),'Character dataDirectory must be inside its separate DSH_HOME');
  const card=cardBuildConfig(c,path.dirname(file));assert(fs.existsSync(card.cardPath),'Character card is missing');
@@ -31,11 +33,11 @@ function prepare(file,home,qqtk){
  const {roleSettings,roleConfig}=require('./role-settings.cjs'),roles=c.roles?.enabled===true?roleSettings({...c.roles,publicPersonaFile:c.roles.publicPersona&&path.resolve(path.dirname(file),c.roles.publicPersona)}):undefined;
  const allow=c.qq.allow??[];assert(Array.isArray(allow)&&allow.every(id=>typeof id==='string'&&id&&!id.includes('<')&&id!=='*'&&id!==c.qq.ownerId),'qq.allow lists explicit other private accounts');
  assert(roles||!allow.length,'Admitting other accounts requires roles.enabled');
- const build={...card,dataDirectory:data,presetId:c.characterPresetId||(roles?'character':'qq-character'),...(roles?{roles}:{}),interaction:c.interaction||{enabled:false},specialistWorkers:c.specialistWorkers||[],communityWorkerPresets:c.communityWorkerPresets||[]};
+ const build={...card,dataDirectory:data,presetId:c.characterPresetId||(roles?'character':'qq-character'),...(roles?{roles}:{}),interaction:c.interaction||{enabled:false},...(c.semanticRecall!==undefined?{semanticRecall:portableSemantic(c.semanticRecall,path.dirname(file))}:{}),specialistWorkers:c.specialistWorkers||[],communityWorkerPresets:c.communityWorkerPresets||[]};
  const buildFile=home+'/build-config.private.json';fs.writeFileSync(buildFile,JSON.stringify(build,null,2),{mode:0o600});
  const env={...process.env,DSH_INSTALL_ROOT:home,DSH_HOME:home,DSH_CHARACTER_HOST_ROOT:rt.root,DSH_RESOURCES_DIR:rt.resources,DSH_QQTK_PROJECT:qqtk,DSH_CHARACTER_BUILD_CONFIG:buildFile};
  for(const script of ['build','pack']){const report=buildStepReport(script,cp.spawnSync(process.execPath,[root+'/scripts/'+script+'.cjs'],{cwd:root,env,stdio:'pipe',encoding:'utf8',windowsHide:true}));for(const warning of report.warnings)console.error(warning);if(report.failure)throw Error(report.failure);}
- const source=JSON.parse(fs.readFileSync(root+'/artifacts/package-source.json')),selected=new Set(['dsh-character-core','dsh-character-identity','dsh-character-memory-core','dsh-character-memory-tools','dsh-character-qq-adapter']);
+ const source=JSON.parse(fs.readFileSync(root+'/artifacts/package-source.json')),selected=new Set(['dsh-character-core','dsh-character-identity','dsh-character-memory-core','dsh-character-memory-tools','dsh-character-qq-adapter','dsh-memory-semantic']);
  if(c.extras||c.longTasks)selected.add('dsh-character-extras');if(c.longTasks)selected.add('dsh-character-long-tasks');if(c.interaction?.enabled)selected.add('dsh-interaction-policy');if(c.inspector?.enabled)selected.add('dsh-memory-inspector');
  const own=source.artifacts.filter(p=>selected.has(p.name)).map(p=>({...p,file:root+'/artifacts/packages/'+p.filename})),artifacts=[...q.pack(home+'/packages'),...own];
  const {rows,im}=q.baseRows(c,home);im.config.preset=build.presetId;const host=roles&&roleConfig(roles,data);

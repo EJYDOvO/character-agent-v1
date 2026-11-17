@@ -125,6 +125,16 @@ export class LayeredMemory extends MemoryStore {
     const rows=new Map(this.#rows(ctx,'',{ids:order}).map(r=>[r.id,r]));
     return order.flatMap(id=>rows.has(id)?[rows.get(id)]:[]);
   }
+  // Per-turn path: the Host resolves context providers synchronously, then awaits the asynchronous
+  // "system-prompt/assemble" waterfall before the request is sent. Memory Tools hook that waterfall and
+  // call this: when the current topic's query vector is still being computed, wait for it (bounded by
+  // the ranker's prepare timeout) and report whether the context should be recomputed.
+  async awaitSemanticContext(ctx){
+    const r=this.#semantic;if(typeof r?.awaitQuery!=='function')return false;
+    let topic;try{const p=this.policy(ctx);topic=this.#topics.get(hash([p.key,p.agentId,ctx.sessionId]));}catch{return false;}
+    if(!topic?.query||Date.now()-topic.at>=1800000||topic.query.length>200)return false;
+    try{return (await r.awaitQuery(topic.query))===true;}catch{return false;}
+  }
   // Tool path: waits (bounded by the ranker) for the query vector, then the ordinary synchronous recall.
   async recallAsync(ctx,query='',budget=2400,options={}){
     const r=this.#semantic;

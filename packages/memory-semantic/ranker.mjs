@@ -12,7 +12,7 @@ export class SemanticRanker{
   if(!['active','shadow'].includes(mode))throw Error('Semantic mode must be active or shadow');
   Object.assign(this,{mode,index,provider,model,modelVersion,topK,minCoverage,prepareTimeoutMs,queryCacheSize,breakerFailures,breakerCooldownMs});
   const saved=index.meta('shadow');
-  this.counters={prepared:0,prepareTimeouts:0,prepareErrors:0,breakerSkips:0,ranked:0,notReady:0,lowCoverage:0,empty:0,errors:0,invalidated:0,invalidateErrors:0};
+  this.counters={contextWaits:0,contextRecovered:0,contextWaitSkipped:0,prepared:0,prepareTimeouts:0,prepareErrors:0,breakerSkips:0,ranked:0,notReady:0,lowCoverage:0,empty:0,errors:0,invalidated:0,invalidateErrors:0};
   this.shadow=saved?.modelVersion===modelVersion?saved.stats:{compared:0,semanticUnavailable:0,sameTop1:0,overlapAt5:0,lexicalRows:0,semanticRows:0,semanticEmpty:0};
  }
  // Embeds the query ahead of the synchronous rank(). Never rejects; resolves true when a vector is
@@ -35,6 +35,16 @@ export class SemanticRanker{
    this.#inflight.set(query,job);
   }
   return withTimeout(job,this.prepareTimeoutMs,'query embedding').catch(()=>{this.counters.prepareTimeouts++;return false;});
+ }
+ // true only when the vector was missing and became available within the bound: the caller then
+ // recomputes the context it built while the vector was missing.
+ async awaitQuery(query){
+  if(this.#cache.has(query))return false;
+  // A worker that is not loaded cannot answer within the bound (loading takes seconds): don't delay the
+  // turn for nothing. The query is still being embedded for the next context refresh.
+  const state=this.provider.state?.();if(state==='stopped'||state==='starting'){this.counters.contextWaitSkipped++;return false;}
+  this.counters.contextWaits++;
+  const ok=await this.prepare(query);if(ok)this.counters.contextRecovered++;return ok;
  }
  rank({query,keys}){
   const vector=this.#cache.get(query);if(!vector){this.counters.notReady++;return null;}
