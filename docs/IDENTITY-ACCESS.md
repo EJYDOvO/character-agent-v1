@@ -54,7 +54,7 @@ contact/guest 从空组合独立装配，不从 Owner Preset 继承后靠 Prompt
 - 公开人设不再来自 `roles.publicPersonaFile`（同时设置会被构建拒绝），而由当前角色生成：同一张卡、同一份规则，关系段换成对其他人的关系，`{{user}}` 换成「对方」，可排除含私人关系的设定字段。Owner 在设置 → 角色管理里预览并确认后才生效；没有确认过的公开版时，Contact / Guest 得到中性回退文本，不读 Owner 版。
 - Contact / Guest 的 Preset 组成不变：仍从空组合装配，只含运行时人设插件（只读公开部分）和 `tool-scope`，工具不可见、不可执行。
 - `identity-access.json`、`identity-owner.json` 放在 `data/account/`，不在角色目录里：授权和封禁属于 QQ 账号与这个 bot，切换角色后仍然有效。Contact / Guest 的会话路由在角色目录的 `conversations.json` 里；切换时，任一角色记录过的会话键都会在目标里得到新的 Session ID，这些 Contact / Guest 换角色后进入新角色自己的新 Session。
-- 已知限制：Conversation Manager 只在换新 Session（`/new`、角色变化）、改模型或 Preset 偏好、或开启 `sessionLifecycle` 时才记录会话键。QQ 默认关闭 `sessionLifecycle`，一直保持同一角色、从没换过 Session 的 Contact / Guest 私聊不会出现在任何 `conversations.json` 里；切换后若其角色不变，新角色会恢复旧角色的 Session 与历史。开启 QQ 的 `sessionLifecycle.enabled` 可消除这个缺口（代价：Host 重启和长时间不活动后私聊会换新 Session，含 Owner）。详见 [MANAGEMENT](MANAGEMENT.md)「角色管理」的「已知限制」。
+- 没有记录的会话：Conversation Manager 对状态文件里没有记录的会话键按会话键推导 Session ID。开启角色管理时，每个角色的 `conversations.json` 带 `sessionNamespace`（角色 ID），推导结果按角色区分，所以一直保持同一角色身份、从没换过 Session 的 Contact / Guest 切换后也进入新角色自己的 Session（需要 Conversation Manager 0.1.0-test.6）。详见 [MANAGEMENT](MANAGEMENT.md)「角色管理」的「会话命名空间」。
 - 旧位置（角色数据目录）已有这两个文件的安装，停机后把它们移到 `data/account/`。
 
 ## 验证

@@ -42,7 +42,7 @@ export function apply(ctx,config){
    const access=await import(pathToFileURL(config.toolkit+'/plugin-sources/dsh-identity-access/index.mjs').href);
    forks.push(await ctx.plugin(access,{stateFile:config.account+'/identity-access.json',ownerFile:config.account+'/identity-owner.json',legacyOwnerPresets:['qq-character']}));
    for(let i=0;i<100&&!ctx.get('identityAccess');i++)await sleep(20);assert(ctx.get('identityAccess'));
-   const settings=ConfigSchema({appId:'mock-app',appSecret:'synthetic-not-a-credential',provider:'character-manager-fixture',model:'fixture',preset:'character',cwd:config.cwd,access:{c2cMode:'allowlist',c2cAllow:['mock-owner','mock-friend','mock-stranger','mock-visitor'],groupMode:'disabled'},identityAccess:{enabled:true},debug:false,media:{enabled:false},vision:{enabled:false},hitl:{enabled:true},notifications:{enabled:true}});
+   const settings=ConfigSchema({appId:'mock-app',appSecret:'synthetic-not-a-credential',provider:'character-manager-fixture',model:'fixture',preset:'character',cwd:config.cwd,access:{c2cMode:'allowlist',c2cAllow:['mock-owner','mock-friend','mock-stranger','mock-visitor','mock-quiet'],groupMode:'disabled'},identityAccess:{enabled:true},debug:false,media:{enabled:false},vision:{enabled:false},hitl:{enabled:true},notifications:{enabled:true}});
    let runtime;
    forks.push(await ctx.plugin({name:'synthetic-qq-gateway',inject:['agents','agentIO','conversationManager'],async apply(inner){await activate(inner,settings,(g,c,options)=>bootstrapGateway(g,g.agents,c,g.logger,options));runtime=inner.get('qqGateway');}},{}));
    for(let i=0;i<200&&!runtime;i++){await sleep(25);runtime=ctx.get('qqGateway');}assert(runtime,'Gateway must become active');
@@ -99,6 +99,11 @@ export function apply(ctx,config){
     await manager.remove('c2c','mock-visitor');
     one(await say('mock-visitor','VISITOR_A_HISTORY_MARK 第二次'));const visitorSession=record('mock-visitor').sessionId;
     assert.notEqual(visitorSession,visitorDerived,'the visitor moved to a new Session');assert.equal(record('mock-visitor').agentPreset,'character-guest');
+    // A Guest nothing ever records: one message, no Session change, no lifecycle. Its
+    // Session id is derived from the key alone in A (A's state file has no namespace).
+    const {deriveSessionId}=await import(pathToFileURL(config.toolkit+'/plugin-sources/dsh-conversation-manager/session-id.mjs').href);
+    one(await say('mock-quiet','QUIET_A_HISTORY_MARK 你好'));assert.equal(record('mock-quiet').agentPreset,'character-guest');
+    const quietDerived=record('mock-quiet').sessionId;assert.equal(quietDerived,deriveSessionId('qqbot:mock-app:c2c:mock-quiet'),'derived without a namespace in A');
 
     // 1. Hot reload: an edit of compiled.json reaches the next request through the Host's own prompt assembly.
     const compiled=readCompiled(config.current+'/compiled.json',{characterId:'a'});
@@ -117,7 +122,7 @@ export function apply(ctx,config){
     memory.remember(trusted,{kind:'semantic',statement:MEMORY},{sessionId:ownerSession,eventSeq:1,messageId:'character-manager-memory',origin:'direct_user',quote:MEMORY});
     assert(JSON.stringify(memory.recall(identity.forSession(ownerSession),'A_PRIVATE_MEMORY_MARK')).includes('A_PRIVATE_MEMORY_MARK'),'A recalls its own memory');
     const reminder=await ctx.schedule.create({title:'A reminder',prompt:REMINDER_PROMPT,timing:{kind:'after',after_seconds:60},target:{kind:'session',sessionId:ownerSession}},ownerSession);
-    fs.writeFileSync(phaseFile,JSON.stringify({ownerSession,contactSession,visitorDerived,visitorSession,friend,stranger,reminder:reminder.id,dueAt:Date.now()+60000}));
+    fs.writeFileSync(phaseFile,JSON.stringify({ownerSession,contactSession,visitorDerived,visitorSession,quietDerived,friend,stranger,reminder:reminder.id,dueAt:Date.now()+60000}));
     report.checks.push('Switch setup: A memory remembered and recalled; A reminder due in 60 s on the Owner Session');
     report.ok=true;return;
    }
@@ -141,6 +146,13 @@ export function apply(ctx,config){
    assert.equal(record('mock-visitor').sessionId,config.seededVisitorSession,'the Session prepared for B');
    for(const mark of ['VISITOR_A_HISTORY_MARK','A_CARD_MARK','A_PUBLIC_REL'])assert(!request.body.includes(mark),'Guest request has nothing of A: '+mark);
    assert(request.system.includes('B_CARD_MARK'));noTools('mock-visitor',request);
+   // The unrecorded Guest: no preparation can know its key, so only B's session
+   // namespace keeps it from deriving A's id and resuming A's history.
+   const {deriveSessionId}=await import(pathToFileURL(config.toolkit+'/plugin-sources/dsh-conversation-manager/session-id.mjs').href);
+   request=one(await say('mock-quiet','hello B'));assert.equal(record('mock-quiet').agentPreset,'character-guest');
+   assert.notEqual(record('mock-quiet').sessionId,previous.quietDerived,'the unrecorded Guest does not resume the Session of A');
+   assert.equal(record('mock-quiet').sessionId,deriveSessionId('qqbot:mock-app:c2c:mock-quiet','b'),'derived in the namespace of B');
+   assert(!request.body.includes('QUIET_A_HISTORY_MARK'),'the unrecorded Guest sees nothing of A');
 
    // 4. Grants survive the switch; Contact enters B's own new Session with B's public version.
    request=one(await say('mock-friend','hello B'));assert.equal(record('mock-friend').agentPreset,'character-contact','the Contact grant survives');

@@ -129,8 +129,36 @@ test('every key a registered character knows gets a fresh Session in the target;
   assert.deepEqual(conversationsOf(f.root, 'other').sessionIds, {'s-other': 'other-1'});
 });
 
+// Conversation Manager derives the Session id of an unrecorded key from the
+// key and the state file's sessionNamespace; with the Character id there, no
+// key can resume another Character's Session, recorded or not.
+test('the target gets its own session namespace; the current character is not written', () => {
+  const f = fixture({targets: ['next', 'fresh']});
+  const current = join(characterDir(f.root, 'cur'), 'conversations.json'), before = readFileSync(current, 'utf8');
+  writeFileSync(join(characterDir(f.root, 'next'), 'conversations.json'), JSON.stringify({sessionIds: {[OWNER_KEY]: 'kept'}, overrides: {}, presets: {}, lifecycle: {}}));
+  requestSwitch(f.options('next'));
+  const next = conversationsOf(f.root, 'next');
+  assert.equal(next.sessionNamespace, 'next', 'added to a file that has every key already');
+  assert.equal(next.sessionIds[OWNER_KEY], 'kept');
+  assert.equal(readFileSync(current, 'utf8'), before, 'the running character\'s file is never written');
+
+  const g = fixture({targets: ['fresh']});
+  requestSwitch(g.options('fresh'));
+  assert.equal(conversationsOf(g.root, 'fresh').sessionNamespace, 'fresh', 'a new file carries it');
+});
+
+test('a target whose namespace names another character refuses the switch', () => {
+  const f = fixture();
+  const file = join(characterDir(f.root, 'next'), 'conversations.json');
+  const copied = JSON.stringify({sessionNamespace: 'cur', sessionIds: {}, overrides: {}, presets: {}, lifecycle: {}});
+  writeFileSync(file, copied);
+  assert.throws(() => requestSwitch(f.options()), /sessionNamespace/);
+  assert.equal(readFileSync(file, 'utf8'), copied);
+  assert.equal(existsSync(f.file(REQUEST_FILE)), false);
+});
+
 test('an unreadable conversations.json refuses the switch', () => {
-  for (const [where, content] of [['other', '{broken'], ['next', '{broken'], ['next', '{"sessionIds":[]}']]) {
+  for (const [where, content] of [['other', '{broken'], ['next', '{broken'], ['next', '{"sessionIds":[]}'], ['other', '{"sessionNamespace":5}']]) {
     const f = fixture({targets: ['next', 'other']});
     const file = join(characterDir(f.root, where), 'conversations.json');
     writeFileSync(file, content);

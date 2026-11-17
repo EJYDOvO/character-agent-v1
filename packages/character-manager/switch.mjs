@@ -39,8 +39,9 @@ export function watchdogReady({maintenanceDirectory, featuresFile, now = Date.no
 
 /**
  * Prepares the Conversation state of `target` (which is not running): its
- * conversations.json is created, or gets a new Session ID for each key it has
- * none for; nothing it has is changed (binding.json is never written here).
+ * conversations.json is created, or gets its sessionNamespace (the target id)
+ * and a new Session ID for each key it has none for; nothing it has is changed
+ * (binding.json is never written here).
  * Nothing of `current` or any other character is written. Throws when a
  * character's conversations.json exists but cannot be read.
  * @param {{root: string, target: string, current: string}} options
@@ -59,21 +60,26 @@ export function prepareTarget({root, target, current}) {
   }
 
   // Conversation Manager derives the Session ID of a key it has no record of
-  // from the key alone, and the key does not name the character: a key the
-  // target lacks would resume whichever character's Session has that id. So
-  // the Owner's key and every key a registered character has recorded get a
-  // new Session in the target; what the target already has is kept. Keys
-  // Conversation Manager never recorded cannot be known (docs/MANAGEMENT.md).
+  // from the key and the state file's sessionNamespace. The target's own id as
+  // namespace keeps any key, recorded anywhere or not, from resuming another
+  // character's Session. The namespace is written here only: the target is not
+  // running, and Conversation Manager refuses a file changed under it.
+  const state = readConversations(target, targetDir) ?? {overrides: {}, presets: {}, sessionIds: {}, lifecycle: {}};
+  if (state.sessionNamespace !== undefined && state.sessionNamespace !== target) {
+    throw new Error(`目标角色的 ${CONVERSATIONS_FILE} 属于另一个角色（sessionNamespace 为 ${state.sessionNamespace}），不能切换。`);
+  }
+  // Second line of defence, and the only one for a Conversation Manager
+  // without namespaces: the Owner's key and every key a registered character
+  // has recorded get a new Session in the target; what it already has is kept.
   const keys = new Set([`qqbot:${appId}:c2c:${ownerId}`]);
   for (const {id, dir} of registeredDirectories(root)) {
     for (const key of conversationKeys(readConversations(id, dir))) keys.add(key);
   }
-  const state = readConversations(target, targetDir) ?? {overrides: {}, presets: {}, sessionIds: {}, lifecycle: {}};
   const recorded = state.sessionIds ?? {};
   const missing = [...keys].filter(key => typeof recorded[key] !== 'string' || !recorded[key]);
-  if (!missing.length) return;
+  if (!missing.length && state.sessionNamespace === target) return;
   const sessionIds = {...recorded, ...Object.fromEntries(missing.map(key => [key, randomUUID()]))};
-  writeJsonAtomic(path.join(targetDir, CONVERSATIONS_FILE), {...state, sessionIds});
+  writeJsonAtomic(path.join(targetDir, CONVERSATIONS_FILE), {sessionNamespace: target, ...state, sessionIds});
 }
 
 // A character's Conversation Manager state; null when it has none yet. One that
@@ -87,7 +93,9 @@ function readConversations(id, dir) {
   } catch {
     throw new Error(`角色 ${id} 的 ${CONVERSATIONS_FILE} 无法读取，不能切换。`);
   }
-  if (!isObject(value) || CONVERSATION_MAPS.some(name => value[name] !== undefined && !isObject(value[name]))) {
+  const namespace = value?.sessionNamespace;
+  if (!isObject(value) || CONVERSATION_MAPS.some(name => value[name] !== undefined && !isObject(value[name]))
+    || (namespace !== undefined && (typeof namespace !== 'string' || !namespace))) {
     throw new Error(`角色 ${id} 的 ${CONVERSATIONS_FILE} 格式不正确，不能切换。`);
   }
   return value;
