@@ -10,6 +10,7 @@
 | characterId / characterPresetId / projectId | 记忆作用域的角色 ID（必填，没有默认值）、真实 Preset 与固定项目作用域 |
 | model | provider/id/API/URL/input 与凭据变量名 |
 | qq | 唯一账号、Owner、凭据变量名与是否启用连接；`allow` 为额外准入的私聊账号，仅在 roles 开启时允许 |
+| semanticRecall | L2 语义检索（[SEMANTIC-RECALL](SEMANTIC-RECALL.md)）：`mode` 默认 `active`，可设 `shadow`/`off`；`runtimeDir`/`modelDir` 默认 `<安装根>/data/semantic-recall/{runtime,models}`，用 `node scripts/provision-semantic.cjs` 准备；`threads` 默认 2。未准备模型时 Memory 照常运行在 FTS5 上 |
 | roles | 可选角色模式（默认关闭）：`publicPersona` 审阅过的公开 Persona 文件、`legacyOwnerPreset` 旧 Owner Preset id；见 [Identity & Access](IDENTITY-ACCESS.md) |
 | memoryMode | off / assistant / character；由可信 Host 决定 |
 | interaction / inspector | 可选交互策略、管理页；Inspector 默认 writable:false |

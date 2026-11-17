@@ -144,4 +144,4 @@ node scripts/migrate-memory.mjs /backup/memory-v2.sqlite /staging/memory-v3.sqli
 
 ## 明确限制
 
-未实现向量检索、全量历史回扫、独立 UI、新 Worker、主动聊天或 Skills 生成。跨事件窗口目前是最近 40 条有效经历，不保证跨多年全库聚类；原有 L2 的中文 FTS5 召回仍保留。没有全局多进程写入/后台调度租约，同一数据库应只由一个 Host Core 实例管理。模型质量、长时间压力及真实 QQ 新模式验收不由单元测试代替。
+L2 语义检索见 [SEMANTIC-RECALL](SEMANTIC-RECALL.md)（Character 构建默认开启，模型未准备时退回 FTS5）。未实现 L1 全历史语义检索、全量历史回扫、独立 UI、新 Worker、主动聊天或 Skills 生成。跨事件窗口目前是最近 40 条有效经历，不保证跨多年全库聚类；原有 L2 的中文 FTS5 召回仍保留。没有全局多进程写入/后台调度租约，同一数据库应只由一个 Host Core 实例管理。模型质量、长时间压力及真实 QQ 新模式验收不由单元测试代替。
