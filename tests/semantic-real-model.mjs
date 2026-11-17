@@ -1,17 +1,17 @@
 // Opt-in end-to-end verification with the real model (not part of `npm test`: needs provisioned files).
 // Real LayeredMemory + real plugin + real embedding worker process, synthetic data only.
 //   node tests/semantic-real-model.mjs --runtime-dir <abs> --model-dir <abs> --dataset <dir> [--noise 300] [--out file]
-// <dataset> is evaluation/retrieval-d/dataset of the D-phase research branch (PR #26): corpus.mjs,
-// queries.mjs, stress-ids.mjs. It also runs unchanged on the Host runtime:
+// The dataset defaults to tests/fixtures/semantic-eval: the frozen corpus and dev/held-out judgments of
+// the D-phase research (PR #26), copied unchanged (see MANIFEST.json there). It also runs unchanged on the Host runtime:
 //   ELECTRON_RUN_AS_NODE=1 "<Host>/DeepSeek Harness.exe" tests/semantic-real-model.mjs ...
 import fs from 'node:fs';import os from 'node:os';import path from 'node:path';import assert from 'node:assert/strict';
-import {pathToFileURL} from 'node:url';
+import {pathToFileURL,fileURLToPath} from 'node:url';
 import {LayeredMemory} from '../packages/character-memory-core/layered.mjs';
 import {attach} from '../packages/memory-semantic/index.mjs';
 
 const args=process.argv.slice(2),value=(name,fallback)=>{const i=args.indexOf('--'+name);return i<0?fallback:args[i+1];};
-const runtimeDir=value('runtime-dir'),modelDir=value('model-dir'),dataset=value('dataset'),noise=Number(value('noise',300)),out=value('out');
-assert(runtimeDir&&modelDir&&dataset,'usage: --runtime-dir <abs> --model-dir <abs> --dataset <dir> [--noise N] [--out file]');
+const runtimeDir=value('runtime-dir'),modelDir=value('model-dir'),dataset=value('dataset',fileURLToPath(new URL('./fixtures/semantic-eval/',import.meta.url))),noise=Number(value('noise',300)),out=value('out');
+assert(runtimeDir&&modelDir,'usage: --runtime-dir <abs> --model-dir <abs> [--dataset <dir>] [--noise N] [--out file]');
 const load=name=>import(pathToFileURL(path.resolve(dataset,name)).href);
 const {scopes,memories,distractors}=await load('corpus.mjs'),{queries}=await load('queries.mjs'),{stressQueries}=await load('stress-ids.mjs');
 const pct=(a,p)=>{const s=[...a].sort((x,y)=>x-y);return s.length?+s[Math.min(s.length-1,Math.floor(s.length*p))].toFixed(2):null;};
