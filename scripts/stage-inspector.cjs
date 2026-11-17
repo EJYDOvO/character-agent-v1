@@ -17,7 +17,9 @@ const schema=yaml.DEFAULT_SCHEMA.extend([new yaml.Type('tag:yaml.org,2002:js',{k
  const specialists=extras||workerProbe?['worker-review']:[],community=workerProbe?['worker-community',{id:'root-planner-worker',alias:'external-planner'}]:[];
  const workerIds=selectedWorkerIds(specialists,community);configureWorkers(character,specialists,community);
  character.config.plugins.find(p=>p.id==='delegation').config.find(p=>p.id==='tool-subagent').name=local('packages/character-memory-tools/subagent.mjs');
- character.config.plugins.push({id:'memory-tools',name:local('packages/character-memory-tools/character.mjs'),config:{workerPresets:workerIds,communityWorkerPresets:community}});
+ // The Workers gate also proves the card style reminder reaches the Root request on a real Host; its braces prove interpolation stays off.
+ const reminder=workerProbe?'Fixture reminder {{not_a_variable}}: 保持简短。':undefined;
+ character.config.plugins.push({id:'memory-tools',name:local('packages/character-memory-tools/character.mjs'),config:{workerPresets:workerIds,communityWorkerPresets:community,...(reminder?{reminder}:{})}});
  const {communityWorkerIds}=await import('../packages/character-memory-tools/worker-policy.mjs');
  const external=communityWorkerIds(community),workers=workerIds.filter(id=>!external.includes(id)).map(workerPreset);
  for(const id of external){const reviewed=workerPreset();reviewed.id='preset-'+id;reviewed.config.id=id;reviewed.config.name='Reviewed community fixture';reviewed.config.plugins.find(p=>p.id==='persona').config.prefix=reviewed.config.plugins.find(p=>p.id==='persona').config.prefix.replaceAll('worker-general',id);workers.push(reviewed);}
@@ -31,7 +33,7 @@ const schema=yaml.DEFAULT_SCHEMA.extend([new yaml.Type('tag:yaml.org,2002:js',{k
   {id:'memory-core',name:local('packages/character-memory-core/index.mjs'),config:{database:home+'/memory.sqlite',autoCapture:true,idleMs:50,consolidation:false}},
   ...(extras?[{id:'memory-inspector',name:local('packages/memory-inspector/index.mjs'),config:{writable:true}}]:[]),
   ...(workerProbe?[{id:'long-tasks',name:local('packages/long-tasks/index.mjs'),config:{cwd:home}}]:[]),
-  {id:'inspector-probe',name:local(workerProbe?'tests/workers-host.mjs':'tests/inspector-host.mjs'),config:{cwd:home,result:home+'/result.json',runId,extras,version,managerProbe,preview:process.argv.includes('--preview')}}];
+  {id:'inspector-probe',name:local(workerProbe?'tests/workers-host.mjs':'tests/inspector-host.mjs'),config:{cwd:home,result:home+'/result.json',runId,extras,version,managerProbe,preview:process.argv.includes('--preview'),...(reminder?{reminder}:{})}}];
  if(modules)inserted.splice(0,inserted.length,{id:'module-contract',name:local('tests/module-lifecycle-host.mjs'),config:{cwd:home,result:home+'/result.json',runId,version}});
  const bundles=['@deepseek-ai/dsh-base','@deepseek-ai/dsh-web-app'];
  if(extras){

@@ -8,7 +8,7 @@
 
 | 目录 | 用途 |
 |---|---|
-| packages/character-definition | YAML 定义校验、Persona 与 Creator 构建派生 |
+| packages/character-definition | Character Card V3/V2/V1 角色卡读取、校验与 Persona 渲染；Creator 构建派生 |
 | packages/character-identity | Owner、可信 Session、Memory 授权与通知 Outbox |
 | packages/character-memory-core / character-memory-tools | SQLite/FTS5/CAS、L1–L3、通用记忆工具 |
 | packages/character-qq-adapter | 复用唯一 QQ Gateway 的 Character 组合适配 |
