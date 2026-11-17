@@ -1,0 +1,295 @@
+// Synthetic long-term memory corpus for the D-phase retrieval study.
+// Entirely invented: no chat history, no production memory, no credentials.
+// Tuple: [label, scope, kind, statement, options]
+//   options.was        original statement; the record is created with it and then corrected to `statement`
+//   options.forget     record is forgotten after creation (must never be returned)
+//   options.expiresAt  ISO timestamp (past => expired, must never be returned)
+//   options.claimKey   conflict topic (same key + different fact => conflict pair)
+//   options.origin     'direct_user' (default) | 'inference'
+//   options.session    originating Session id (default 'session-2026-a')
+export const corpusVersion=1;
+
+export const scopes={
+ S0:{principalId:'owner-a',namespaceId:'char-yuna',projectId:'proj-main'}, // main evaluation scope
+ S1:{principalId:'owner-b',namespaceId:'char-yuna',projectId:'proj-main'}, // another principal
+ S2:{principalId:'owner-a',namespaceId:'char-tessa',projectId:'proj-main'}, // another Character namespace
+ S3:{principalId:'owner-a',namespaceId:'char-yuna',projectId:'proj-side'}, // another project
+};
+
+const filler=(sentence,n)=>sentence.repeat(n);
+const E='episodic',P='procedural',S='semantic';
+const old={session:'session-2025-h2'},mid={session:'session-2026-spring'};
+
+export const memories=[
+ // ---- food & drink
+ ['food-peanut','S0',S,'用户对花生过敏，点餐时要避开含花生的菜和花生酱。'],
+ ['food-cilantro','S0',S,'用户不吃香菜，外卖备注里要写明不放香菜。'],
+ ['food-sichuan','S0',S,'用户最喜欢川菜，尤其是水煮鱼和回锅肉。',old],
+ ['food-stomach','S0',S,'用户胃不舒服的时候只点清淡的粥和汤面。'],
+ ['drink-americano','S0',S,'用户早上习惯喝一杯不加糖的冰美式。',old],
+ ['drink-evening-tea','S0',S,'晚上八点以后用户不喝咖啡，改喝无咖啡因的洋甘菊茶。'],
+ ['drink-no-alcohol','S0',S,'用户不喝酒，聚餐时会点苏打水。'],
+ ['drink-milk-tea','S0',S,'用户不喜欢喝奶茶，觉得太甜。'],
+ ['food-sister-vegetarian','S0',S,'用户的妹妹林夏吃素，一起吃饭时要选有素食的餐厅。'],
+ ['food-colleague-seafood','S0',S,'同事周衡对海鲜过敏，团建订餐不能有虾蟹。'],
+ ['food-breakfast','S0',S,'The user usually skips breakfast on weekdays and has an early lunch around 11:30.'],
+ ['food-lactose','S0',S,'The user is lactose intolerant and orders oat milk in lattes.'],
+ ['food-sushi','S0',S,'The user\'s favourite restaurant is a small sushi bar called Umi near the office.'],
+ ['food-no-smoking','S0',S,'用户不抽烟，订餐厅要选无烟区。'],
+ // ---- hobbies & sport
+ ['hobby-hike','S0',S,'用户周末通常去郊外徒步，偏好十公里左右的山路。',old],
+ ['hobby-bike-commute','S0',S,'The user commutes to the office by bicycle on weekdays.',old],
+ ['hobby-commute-time','S0',S,'用户骑车上班单程大约二十五分钟。'],
+ ['hobby-no-swim','S0',S,'用户不会游泳，也不喜欢去水上乐园。'],
+ ['hobby-badminton','S0',S,'每周四晚上用户和大学同学打羽毛球。',{was:'每周二晚上用户和大学同学打羽毛球。'}],
+ ['hobby-photography','S0',S,'用户喜欢胶片摄影，常用的相机是一台 Pentax 67。'],
+ ['hobby-jazz','S0',S,'用户一直喜欢爵士乐，写代码时常放 Bill Evans 的专辑。',old],
+ ['hobby-rock-festival','S0',E,'上个月用户陪朋友去听了一场摇滚音乐节，觉得太吵。'],
+ ['hobby-boardgame','S0',S,'The user hosts a board game night on the first Saturday of every month.'],
+ ['hobby-scifi','S0',S,'用户睡前习惯读科幻小说，最近在读《三体》的英文版。'],
+ ['hobby-guitar','S0',E,'用户以前学过吉他，但两年前已经放弃了。',old],
+ ['hobby-knee','S0',S,'The user stopped running after a knee injury and now prefers low-impact exercise.'],
+ ['hobby-gym','S0',S,'用户每周一、三、五下班后去健身房做力量训练。'],
+ ['hobby-weight-goal','S0',S,'用户想在年底前把体重降到七十公斤。'],
+ ['hobby-civ','S0',S,'用户偶尔玩《文明 6》，一般只在长假玩。'],
+ ['hobby-heights','S0',S,'用户恐高，不参加蹦极和高空玻璃桥之类的活动。'],
+ ['hobby-book-club','S0',S,'用户参加了一个每月一次的读书会，本月读《置身事内》。'],
+ ['hobby-volunteer','S0',S,'The user volunteers at an animal shelter on the last Sunday of each month.'],
+ ['hobby-movies','S0',S,'用户不看恐怖片，看电影偏好悬疑和纪录片。'],
+ ['hobby-partner-horror','S0',S,'伴侣很喜欢恐怖片，经常一个人去看。'],
+ ['hobby-movie-night','S0',S,'每周五晚上是用户和伴侣的电影之夜。'],
+ // ---- family, people, pets
+ ['family-sister','S0',S,'用户的妹妹叫林夏，在成都做建筑设计。',old],
+ ['family-mom-birthday','S0',S,'用户妈妈的生日是农历八月初三，每年要提前订蛋糕。',old],
+ ['family-dad-fishing','S0',S,'用户的爸爸退休后迷上了钓鱼。'],
+ ['family-parents-call','S0',S,'用户每周日上午给父母打视频电话。'],
+ ['family-hometown','S0',S,'用户的老家在湖南长沙，春节通常回去过年。',old],
+ ['family-dialect','S0',S,'用户会说长沙话，但平时只说普通话。'],
+ ['pet-cat','S0',S,'用户养了一只叫“年糕”的橘猫，今年四岁。',old],
+ ['pet-cat-vet','S0',S,'年糕每年三月要去宠物医院打疫苗。'],
+ ['pet-neighbor-dog','S0',S,'邻居家的柯基叫“布丁”，用户偶尔帮忙遛它。'],
+ ['friend-wedding','S0',E,'用户的大学室友陈默将在十月举办婚礼，用户是伴郎。'],
+ ['colleague-zhou','S0',S,'同事周衡负责后端支付模块，是用户的代码评审搭档。'],
+ ['colleague-zhou-remote','S0',S,'周衡每周一和周五远程办公。'],
+ ['colleague-mira','S0',S,'Mira Okafor is the product manager for the Atlas project and prefers written updates over meetings.'],
+ ['manager-1on1','S0',S,'The user\'s one-on-one with their manager Daniel happens every other Tuesday at 10 am.',{was:'The user\'s one-on-one with their manager Daniel happens every Monday at 2 pm.'}],
+ ['mentor-juniors','S0',S,'The user mentors two junior engineers, Priya and Tomás, with fortnightly sessions.'],
+ ['partner-anniversary','S0',S,'用户和伴侣的纪念日是五月二十日。',old],
+ ['partner-gift','S0',S,'伴侣喜欢手冲咖啡器具，用户想在纪念日送一个磨豆机。'],
+ ['self-birthday','S0',S,'The user\'s birthday is on November 3rd and they prefer no surprise parties.',old],
+ ['self-college','S0',S,'用户本科毕业于浙江大学计算机系。',old],
+ ['self-first-job','S0',E,'用户的第一份工作是在一家做地图导航的公司写安卓应用。',old],
+ // ---- home, health, travel
+ ['home-city-old','S0',E,'2025 年之前用户一直住在杭州。',old],
+ ['home-city-new','S0',S,'2026 年三月用户搬到了成都高新区。',mid],
+ ['home-rent','S0',S,'用户现在的房子是租的，租约到 2027 年二月。',{was:'用户现在的房子是租的，租约到 2026 年八月。'}],
+ ['home-plants','S0',S,'用户阳台上种了薄荷和迷迭香，出差时需要有人浇水。'],
+ ['home-router','S0',S,'家里的路由器放在书房，型号是 AX6000。'],
+ ['home-ac','S0',S,'用户怕热，夏天空调一般设在二十四度。'],
+ ['home-delivery','S0',S,'快递默认寄到公司前台，不要放丰巢。'],
+ ['home-library','S0',S,'用户常去的图书馆是天府图书馆，周一闭馆。'],
+ ['home-barber','S0',S,'用户大约每五周剪一次头发，固定找一位叫阿杰的理发师。'],
+ ['sleep-schedule','S0',S,'用户通常晚上十二点半睡，早上七点半起。',{was:'用户通常凌晨一点半睡，早上八点半起。'}],
+ ['sleep-nap','S0',S,'The user takes a twenty-minute nap after lunch whenever possible.'],
+ ['health-pollen','S0',S,'用户春天有花粉过敏，四月份外出要戴口罩。'],
+ ['health-eyes','S0',S,'医生建议用户注意用眼，每工作五十分钟休息十分钟。'],
+ ['health-dentist','S0',S,'The user has a dentist appointment every six months, the next one in January.'],
+ ['health-checkup','S0',S,'用户的体检安排在每年九月，由公司统一组织。'],
+ ['health-cold-weather','S0',S,'The user hates cold weather and avoids scheduling outdoor activities in winter.'],
+ ['commute-rain','S0',S,'下雨天用户改坐地铁二号线上班。'],
+ ['commute-no-car','S0',S,'用户没有车，也没有驾照。'],
+ ['commute-news','S0',S,'用户每天早上通勤时看十分钟科技新闻。'],
+ ['commute-podcast','S0',S,'The user listens to the Changelog podcast on the way home.'],
+ ['travel-aisle','S0',S,'用户坐飞机喜欢靠过道的座位，方便起身。'],
+ ['travel-kyoto','S0',E,'2025 年十月用户去了京都和奈良旅行，住了六晚。',old],
+ ['travel-iceland','S0',S,'The user is planning a trip to Iceland in February to see the northern lights.'],
+ ['travel-hotel','S0',S,'用户出差住酒店时偏好高楼层、远离电梯的安静房间。'],
+ ['travel-carsick','S0',S,'用户坐长途大巴会晕车，尽量订火车。'],
+ ['travel-vacation-policy','S0',P,'Vacation requests must be filed at least two weeks in advance.'],
+ // ---- work: projects, deployment, engineering conventions
+ ['proj-atlas','S0',S,'Atlas 是用户团队负责的内部数据看板项目，代号 ATL。',old],
+ ['proj-atlas-deadline','S0',S,'Atlas 2.0 的发布截止日期是 2026 年 12 月 18 日。',{was:'Atlas 2.0 的发布截止日期是 2026 年 11 月 30 日。'}],
+ ['proj-orion','S0',S,'Orion 是另一个团队的推荐系统项目，用户只负责对接接口。'],
+ ['proj-orion-rollout','S0',S,'Orion 的灰度发布定在 2027 年一月第二周。'],
+ ['deploy-rollback','S0',P,'部署前保留回滚点，先在隔离环境验证，再检查健康状态。',old],
+ ['deploy-freeze','S0',P,'每周五下午三点之后禁止生产发布。'],
+ ['deploy-port-staging','S0',S,'预发环境的网关端口是 7805。',{was:'预发环境的网关端口是 7801。'}],
+ ['deploy-port-prod','S0',S,'生产环境的网关端口是 8443。'],
+ ['deploy-region','S0',S,'The production cluster runs in the ap-southeast-1 region with a standby in eu-central-1.'],
+ ['deploy-feature-flag','S0',P,'New features ship behind feature flags and are enabled for 5% of users first.'],
+ ['release-checklist','S0',P,'The release checklist requires a rollback snapshot, staged validation and a recorded health check.',old],
+ ['release-version','S0',S,'版本号采用语义化版本，测试包带 -test.N 后缀。'],
+ ['kappa-blueprint','S0',P,'发布窗口使用 KAPPA-42 蓝图，执行前核对版本、依赖与恢复说明。'],
+ ['kappa-decoy','S0',S,'kappa and 42 are unrelated labels in the glossary.'],
+ ['ci-node','S0',S,'CI 使用 Node.js 24.13，本地开发需要保持同一个大版本。'],
+ ['ci-flaky','S0',S,'The integration test suite is flaky on Windows runners; rerun once before investigating.'],
+ ['git-branch','S0',P,'分支命名规则是 feat/、fix/、docs/ 加短横线描述，例如 feat/memory-recall。'],
+ ['git-commit','S0',P,'提交信息用英文祈使句，正文可以用中文补充背景。'],
+ ['git-squash','S0',P,'Pull requests are squash-merged; never force-push to main.'],
+ ['review-payment','S0',P,'涉及支付模块的改动需要两个人评审通过。'],
+ ['review-size','S0',S,'The user prefers small pull requests under 300 changed lines.'],
+ ['review-feedback','S0',S,'The user wants blunt, specific code review feedback rather than polite hints.'],
+ ['ticket-format','S0',S,'工单编号格式是 ATL- 加四位数字，例如 ATL-2317。'],
+ ['ticket-2317','S0',S,'ATL-2317 是看板首页加载超过五秒的性能问题，已指派给周衡。'],
+ ['ticket-2291','S0',E,'ATL-2291 是导出 CSV 时中文乱码的缺陷，上周已修复。'],
+ ['incident-0412','S0',E,'2026 年 4 月 12 日发生过一次数据库连接池耗尽的事故，持续了四十分钟。',mid],
+ ['incident-postmortem','S0',P,'事故复盘文档要在事故后三个工作日内完成。'],
+ ['oncall-rotation','S0',S,'用户每四周轮一次值班，值班周从周一上午十点开始。'],
+ ['db-postgres','S0',S,'主数据库是 PostgreSQL 16，只读副本延迟通常低于两秒。'],
+ ['db-backup','S0',S,'Database backups run nightly at 02:00 UTC and are kept for 35 days.'],
+ ['cache-redis','S0',S,'看板查询结果在 Redis 里缓存十五分钟。'],
+ ['api-rate-limit','S0',S,'对外接口的限流是每个客户端每分钟 120 次请求。',{was:'对外接口的限流是每个客户端每分钟 60 次请求。'}],
+ ['api-timeout','S0',S,'The default timeout for upstream API calls is 8 seconds with two retries.'],
+ ['log-retention','S0',S,'应用日志保留 14 天，审计日志保留一年。'],
+ ['monitor-alert','S0',P,'告警先发到飞书的 #atlas-oncall 群，十分钟无人响应再打电话。'],
+ ['slo-budget','S0',S,'The service SLO is 99.9% availability with a monthly error budget of 43 minutes.'],
+ ['budget-cloud','S0',S,'团队每月的云资源预算上限是三万元。'],
+ ['vendor-contract','S0',S,'The contract with the monitoring vendor renews on March 1st each year.'],
+ ['security-deps','S0',P,'新增外部依赖前要先过一遍许可证和安全检查。'],
+ ['lang-python','S0',P,'Python 代码用 ruff 格式化，行宽 100。'],
+ ['lang-typescript','S0',P,'TypeScript projects must enable strict mode and avoid the any type.'],
+ ['doc-report-lang','S0',P,'工作报告默认用中文，引用英文原文时保留出处。'],
+ ['doc-weekly','S0',P,'每周五上午用户要给团队发一份周报，三段式：进展、风险、下周计划。'],
+ ['doc-rfc','S0',P,'Design documents follow the RFC template with a mandatory alternatives section.'],
+ ['doc-newsletter','S0',S,'The user writes a monthly engineering newsletter called Signal Path.'],
+ ['meeting-standup','S0',S,'Daily standup is at 9:45 am and should not exceed fifteen minutes.'],
+ ['meeting-no-wed','S0',S,'周三下午是用户的无会议时间，用来专注写代码。'],
+ ['meeting-notes','S0',P,'会议纪要要在当天发出，并写清楚负责人和截止时间。'],
+ ['meeting-async','S0',S,'用户不喜欢临时拉会，希望先在文档里异步讨论。'],
+ ['meeting-timezone','S0',S,'Most of the user\'s collaborators are in the UTC+1 timezone, so afternoon meetings work best.'],
+ ['meeting-pairing','S0',S,'The user enjoys pair programming on Tuesday mornings.'],
+ ['work-remote','S0',S,'用户每周二和周四在家办公，其余时间去公司。'],
+ ['work-calls','S0',S,'The user dislikes unscheduled phone calls and prefers a text message first.'],
+ ['work-expense','S0',P,'Expense reports are due by the fifth of each month.'],
+ ['work-invoice','S0',P,'报销发票抬头要写公司全称，税号在行政群公告里。'],
+ ['work-laptop-refresh','S0',S,'The work laptop is due for replacement in Q2 next year.'],
+ ['work-conference','S0',E,'The user will speak at a frontend conference in Singapore in June about dashboard performance.'],
+ ['work-cafe','S0',S,'The user\'s go-to café for remote work is Driftwood Coffee on Jinhui Road.'],
+ ['work-tax','S0',P,'每年三月用户要办理个人所得税汇算。'],
+ // ---- tools
+ ['tool-editor','S0',S,'The user\'s preferred editor is Neovim with a dark theme and a monospace font.',{was:'The user\'s preferred editor is VS Code with a light theme.'}],
+ ['tool-terminal','S0',S,'用户的终端是 WezTerm，shell 用的是 fish。'],
+ ['tool-keyboard','S0',S,'用户用的是一把 HHKB 静电容键盘。'],
+ ['tool-os','S0',S,'用户的工作电脑是 Windows 11，个人笔记本是 MacBook Air。'],
+ ['tool-monitor','S0',S,'The user works with a single 32-inch 4K monitor and no second screen.'],
+ ['tool-headphones','S0',S,'The user wears Sony WH-1000XM5 headphones in the open office.'],
+ ['tool-standing-desk','S0',S,'The user uses a standing desk and alternates between sitting and standing every hour.'],
+ // ---- interaction conventions with the Character
+ ['addr-nickname','S0',S,'用户希望被称呼为“阿澈”，不要叫全名。',old],
+ ['tone-concise','S0',S,'用户希望回答先给结论，再给不超过三条理由。'],
+ ['tone-no-emoji','S0',S,'The user dislikes emoji in work-related replies.'],
+ ['tone-jokes','S0',S,'用户喜欢偶尔来点冷笑话，但工作时间不要。'],
+ ['tone-language','S0',S,'日常聊天用中文，技术术语保留英文原文。'],
+ ['remind-morning','S0',S,'提醒类消息最好在早上八点到九点之间发送。'],
+ ['remind-night','S0',S,'晚上十一点之后除非紧急情况不要打扰用户。'],
+ ['remind-weekly-review','S0',S,'每周日晚上用户想做一次下周计划的回顾。'],
+ // ---- money, shopping, learning
+ ['shop-phone','S0',S,'用户打算在双十一换手机，预算五千元以内。'],
+ ['shop-shoes','S0',S,'The user wears size 43 running shoes and prefers the brand Asics.'],
+ ['shop-subscriptions','S0',S,'用户订阅了 Apple Music 和 Netflix，每年一月续费。'],
+ ['money-saving','S0',S,'用户今年的目标是存下十万元作为装修基金。'],
+ ['learn-japanese','S0',S,'用户正在学日语，目标是明年七月通过 N3 考试。',{was:'用户正在学日语，目标是明年十二月通过 N4 考试。'}],
+ ['learn-rust','S0',S,'The user is learning Rust in the evenings and is halfway through the official book.'],
+ // ---- conflict pairs (same claimKey, different fact)
+ ['conflict-gym-a','S0',S,'用户办的健身房年卡在公司楼下那家。',{claimKey:'gym-location'}],
+ ['conflict-gym-b','S0',S,'用户的健身房年卡办在小区旁边那家。',{claimKey:'gym-location',origin:'inference'}],
+ ['conflict-mirror-a','S0',S,'合成镜像部署端口为 7801。',{claimKey:'mirror-port'}],
+ ['conflict-mirror-b','S0',S,'合成镜像部署端口为 7802。',{claimKey:'mirror-port',origin:'inference'}],
+ // ---- future-dated validity (still valid, must be retrievable)
+ ['temp-desk','S0',S,'本季度用户的工位临时搬到 5 楼 E 区。',{expiresAt:'2099-01-01T00:00:00Z'}],
+ ['temp-reviewer','S0',S,'While Zhou Heng is on leave, Priya covers payment-module reviews.',{expiresAt:'2099-01-01T00:00:00Z'}],
+ // ---- long records (key fact buried in a long body)
+ ['long-onboarding','S0',P,'新人入职流程说明：'+filler('第一周以熟悉环境为主，按清单逐项确认账号、设备和文档访问是否到位。',14)+'最后一条约定：入职第三天下午必须完成安全培训，并在 ATL 看板的“入职”泳道登记完成时间。'],
+ ['long-incident','S0',E,'支付回调超时事故的完整记录：'+filler('值班同学先确认了告警范围，然后逐个排查上游依赖的响应时间和错误率。',16)+'根因最终定位为第三方网关证书轮换后连接复用失效，临时措施是把连接保活时间从九十秒降到三十秒。'],
+ ['long-kyoto-notes','S0',E,'Travel notes from the Kyoto and Nara trip: '+filler('We walked between temples most of the day and stopped for tea whenever it rained. ',18)+'One practical detail to remember: the ryokan in Nara locked its front door at 11 pm, so late dinners had to be planned around the curfew.'],
+ ['long-meeting','S0',E,'Atlas 季度规划会纪要：'+filler('各小组依次同步了当前进度、阻塞项以及需要其他团队配合的事项。',15)+'会议最终决定：导出功能的重构推迟到下个季度，本季度优先完成看板权限模型的改造。'],
+ ['long-recipe','S0',P,'用户常做的红烧肉步骤：'+filler('五花肉切块后冷水下锅焯水，捞出洗净沥干，小火慢慢煸出油脂。',13)+'用户自己的改良做法是在收汁前加一勺陈醋，他觉得这样更解腻。'],
+ ['long-archive','S0',P,'前置材料：'+filler('先核对证据并保留原始引用。',55)+'最终约定：海蓝档案保留原始事件编号，跨会话核验来源。'],
+ // ---- lifecycle: forgotten (must never be returned by any retriever)
+ ['forgot-ex','S0',E,'用户的前任叫许岚，两人在 2023 年分手。',{forget:true}],
+ ['forgot-salary','S0',S,'用户目前的月薪是三万二千元。',{forget:true}],
+ ['forgot-diagnosis','S0',S,'用户去年被诊断为轻度焦虑，正在服用舍曲林。',{forget:true}],
+ ['forgot-address','S0',S,'用户住在天府三街 88 号 12 栋 1703。',{forget:true}],
+ ['forgot-interview','S0',S,'The user is secretly interviewing with a competitor called Northwind Labs.',{forget:true}],
+ ['forgot-keto','S0',S,'用户上个月开始尝试生酮饮食。',{forget:true}],
+ ['forgot-childhood-name','S0',S,'用户小时候的外号叫“豆包”。',{forget:true}],
+ ['forgot-cafe-plan','S0',S,'The user planned to quit and open a café in Dali next spring.',{forget:true}],
+ // ---- lifecycle: expired (must never be returned)
+ ['exp-parking','S0',S,'本周公司地库维修，临时停车改到 B3 层。',{expiresAt:'2000-01-01T00:00:00Z'}],
+ ['exp-discount','S0',S,'The 20% discount for the cloud vendor is only valid until the end of this month.',{expiresAt:'2000-01-01T00:00:00Z'}],
+ ['exp-cousin','S0',S,'用户的表弟这周借住在家里，周日离开。',{expiresAt:'2000-01-01T00:00:00Z'}],
+ ['exp-code-freeze','S0',S,'国庆期间 9 月 28 日到 10 月 8 日全面封版。',{expiresAt:'2000-01-01T00:00:00Z'}],
+ ['exp-guest-network','S0',S,'The office guest network name this week is Atlas-Guest-37.',{expiresAt:'2000-01-01T00:00:00Z'}],
+ ['exp-sugar','S0',S,'用户这两周在做无糖挑战，不吃任何甜食。',{expiresAt:'2000-01-01T00:00:00Z'}],
+
+ // ===== S1: another principal talking to the same Character in the same project.
+ // Several records deliberately contradict or shadow S0 facts: any leak is immediately visible.
+ ['b-peanut','S1',S,'用户很喜欢花生酱，早餐常吃花生酱吐司。'],
+ ['b-coffee','S1',S,'用户只喝热拿铁，从不喝冰咖啡。'],
+ ['b-city','S1',S,'用户住在上海浦东，在陆家嘴上班。'],
+ ['b-pet','S1',S,'用户养了一只叫“可乐”的柴犬。'],
+ ['b-port','S1',S,'预发环境的网关端口是 9911。'],
+ ['b-deadline','S1',S,'Atlas 2.0 的发布截止日期是 2027 年 3 月 1 日。'],
+ ['b-editor','S1',S,'The user\'s preferred editor is IntelliJ IDEA with a light theme.'],
+ ['b-nickname','S1',S,'用户希望被称呼为“老唐”。'],
+ ['b-allergy','S1',S,'用户对青霉素过敏。'],
+ ['b-hobby','S1',S,'用户周末喜欢去攀岩馆。'],
+ ['b-vinyl','S1',S,'用户收藏黑胶唱片，最珍贵的一张是 1959 年版的 Kind of Blue。'],
+ ['b-vespa','S1',S,'The user owns a vintage Vespa scooter and rides it on Sundays.'],
+ ['b-daughter','S1',S,'用户的女儿叫唐果，今年上小学二年级。'],
+ ['b-pmp','S1',S,'用户正在准备 PMP 认证考试。'],
+ ['b-borealis','S1',S,'The user\'s team uses the codename Borealis for the billing migration.'],
+ ['b-oncall','S1',S,'用户每两周轮一次值班，值班从周三开始。'],
+ ['b-sleep','S1',S,'用户每天晚上十点就睡，早上五点半起来晨跑。'],
+ ['b-commute','S1',S,'The user drives to work and parks in the basement garage.'],
+ ['b-tea','S1',S,'用户每天下午三点要喝一壶正山小种。'],
+ ['b-golf','S1',S,'The user plays golf with clients on the second Friday of every month.'],
+ ['b-anniversary','S1',S,'用户的结婚纪念日是九月九日。'],
+ ['b-standup','S1',S,'Daily standup for the billing team is at 10:30 am.'],
+
+ // ===== S2: same owner, a different Character namespace.
+ ['t-nickname','S2',S,'用户让 Tessa 叫他“林工”。'],
+ ['t-career','S2',S,'用户只跟 Tessa 说过想转行做产品经理。'],
+ ['t-story','S2',S,'用户和 Tessa 约定每晚讲一个睡前故事。'],
+ ['t-tone','S2',S,'用户希望 Tessa 说话毒舌一点。'],
+ ['t-stardew','S2',S,'The user plays Stardew Valley co-op and asked Tessa to keep notes about the farm layout.'],
+ ['t-cocoa','S2',S,'用户对 Tessa 说过他下午会喝一杯热可可。'],
+ ['t-crush','S2',E,'用户告诉 Tessa 他高中时暗恋过同桌。'],
+ ['t-novel','S2',S,'用户在和 Tessa 一起写一部叫《雾港》的悬疑小说。'],
+ ['t-playlist','S2',S,'Tessa keeps a late-night playlist for the user that is mostly city pop.'],
+ ['t-diary','S2',S,'用户每周三会向 Tessa 口述一段日记。'],
+ ['t-fear','S2',S,'The user told Tessa about a recurring nightmare of missing an exam.'],
+ ['t-tarot','S2',S,'用户喜欢让 Tessa 每周一抽一张塔罗牌。'],
+ ['t-port','S2',S,'用户让 Tessa 记住的测试端口是 6606。'],
+ ['t-reminder','S2',S,'Tessa 的提醒可以在深夜一点之后发，用户那时通常还醒着。'],
+
+ // ===== S3: same owner and Character, a different project.
+ ['s-nimbus','S3',S,'Nimbus 是用户的个人开源项目，一个 Markdown 笔记同步工具。'],
+ ['s-port','S3',S,'Nimbus 本地开发服务器端口是 4321。'],
+ ['s-server','S3',S,'Nimbus 部署在一台 2 核 4G 的轻量云服务器上。'],
+ ['s-branch','S3',P,'Nimbus 仓库的默认分支叫 trunk，直接推送不需要评审。'],
+ ['s-license','S3',S,'Nimbus uses the MIT license and accepts external contributions.'],
+ ['s-release','S3',P,'Nimbus 每月最后一个周末发布一个小版本。'],
+ ['s-ci','S3',S,'Nimbus CI runs only on Linux with Node.js 22.'],
+ ['s-db','S3',S,'Nimbus 使用 SQLite 单文件存储，不依赖外部数据库。'],
+ ['s-sponsor','S3',S,'Nimbus has three sponsors on GitHub and the income covers the server bill.'],
+ ['s-roadmap','S3',S,'Nimbus 下一个大功能是端到端加密同步，计划明年春天发布。'],
+ ['s-issue-format','S3',S,'Nimbus 的问题编号直接用 GitHub 的 # 加数字。'],
+ ['s-maintainer','S3',S,'The only other Nimbus maintainer is a contributor from Lisbon named Rui.'],
+ ['s-style','S3',P,'Nimbus 的代码用 prettier 格式化，行宽 80。'],
+ ['s-deadline','S3',S,'Nimbus 1.0 的目标发布日期是 2027 年 5 月 1 日。'],
+];
+
+// Deterministic background records for the main scope: an unrelated domain (warehouse / facilities log)
+// that still shares everyday function words and characters with real queries.
+export function distractors(count,seed=20261117){
+ let s=seed>>>0;const rnd=()=>{s=(s*1664525+1013904223)>>>0;return s/2**32;},pick=a=>a[Math.floor(rnd()*a.length)];
+ const zhWho=['仓库管理员','夜班主管','质检员','叉车司机','前台','物业','保洁组','采购专员'],zhDo=['清点了','重新贴标了','登记了','更换了','抽检了','搬运了','封存了','报修了'],zhWhat=['三号货架的纸箱','冷库的温度计','打印机的硒鼓','走廊的应急灯','叉车的电瓶','托盘上的样品','门禁读卡器','饮水机的滤芯'],zhWhen=['周一早班','上个季度末','盘点日当天','月初','午休之后','交接班时','周末大扫除期间','年检之前'];
+ const enWho=['The facilities desk','A night-shift clerk','The loading dock crew','An auditor','The mailroom','A contractor','The cleaning team','A temp worker'],enDo=['logged','replaced','relabelled','inspected','archived','moved','sealed','reported'],enWhat=['the pallet scanner','a box of thermal labels','the freight elevator panel','two fire extinguishers','the dock door sensor','a rack of sample bins','the visitor badge printer','the water filter cartridge'],enWhen=['during inventory week','before the annual inspection','after the shift handover','on the first Monday','at the end of the quarter','over the long weekend','ahead of the audit','right after lunch'];
+ const out=[],seen=new Set();
+ while(out.length<count){const i=out.length,zh=rnd()<0.6;
+  const text=zh?`${pick(zhWhen)}${pick(zhWho)}${pick(zhDo)}${pick(zhWhat)}，记录编号 W${1000+i}。`:`${pick(enWho)} ${pick(enDo)} ${pick(enWhat)} ${pick(enWhen)}; log entry W${1000+i}.`;
+  if(seen.has(text))continue;seen.add(text);out.push(['noise-'+i,'S0','episodic',text,{origin:'inference',session:'session-noise'}]);
+ }
+ return out;
+}

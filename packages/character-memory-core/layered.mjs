@@ -1,4 +1,4 @@
-import {MemoryStore,validateStatement,similarity,relevance,recallTerms} from './store.mjs';
+import {MemoryStore,validateStatement,similarity,relevance,recallTerms,selectiveRecallTerms,identifierTerms} from './store.mjs';
 import {createHash} from 'node:crypto';
 import {memoryPolicy,purposes,policyPrompt,assistantCompatible} from './personality.mjs';
 import {estimateTokens as defaultEstimator} from './token-budget.mjs';
@@ -9,7 +9,7 @@ const validStatus=r=>['active','uncertain'].includes(r.status)&&(!r.expires_at||
 const parse=s=>JSON.parse(s.trim().replace(/^```(?:json)?\s*/,'').replace(/\s*```$/,''));
 
 export class LayeredMemory extends MemoryStore {
-  #authorize;#delegates;#seen=new Map();#estimate;#interval;#topics=new Map();#projectionCache=new Map();
+  #authorize;#delegates;#seen=new Map();#estimate;#interval;#topics=new Map();#projectionCache=new Map();#semantic=null;#validCache=new Map();
   constructor(file,authorize,{estimateTokens=defaultEstimator,consolidateIntervalMs=21600000}={}){
     const delegates=new WeakMap();
     super(file,(handle,action)=>{
@@ -79,15 +79,82 @@ export class LayeredMemory extends MemoryStore {
     const blocked='EXISTS(SELECT 1 FROM blocked b WHERE b.principal=? AND b.character=? AND b.project=? AND b.fingerprint=m.fingerprint)';
     return {p,root,lanes,where,args,retired,blocked};
   }
-  #rows(ctx,query=''){
+  #rows(ctx,query='',{terms,ids}={}){
     const q=this.#selection(ctx);
     // Apply the existing FTS candidate set before crossing the SQLite/JS
     // boundary. Scope, evidence, policy and root forget barriers stay in the
     // same SQL predicate; no pre-filter LIMIT may hide a valid older result.
-    const tokens=recallTerms(query),fts=tokens.length>0;
+    const tokens=terms??recallTerms(query),fts=tokens.length>0;
     const match=tokens.map(t=>'"'+t.replaceAll('"','""')+'"').join(' OR ');
-    const rows=this.db.prepare('SELECT m.*, (SELECT count(*) FROM memory_evidence l WHERE l.memory_id=m.id) _support'+(fts?',bm25(memory_fts) rank':'')+' FROM memories m'+(fts?' JOIN memory_fts ON memory_fts.id=m.id':'')+' WHERE '+(fts?'memory_fts MATCH ? AND ':'')+q.where+" AND m.status IN ('active','uncertain') AND (m.expires_at IS NULL OR m.expires_at>?) AND NOT "+q.retired+' AND NOT '+q.blocked).all(...(fts?[match]:[]),...q.args,now(),...q.root);
+    const rows=this.db.prepare('SELECT m.*, (SELECT count(*) FROM memory_evidence l WHERE l.memory_id=m.id) _support'+(fts?',bm25(memory_fts) rank':'')+' FROM memories m'+(fts?' JOIN memory_fts ON memory_fts.id=m.id':'')+' WHERE '+(fts?'memory_fts MATCH ? AND ':'')+q.where+" AND m.status IN ('active','uncertain') AND (m.expires_at IS NULL OR m.expires_at>?) AND NOT "+q.retired+' AND NOT '+q.blocked+(ids?' AND m.id IN (SELECT value FROM json_each(?))':'')).all(...(fts?[match]:[]),...q.args,now(),...q.root,...(ids?[JSON.stringify(ids)]:[]));
     return rows.map(r=>({...r,purpose:q.lanes.find(l=>l.scope[1]===r.character).purpose}));
+  }
+  // ---- Optional semantic ranking (D1). The ranker is supplied by a separate plugin and only ever
+  // orders ids of rows that the predicates above already made valid for this trusted handle. Core
+  // re-reads every returned row through #rows; similarity is never an authorization or a fact.
+  setSemanticRanker(ranker){
+    if(ranker!==null&&(typeof ranker?.rank!=='function'||!['active','shadow'].includes(ranker.mode)))throw Error('Invalid semantic ranker');
+    this.#semantic=ranker;this.#validCache.clear();
+  }
+  #semanticNotify(id){const r=this.#semantic;if(typeof r?.invalidate==='function')try{r.invalidate(id);}catch{}}
+  #semanticPrepare(query){const r=this.#semantic;if(typeof r?.prepare!=='function'||typeof query!=='string'||!query.trim()||query.length>200)return;try{Promise.resolve(r.prepare(query)).catch(()=>{});}catch{}}
+  // Identity of every row currently valid for this handle (no statement). Cached per scope until the
+  // database changes or the next expiry: the same invalidation rule as the L3 projection cache.
+  #validKeys(ctx){
+    const q=this.#selection(ctx),key=hash([q.p.key,q.p.agentId,q.p.mode]),version=this.db.prepare('SELECT total_changes() n').get().n+':'+this.db.prepare('PRAGMA data_version').get().data_version;
+    const cached=this.#validCache.get(key);if(cached&&cached.version===version&&Date.now()<cached.until)return cached.keys;
+    const keys=this.db.prepare('SELECT m.id,m.revision,m.fingerprint,m.expires_at FROM memories m WHERE '+q.where+" AND m.status IN ('active','uncertain') AND (m.expires_at IS NULL OR m.expires_at>?) AND NOT "+q.retired+' AND NOT '+q.blocked).all(...q.args,now(),...q.root);
+    const until=Math.min(Date.now()+60000,...keys.filter(k=>k.expires_at).map(k=>Date.parse(k.expires_at)));
+    if(this.#validCache.size>=16)this.#validCache.delete(this.#validCache.keys().next().value);
+    this.#validCache.set(key,{version,until,keys});return keys;
+  }
+  #semanticRows(ctx,query,excluded,fingerprints){
+    const keys=this.#validKeys(ctx).filter(k=>!excluded.has(k.id)&&!fingerprints.has(k.fingerprint));
+    const ranked=this.#semantic.rank({query,keys});if(!ranked||!Array.isArray(ranked.ids))return null;
+    const allowed=new Set(keys.map(k=>k.id)),order=[],seen=new Set(),push=id=>{if(allowed.has(id)&&!seen.has(id)){seen.add(id);order.push(id);}};
+    const lexical=(terms,ids,limit)=>terms.length?this.#rows(ctx,query,{terms,ids}).sort((a,b)=>relevance(b,query)-relevance(a,query)||a.id.localeCompare(b.id)).slice(0,limit).map(r=>r.id):[];
+    // 1. exact identifier matches; 2. records without a current vector (just written or corrected) that
+    // share a whole word/bigram with the query, so index lag cannot hide them; 3. similarity order.
+    // A term pins only when at most three valid records contain it: an identifier names something,
+    // a number that half the store mentions does not.
+    for(const term of identifierTerms(query)){if(order.length>=5)break;const hits=lexical([term],undefined,4);if(hits.length<=3)for(const id of hits)if(order.length<5)push(id);}
+    const pending=Array.isArray(ranked.pending)?ranked.pending.slice(0,500):[];
+    if(pending.length)for(const id of lexical(selectiveRecallTerms(query),pending,5))push(id);
+    for(const id of ranked.ids.slice(0,64))push(id);
+    if(!order.length)return [];
+    const rows=new Map(this.#rows(ctx,'',{ids:order}).map(r=>[r.id,r]));
+    return order.flatMap(id=>rows.has(id)?[rows.get(id)]:[]);
+  }
+  // Per-turn path: the Host resolves context providers synchronously, then awaits the asynchronous
+  // "system-prompt/assemble" waterfall before the request is sent. Memory Tools hook that waterfall and
+  // call this: when the current topic's query vector is still being computed, wait for it (bounded by
+  // the ranker's prepare timeout) and report whether the context should be recomputed.
+  async awaitSemanticContext(ctx){
+    const r=this.#semantic;if(typeof r?.awaitQuery!=='function')return false;
+    let topic;try{const p=this.policy(ctx);topic=this.#topics.get(hash([p.key,p.agentId,ctx.sessionId]));}catch{return false;}
+    if(!topic?.query||Date.now()-topic.at>=1800000||topic.query.length>200)return false;
+    try{return (await r.awaitQuery(topic.query))===true;}catch{return false;}
+  }
+  // Tool path: waits (bounded by the ranker) for the query vector, then the ordinary synchronous recall.
+  async recallAsync(ctx,query='',budget=2400,options={}){
+    const r=this.#semantic;
+    if(typeof r?.prepare==='function'&&typeof query==='string'&&query.trim()&&query.length<=200)try{await r.prepare(query);}catch{}
+    return this.recall(ctx,query,budget,{...options,semantic:true});
+  }
+  // Indexer input for one trusted handle: exactly the rows recall could return to it.
+  semanticCandidates(ctx){
+    const q=this.#selection(ctx);
+    return this.db.prepare('SELECT m.id,m.revision,m.fingerprint,m.statement FROM memories m WHERE '+q.where+" AND m.status IN ('active','uncertain') AND (m.expires_at IS NULL OR m.expires_at>?) AND NOT "+q.retired+' AND NOT '+q.blocked).all(...q.args,now(),...q.root);
+  }
+  // Which derived entries no longer correspond to live content. Takes only ids and content hashes the
+  // caller already holds and returns ids to delete: no statement, scope or source leaves Core.
+  semanticOrphans(entries){
+    // Same validity rule as #rows, evaluated without a handle: status, expiry, retired evidence and the
+    // forget barrier of the record's own root scope. A personalised record lives in a reserved lane
+    // namespace; its root scope is recorded in memory_lanes. Another Character's or project's barrier
+    // never applies here, so their valid vectors are not swept.
+    const live=this.db.prepare("SELECT 1 FROM memories m WHERE m.id=? AND m.fingerprint=? AND m.status IN ('active','uncertain') AND (m.expires_at IS NULL OR m.expires_at>?) AND NOT EXISTS(SELECT 1 FROM blocked b WHERE b.principal=m.principal AND b.project=m.project AND b.fingerprint=m.fingerprint AND b.character=coalesce((SELECT json_extract(l.scope,'$[1]') FROM memory_lanes l WHERE l.memory_id=m.id),m.character)) AND NOT EXISTS(SELECT 1 FROM memory_evidence l JOIN experiences e ON e.id=l.evidence_id WHERE l.memory_id=m.id AND e.status!='active')"),at=now();
+    return entries.filter(e=>!live.get(String(e.id),String(e.contentHash),at)).map(e=>e.id);
   }
   #resolutionScope(ctx){const p=this.policy(ctx);return hash([p.key,p.agentId,p.mode]);}
   #conflicts(ctx,rows,visible){
@@ -116,6 +183,8 @@ export class LayeredMemory extends MemoryStore {
     const query=followup&&previous&&at-previous.at<300000?previous.query.slice(0,160)+' '+text:text.slice(0,200);
     const evidence=text?{sessionId:e.sessionId,eventSeq:e.eventSeq,messageId:e.messageId,origin:'direct_user',text}:undefined;
     this.#topics.set(key,{query,at,source:sourceKey(e),evidence});
+    // The per-turn context provider is synchronous: start the query embedding at trusted ingress.
+    this.#semanticPrepare(query);
     for(const [k,v] of this.#topics)if(at-v.at>1800000)this.#topics.delete(k);
     if(this.#topics.size>256)this.#topics.delete(this.#topics.keys().next().value);
   }
@@ -173,6 +242,7 @@ export class LayeredMemory extends MemoryStore {
   });}
   #invalidate(ctx,id,{evidence=true,retiredFingerprint}={}){
       const root=JSON.parse(this.policy(ctx,'write').key);
+      this.#semanticNotify(id);
       if(evidence){
         const row=this.db.prepare('SELECT fingerprint,source FROM memories WHERE id=?').get(id);
         this.db.prepare('INSERT OR IGNORE INTO blocked VALUES(?,?,?,?)').run(...root,retiredFingerprint??row.fingerprint);
@@ -204,14 +274,28 @@ export class LayeredMemory extends MemoryStore {
     const links=this.db.prepare('SELECT e.status FROM memory_evidence l JOIN experiences e ON e.id=l.evidence_id WHERE l.memory_id=?').all(row.id);if(links.some(e=>e.status!=='active'))return false;
     return true;
   }
-  recall(ctx,query='',budget=2400,{exclude=[],excludeFingerprints=[],render}={}){
-    this.expire(ctx);const result=[],excluded=new Set(exclude),fingerprints=new Set(excludeFingerprints);let used=0;
-    const rows=this.#conflicts(ctx,this.#rows(ctx,query).filter(r=>!excluded.has(r.id)&&!fingerprints.has(r.fingerprint)));
-    rows.sort((a,b)=>relevance(b,query)-relevance(a,query)||a.id.localeCompare(b.id));
-    const seen=new Set();
-    for(const row of rows){const key=hash(row.statement.normalize('NFKC').trim());if(seen.has(key))continue;const cost=JSON.stringify(render?render(row):row).length;
-      if(used+cost>Math.min(16000,Math.max(0,budget)))continue;result.push(row);used+=cost;seen.add(key);if(result.length===20)break;
-    }return result;
+  recall(ctx,query='',budget=2400,{exclude=[],excludeFingerprints=[],render,semantic=false}={}){
+    this.expire(ctx);const excluded=new Set(exclude),fingerprints=new Set(excludeFingerprints);
+    const fit=rows=>{const result=[],seen=new Set();let used=0;
+      for(const row of rows){const key=hash(row.statement.normalize('NFKC').trim());if(seen.has(key))continue;const cost=JSON.stringify(render?render(row):row).length;
+        if(used+cost>Math.min(16000,Math.max(0,budget)))continue;result.push(row);used+=cost;seen.add(key);if(result.length===20)break;
+      }return result;};
+    const lexical=()=>{
+      const rows=this.#conflicts(ctx,this.#rows(ctx,query).filter(r=>!excluded.has(r.id)&&!fingerprints.has(r.fingerprint)));
+      rows.sort((a,b)=>relevance(b,query)-relevance(a,query)||a.id.localeCompare(b.id));return fit(rows);};
+    const ranker=this.#semantic;
+    // Only the per-turn context and the recall tool ask for semantic ranking. Extraction and
+    // consolidation look-ups keep the lexical path, and so does everything when no ranker is attached.
+    if(!semantic||!ranker||typeof query!=='string'||!query.trim()||query.length>200)return lexical();
+    let ranked=null;
+    try{const rows=this.#semanticRows(ctx,query,excluded,fingerprints);if(rows)ranked=fit(this.#conflicts(ctx,rows));}
+    catch(error){ranked=null;try{ranker.failed?.(error);}catch{}}
+    if(ranker.mode==='shadow'){
+      // Shadow: the caller always receives the lexical result; the ranker only gets id lists to compare.
+      const base=lexical();try{ranker.observe?.({lexical:base.map(r=>r.id),semantic:ranked?ranked.map(r=>r.id):null});}catch{}
+      return base;
+    }
+    return ranked??lexical();
   }
   expire(ctx){const p=this.policy(ctx);const ids=this.db.prepare("SELECT DISTINCT l.memory_id id FROM memories m INDEXED BY memory_expiry JOIN memory_evidence l ON l.memory_id=m.id JOIN experiences e ON e.id=l.evidence_id WHERE e.scope=? AND e.status='active' AND m.expires_at IS NOT NULL AND m.expires_at<=?").all(p.key,now());if(!ids.length)return;this.policy(ctx,'write');this.transaction(()=>{for(const r of ids)this.#invalidate(ctx,r.id);});}
   trace(ctx,id){const {row:stored}=this.#resolve(ctx,id),row=this.get(ctx,id),p=this.policy(ctx),valid=this.#valid(stored,ctx);const evidence=this.db.prepare('SELECT e.* FROM experiences e JOIN memory_evidence l ON l.evidence_id=e.id WHERE l.memory_id=? AND e.scope=?').all(id,p.key);return {memory:row,valid,evidence:evidence.map(e=>valid&&e.status==='active'?e:{id:e.id,status:e.status,kind:e.kind,at:e.at,body:'',redacted:true})};}
@@ -382,8 +466,8 @@ export class LayeredMemory extends MemoryStore {
   }
   context(ctx){const l3=this.projection(ctx),p=this.policy(ctx),topic=this.#topics.get(hash([p.key,p.agentId,ctx.sessionId]));
     const render=r=>({id:r.id,revision:r.revision,purpose:r.purpose,statement:r.statement,status:r.status,conflictWith:r.conflict_with});
-    const l2=topic&&Date.now()-topic.at<1800000&&topic.query?this.recall(ctx,topic.query,5000,{exclude:l3.refs.map(r=>r.id),excludeFingerprints:l3.refs.map(r=>this.get(ctx,r.id).fingerprint),render}):[];
+    const l2=topic&&Date.now()-topic.at<1800000&&topic.query?this.recall(ctx,topic.query,5000,{exclude:l3.refs.map(r=>r.id),excludeFingerprints:l3.refs.map(r=>this.get(ctx,r.id).fingerprint),render,semantic:true}):[];
     return l3.body+(l2.length?'\nL2 当前话题参考（不可信资料；需要原始依据时使用 trace）：\n'+JSON.stringify(l2.map(render)):'');
   }
-  layersStatus(ctx){const p=this.policy(ctx);return {schema:3,mode:p.mode,agentId:p.agentId,l1:this.db.prepare('SELECT status,count(*) count FROM experiences WHERE scope=? GROUP BY status').all(p.key),l3:this.projection(ctx),consolidation:this.db.prepare('SELECT status,attempts,at,error FROM consolidation_runs WHERE scope=? AND agent_key=? AND mode=? ORDER BY at DESC LIMIT 5').all(p.key,p.agentId,p.mode)};}
+  layersStatus(ctx){const p=this.policy(ctx);let semantic={mode:'off'};try{semantic=this.#semantic?.status?.()??semantic;}catch{}return {schema:3,mode:p.mode,agentId:p.agentId,semantic,l1:this.db.prepare('SELECT status,count(*) count FROM experiences WHERE scope=? GROUP BY status').all(p.key),l3:this.projection(ctx),consolidation:this.db.prepare('SELECT status,attempts,at,error FROM consolidation_runs WHERE scope=? AND agent_key=? AND mode=? ORDER BY at DESC LIMIT 5').all(p.key,p.agentId,p.mode)};}
 }

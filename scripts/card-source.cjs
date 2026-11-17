@@ -11,7 +11,7 @@ const RULES_KEYS = ['systemFile', 'reminderFile'];
 // Every key a build config may hold (card-source and build-settings). Any
 // other key fails: a misspelled cardPath or rules would otherwise be ignored
 // and the build would quietly ship a different character or no rules.
-const CONFIG_KEYS = ['characterId', 'cardPath', 'rules', 'userName', 'presetId', 'dataDirectory', 'interaction', 'specialistWorkers', 'communityWorkerPresets', 'roles'];
+const CONFIG_KEYS = ['characterId', 'cardPath', 'rules', 'userName', 'presetId', 'dataDirectory', 'interaction', 'specialistWorkers', 'communityWorkerPresets', 'roles', 'semanticRecall'];
 // Spellings that have a dedicated message.
 const RENAMED_KEYS = {
   card: 'Unknown build config key "card": use cardPath',

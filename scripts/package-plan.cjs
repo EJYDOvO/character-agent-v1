@@ -1,5 +1,5 @@
 const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto'),assert=require('node:assert/strict');
-const folders=['packages/character-identity','packages/character-memory-core','packages/character-memory-tools','packages/character-qq-adapter','packages/interaction-policy','packages/memory-inspector','packages/long-tasks','bundles/character-core','bundles/character-extras'];
+const folders=['packages/character-identity','packages/character-memory-core','packages/character-memory-tools','packages/character-qq-adapter','packages/interaction-policy','packages/memory-inspector','packages/long-tasks','packages/memory-semantic','bundles/character-core','bundles/character-extras'];
 const hash=file=>crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 const requiredFolders=folders.filter(f=>!['packages/interaction-policy','packages/memory-inspector','packages/long-tasks','bundles/character-extras'].includes(f));
 function inventory(project,selected=folders){return selected.map(folder=>{assert(folders.includes(folder),'Unknown package');const pkg=JSON.parse(fs.readFileSync(path.join(project,folder,'package.json'))),filename=pkg.name+'-'+pkg.version+'.tgz',file=path.join(project,'artifacts/packages',filename);return {folder,name:pkg.name,version:pkg.version,filename,sha256:hash(file)};});}

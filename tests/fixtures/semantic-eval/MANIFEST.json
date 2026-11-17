@@ -1,0 +1,10 @@
+{
+ "source": "EJYDOvO/character-agent-v1 PR #26, commit 463c2aeb0eb89d4ad6a44778ef8f9b162bf206ca, evaluation/retrieval-d/dataset/",
+ "copiedUnchanged": true,
+ "sha256": {
+  "corpus.mjs": "b3c6b93072ca06c3726f5176d1139546205edf4bc04d79f4022aa0df46659544",
+  "queries.mjs": "34213f7d71f66fed064b4a111102e91b1a1a8e84e08f3cf18132c33d0ed4a896",
+  "stress-ids.mjs": "da994414adebde978a6aeea38f86be875682e2aff8c11e6a57b7c93430a506de",
+  "FREEZE.json": "75826b223f01e26bd06af008bd407dae70aa14f0bc05149689a58d6dcdfcffad"
+ }
+}

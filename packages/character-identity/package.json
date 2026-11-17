@@ -1,6 +1,6 @@
 {
   "name": "dsh-character-identity",
-  "version": "0.1.0-test.37",
+  "version": "0.1.0-test.40",
   "private": true,
   "type": "module",
   "main": "index.mjs",

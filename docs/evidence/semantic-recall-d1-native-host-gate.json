@@ -1,0 +1,521 @@
+[
+ {
+  "ok": true,
+  "phase": "active",
+  "runId": "0b9b7c44-51f1-45ac-ae60-8ddb41d80e5d",
+  "host": "0.2.2-rc.1",
+  "runtime": "v24.21.0",
+  "electron": "44.7.0",
+  "provenance": {
+   "baseSha": "d2b22612e58aee77f2171a67503d5bd082d40dc8",
+   "workingTreeDirty": false,
+   "codeSha256": "2c2db60224d5677d188f811f4a806e2c725dd4813c03aff736de2442a03c13af",
+   "node": "v24.13.0"
+  },
+  "declaredMode": "active",
+  "model": "deterministic chat fixture; real embedding worker",
+  "ingress": "Character Identity capture (QQ session manager fixture)",
+  "synthetic": true,
+  "productionRead": false,
+  "qqNetwork": false,
+  "checks": [
+   "Character preset with card Persona, Character Identity and Memory loaded; 62 synthetic memories present",
+   "Declared default row is active; the real worker indexed every valid record",
+   "Character ingress followed immediately by the message: 20/20 first contexts semantic",
+   "Character tools: semantic recall, identifier first, unrelated empty; correct returns only new text; forget deletes the vector",
+   "Unbound preset and forged handle refused before any ranking",
+   "Killed worker: counted FTS5 fallback, new worker, recovery"
+  ],
+  "metrics": {
+   "indexBuild": {
+    "records": 62,
+    "seconds": 7.5,
+    "workerLoadMs": 2860
+   },
+   "coldWorker": {
+    "semanticInFirstContext": false,
+    "notReady": 2,
+    "contextWaits": 0,
+    "ingressToFirstRequestMs": 236.3
+   },
+   "restartTrace": [
+    [
+     1,
+     "starting",
+     2,
+     0,
+     1,
+     0,
+     0,
+     1
+    ],
+    [
+     1645,
+     "starting",
+     2,
+     0,
+     1,
+     0,
+     0,
+     1
+    ]
+   ],
+   "warmTurns": [
+    {
+     "semantic": true,
+     "notReady": 0,
+     "waits": 0,
+     "recovered": 0,
+     "skipped": 0,
+     "worker": "ready",
+     "ms": 126
+    },
+    {
+     "semantic": true,
+     "notReady": 1,
+     "waits": 0,
+     "recovered": 0,
+     "skipped": 0,
+     "worker": "ready",
+     "ms": 109
+    },
+    {
+     "semantic": true,
+     "notReady": 1,
+     "waits": 0,
+     "recovered": 0,
+     "skipped": 0,
+     "worker": "ready",
+     "ms": 115
+    },
+    {
+     "semantic": true,
+     "notReady": 1,
+     "waits": 0,
+     "recovered": 0,
+     "skipped": 0,
+     "worker": "ready",
+     "ms": 106
+    },
+    {
+     "semantic": true,
+     "notReady": 1,
+     "waits": 0,
+     "recovered": 0,
+     "skipped": 0,
+     "worker": "ready",
+     "ms": 109
+    },
+    {
+     "semantic": true,
+     "notReady": 1,
+     "waits": 0,
+     "recovered": 0,
+     "skipped": 0,
+     "worker": "ready",
+     "ms": 123
+    },
+    {
+     "semantic": true,
+     "notReady": 1,
+     "waits": 0,
+     "recovered": 0,
+     "skipped": 0,
+     "worker": "ready",
+     "ms": 105
+    },
+    {
+     "semantic": true,
+     "notReady": 1,
+     "waits": 0,
+     "recovered": 0,
+     "skipped": 0,
+     "worker": "ready",
+     "ms": 108
+    },
+    {
+     "semantic": true,
+     "notReady": 1,
+     "waits": 0,
+     "recovered": 0,
+     "skipped": 0,
+     "worker": "ready",
+     "ms": 108
+    },
+    {
+     "semantic": true,
+     "notReady": 1,
+     "waits": 0,
+     "recovered": 0,
+     "skipped": 0,
+     "worker": "ready",
+     "ms": 104
+    },
+    {
+     "semantic": true,
+     "notReady": 1,
+     "waits": 0,
+     "recovered": 0,
+     "skipped": 0,
+     "worker": "ready",
+     "ms": 103
+    },
+    {
+     "semantic": true,
+     "notReady": 1,
+     "waits": 0,
+     "recovered": 0,
+     "skipped": 0,
+     "worker": "ready",
+     "ms": 109
+    },
+    {
+     "semantic": true,
+     "notReady": 1,
+     "waits": 0,
+     "recovered": 0,
+     "skipped": 0,
+     "worker": "ready",
+     "ms": 102
+    },
+    {
+     "semantic": true,
+     "notReady": 1,
+     "waits": 0,
+     "recovered": 0,
+     "skipped": 0,
+     "worker": "ready",
+     "ms": 98
+    },
+    {
+     "semantic": true,
+     "notReady": 1,
+     "waits": 0,
+     "recovered": 0,
+     "skipped": 0,
+     "worker": "ready",
+     "ms": 106
+    },
+    {
+     "semantic": true,
+     "notReady": 1,
+     "waits": 0,
+     "recovered": 0,
+     "skipped": 0,
+     "worker": "ready",
+     "ms": 106
+    },
+    {
+     "semantic": true,
+     "notReady": 1,
+     "waits": 0,
+     "recovered": 0,
+     "skipped": 0,
+     "worker": "ready",
+     "ms": 100
+    },
+    {
+     "semantic": true,
+     "notReady": 1,
+     "waits": 0,
+     "recovered": 0,
+     "skipped": 0,
+     "worker": "ready",
+     "ms": 104
+    },
+    {
+     "semantic": true,
+     "notReady": 1,
+     "waits": 0,
+     "recovered": 0,
+     "skipped": 0,
+     "worker": "ready",
+     "ms": 97
+    },
+    {
+     "semantic": true,
+     "notReady": 1,
+     "waits": 0,
+     "recovered": 0,
+     "skipped": 0,
+     "worker": "ready",
+     "ms": 103
+    }
+   ],
+   "workerAfterWarmUp": "ready",
+   "firstContext": {
+    "turns": 20,
+    "semanticInFirstContext": 20,
+    "ratio": 1,
+    "fellBackToFts5": 0,
+    "vectorNotReadyAtSyncResolve": 0,
+    "recoveredByBoundedWait": 0,
+    "notReadyCounted": 19,
+    "ingressToFirstRequestP50Ms": 105.7,
+    "ingressToFirstRequestP95Ms": 125.6,
+    "turnP50Ms": 393.8,
+    "turnP95Ms": 411.5
+   },
+   "timeline": [
+    {
+     "firstRequestAt": 106,
+     "events": [
+      {
+       "at": 63.6,
+       "what": "context()",
+       "semantic": false
+      },
+      {
+       "at": 66,
+       "what": "assemble-hook",
+       "waitedMs": 0.1,
+       "recompute": false
+      },
+      {
+       "at": 100,
+       "what": "context()",
+       "semantic": true
+      }
+     ]
+    },
+    {
+     "firstRequestAt": 102.4,
+     "events": [
+      {
+       "at": 63.7,
+       "what": "context()",
+       "semantic": false
+      },
+      {
+       "at": 65.5,
+       "what": "assemble-hook",
+       "waitedMs": 0,
+       "recompute": false
+      },
+      {
+       "at": 97.2,
+       "what": "context()",
+       "semantic": true
+      }
+     ]
+    },
+    {
+     "firstRequestAt": 104,
+     "events": [
+      {
+       "at": 65.2,
+       "what": "context()",
+       "semantic": false
+      },
+      {
+       "at": 67,
+       "what": "assemble-hook",
+       "waitedMs": 0,
+       "recompute": false
+      },
+      {
+       "at": 99,
+       "what": "context()",
+       "semantic": true
+      }
+     ]
+    }
+   ],
+   "withoutBoundedWait": {
+    "turns": 20,
+    "semanticInFirstContext": 20
+   },
+   "resources": {
+    "hostRssMB": 275,
+    "hostCpuMs": 7172,
+    "wallSeconds": 33.2,
+    "worker": {
+     "starts": 3,
+     "startFailures": 0,
+     "exits": 2,
+     "requestTimeouts": 0,
+     "loadMs": 1792,
+     "rssMB": 1090,
+     "cpuMs": 26889,
+     "retriedAfterExit": 2,
+     "state": "ready",
+     "pid": 5392
+    },
+    "counters": {
+     "contextWaits": 1,
+     "contextRecovered": 0,
+     "contextWaitSkipped": 4,
+     "prepared": 53,
+     "prepareTimeouts": 5,
+     "prepareErrors": 0,
+     "breakerSkips": 0,
+     "ranked": 53,
+     "notReady": 54,
+     "lowCoverage": 0,
+     "empty": 2,
+     "errors": 0,
+     "invalidated": 2,
+     "invalidateErrors": 0
+    },
+    "indexer": {
+     "indexed": 63,
+     "removed": 0,
+     "cycles": 8,
+     "deferred": 62,
+     "recreated": false,
+     "lastError": null
+    }
+   }
+  },
+  "status": "PASS"
+ },
+ {
+  "ok": true,
+  "phase": "shadow",
+  "runId": "0b9b7c44-51f1-45ac-ae60-8ddb41d80e5d",
+  "host": "0.2.2-rc.1",
+  "runtime": "v24.21.0",
+  "electron": "44.7.0",
+  "provenance": {
+   "baseSha": "d2b22612e58aee77f2171a67503d5bd082d40dc8",
+   "workingTreeDirty": false,
+   "codeSha256": "2c2db60224d5677d188f811f4a806e2c725dd4813c03aff736de2442a03c13af",
+   "node": "v24.13.0"
+  },
+  "declaredMode": "shadow",
+  "model": "deterministic chat fixture; real embedding worker",
+  "ingress": "Character Identity capture (QQ session manager fixture)",
+  "synthetic": true,
+  "productionRead": false,
+  "qqNetwork": false,
+  "checks": [
+   "Character preset with card Persona, Character Identity and Memory loaded; 62 synthetic memories present",
+   "Restart in shadow with a corrupted sidecar: recreated and rebuilt; contexts and recall identical to FTS5"
+  ],
+  "metrics": {
+   "shadow": {
+    "compared": 41,
+    "semanticUnavailable": 10,
+    "meanOverlapAt5": 0.116,
+    "meanLexicalRows": 4.9,
+    "meanSemanticRows": 3.1,
+    "turnP50Ms": 408.9,
+    "turnP95Ms": 435.8
+   },
+   "resources": {
+    "hostRssMB": 259,
+    "hostCpuMs": 2219,
+    "wallSeconds": 11.8,
+    "worker": {
+     "starts": 1,
+     "startFailures": 0,
+     "exits": 0,
+     "requestTimeouts": 0,
+     "loadMs": 2820,
+     "rssMB": 1368,
+     "cpuMs": 14562,
+     "state": "ready",
+     "pid": 30056
+    },
+    "counters": {
+     "contextWaits": 1,
+     "contextRecovered": 1,
+     "contextWaitSkipped": 0,
+     "prepared": 20,
+     "prepareTimeouts": 0,
+     "prepareErrors": 0,
+     "breakerSkips": 0,
+     "ranked": 31,
+     "notReady": 10,
+     "lowCoverage": 0,
+     "empty": 0,
+     "errors": 0,
+     "invalidated": 0,
+     "invalidateErrors": 0
+    },
+    "indexer": {
+     "indexed": 61,
+     "removed": 0,
+     "cycles": 7,
+     "deferred": 11,
+     "recreated": true,
+     "lastError": null
+    }
+   }
+  },
+  "status": "PASS"
+ },
+ {
+  "ok": true,
+  "phase": "off",
+  "runId": "0b9b7c44-51f1-45ac-ae60-8ddb41d80e5d",
+  "host": "0.2.2-rc.1",
+  "runtime": "v24.21.0",
+  "electron": "44.7.0",
+  "provenance": {
+   "baseSha": "d2b22612e58aee77f2171a67503d5bd082d40dc8",
+   "workingTreeDirty": false,
+   "codeSha256": "2c2db60224d5677d188f811f4a806e2c725dd4813c03aff736de2442a03c13af",
+   "node": "v24.13.0"
+  },
+  "declaredMode": "off",
+  "model": "deterministic chat fixture; real embedding worker",
+  "ingress": "Character Identity capture (QQ session manager fixture)",
+  "synthetic": true,
+  "productionRead": false,
+  "qqNetwork": false,
+  "checks": [
+   "Character preset with card Persona, Character Identity and Memory loaded; 62 synthetic memories present",
+   "Restart with mode off: no ranker, no worker; original FTS5 behaviour; derived index left untouched"
+  ],
+  "metrics": {
+   "off": {
+    "turnP50Ms": 373.6,
+    "turnP95Ms": 405.4,
+    "indexFileKept": true
+   },
+   "resources": {
+    "hostRssMB": 261,
+    "hostCpuMs": 1469,
+    "wallSeconds": 3.9
+   }
+  },
+  "status": "PASS"
+ },
+ {
+  "ok": true,
+  "phase": "unavailable",
+  "runId": "0b9b7c44-51f1-45ac-ae60-8ddb41d80e5d",
+  "host": "0.2.2-rc.1",
+  "runtime": "v24.21.0",
+  "electron": "44.7.0",
+  "provenance": {
+   "baseSha": "d2b22612e58aee77f2171a67503d5bd082d40dc8",
+   "workingTreeDirty": false,
+   "codeSha256": "2c2db60224d5677d188f811f4a806e2c725dd4813c03aff736de2442a03c13af",
+   "node": "v24.13.0"
+  },
+  "declaredMode": "active",
+  "model": "deterministic chat fixture; real embedding worker",
+  "ingress": "Character Identity capture (QQ session manager fixture)",
+  "synthetic": true,
+  "productionRead": false,
+  "qqNetwork": false,
+  "checks": [
+   "Character preset with card Persona, Character Identity and Memory loaded; 62 synthetic memories present",
+   "Default row on a machine without the model: Host and Memory start, FTS5 results, status reports unavailable with the reason"
+  ],
+  "metrics": {
+   "unavailable": {
+    "reason": "Embedding runtime is not provisioned",
+    "turnP50Ms": 372
+   },
+   "resources": {
+    "hostRssMB": 259,
+    "hostCpuMs": 845,
+    "wallSeconds": 2
+   }
+  },
+  "status": "PASS"
+ }
+]

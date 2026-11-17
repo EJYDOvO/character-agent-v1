@@ -1,0 +1,148 @@
+{
+ "generatedAt": "2026-11-17T05:25:32.514Z",
+ "node": "v24.13.0",
+ "cpu": "AMD Ryzen 9 6900HX with Radeon Graphics",
+ "threads": 16,
+ "platform": "win32 x64",
+ "main": {
+  "validRecords": 473,
+  "productionRecall": {
+   "keyword": {
+    "p50Ms": 0.966,
+    "p95Ms": 9.532,
+    "n": 180
+   },
+   "message": {
+    "p50Ms": 17.557,
+    "p95Ms": 62.569,
+    "n": 780
+   }
+  },
+  "ftsCandidatesPerQuery": {
+   "keyword": 17,
+   "message": 131.5
+  },
+  "validSetEnumerationViaBrowse": {
+   "p50Ms": 15.299,
+   "p95Ms": 21.574,
+   "n": 20
+  },
+  "ftsRankGivenValidSet": {
+   "p50Ms": 1.905,
+   "p95Ms": 6.335,
+   "n": 960
+  },
+  "denseScan": {
+   "embeddinggemma-q8": {
+    "dim": 768,
+    "p50Ms": 0.478,
+    "p95Ms": 0.868,
+    "n": 960,
+    "indexBytes": 2215936,
+    "vectors": 523,
+    "bytesPerVector": 4237
+   },
+   "bge-m3-q8": {
+    "dim": 1024,
+    "p50Ms": 0.588,
+    "p95Ms": 0.755,
+    "n": 960,
+    "indexBytes": 2469888,
+    "vectors": 523,
+    "bytesPerVector": 4723
+   },
+   "me5-small-q8": {
+    "dim": 384,
+    "p50Ms": 0.294,
+    "p95Ms": 0.474,
+    "n": 960,
+    "indexBytes": 1134592,
+    "vectors": 523,
+    "bytesPerVector": 2169
+   }
+  },
+  "fusionAndBudget": {
+   "p50Ms": 2.495,
+   "p95Ms": 6.791,
+   "n": 960
+  },
+  "cpuMsForAllOfTheAbove": 28000,
+  "memoryDatabaseBytes": 5918920
+ },
+ "crossEncoder": {
+  "model": "onnx-community/bge-reranker-v2-m3-ONNX@6f5ff6529851:q8",
+  "pairsPerQuery": 20,
+  "loadMs": 2061,
+  "p50Ms": 639.07,
+  "p95Ms": 750.97,
+  "n": 8,
+  "peakRssMB": 1207
+ },
+ "scale": [
+  {
+   "validRecords": 2173,
+   "fixtureBuildMs": 20861,
+   "productionRecall": {
+    "keyword": {
+     "p50Ms": 1.042,
+     "p95Ms": 51.918,
+     "n": 72
+    },
+    "message": {
+     "p50Ms": 91.739,
+     "p95Ms": 377.983,
+     "n": 312
+    }
+   },
+   "ftsCandidatesPerQuery": {
+    "keyword": 61.8,
+    "message": 562.5
+   },
+   "validSetEnumerationViaBrowse": {
+    "p50Ms": 104.353,
+    "p95Ms": 130.355,
+    "n": 3
+   },
+   "exactScan768d": {
+    "vectors": 2173,
+    "p50Ms": 2.392,
+    "p95Ms": 7.016,
+    "n": 120,
+    "note": "tiled real vectors; latency only"
+   }
+  },
+  {
+   "validRecords": 10173,
+   "fixtureBuildMs": 423562,
+   "productionRecall": {
+    "keyword": {
+     "p50Ms": 1.666,
+     "p95Ms": 313.456,
+     "n": 72
+    },
+    "message": {
+     "p50Ms": 538.524,
+     "p95Ms": 2119.186,
+     "n": 312
+    }
+   },
+   "ftsCandidatesPerQuery": {
+    "keyword": 267.6,
+    "message": 2585.4
+   },
+   "validSetEnumerationViaBrowse": {
+    "p50Ms": 2370.27,
+    "p95Ms": 2512.356,
+    "n": 3
+   },
+   "exactScan768d": {
+    "vectors": 10173,
+    "p50Ms": 16.532,
+    "p95Ms": 23.743,
+    "n": 120,
+    "note": "tiled real vectors; latency only"
+   }
+  }
+ ],
+ "peakRssMB": 1671
+}

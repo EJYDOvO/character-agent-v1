@@ -6,7 +6,7 @@
 
 | 范围 | 状态 |
 |---|---|
-| Character | 0.1.0-test.37（角色卡 V3 第一期，含可选角色模式），Long Tasks 0.1.0-test.6，Interaction 0.1.0-test.10 |
+| Character | 0.1.0-test.40（角色卡 V3 第一期、默认开启的语义检索，含可选角色模式），Semantic Recall 0.1.0-test.1，Long Tasks 0.1.0-test.6，Interaction 0.1.0-test.10 |
 | 配套 QQTK | I/O test.9、Manager test.5、Remote Ops 1.1.1-test.3、QQ0.5.2 / SDK1.0.5 |
 | 官方宿主目标 | DSH 0.2.2-rc.1 / Node 24 / Windows；源码不再支持 0.2.1 Schedule API |
 
@@ -41,7 +41,7 @@
 
 已知非阻断事项：未证明归属的提醒到期后，原生 Schedule 每次 drive 请求都会重试冷恢复目标，并被 Identity 拒绝（隔离 lifecycle 中每次运行约 20 次，每次 15–55 ms，无执行、无投递），只造成重复开销与警告日志；Home 位于 git 仓库内时，DSH workspace-changes 启动的 git（`add`、`rev-parse`）在宿主停止后可能成为孤儿并长时间不退出，原因未查明，隔离 Home 后不再触发。
 
-尚未实现/本轮不扩展：跨平台账号关联、多用户/群聊、完整 Approval Router、向量检索、细粒度任务 grants、旧 Task Memory 正式导入。后续工作优先现有安全回归及实机验收，然后真实 Worker/Memory/Long Tasks 质量评估；不把路线图视为已交付。
+尚未实现/本轮不扩展：跨平台账号关联、多用户/群聊、完整 Approval Router、L1 全历史语义检索、细粒度任务 grants、旧 Task Memory 正式导入。后续工作优先现有安全回归及实机验收，然后真实 Worker/Memory/Long Tasks 质量评估；不把路线图视为已交付。
 
 ## 历史验收记录（不代表当前验证）
 

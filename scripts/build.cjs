@@ -34,6 +34,7 @@ async function main(){
  if(settings.roles){const {rolePresets}=await import('../packages/character-definition/role-presets.mjs');presets=rolePresets({owner:character,publicPersona:fs.readFileSync(settings.roles.publicPersonaFile,'utf8').replace(/^\uFEFF/,'').trim(),legacyOwner:settings.roles.legacyOwnerPreset});}
  const host=[{id:'agent-io',name:'dsh-agent-io',config:{}},{id:'conversation-manager',name:'dsh-conversation-manager',config:{stateFile:settings.dataDirectory+'/conversations.json'}},...(roleHost?[{id:'identity-access',name:'dsh-identity-access',config:roleHost.identityAccess}]:[]),{id:'character-identity',name:'dsh-character-identity',config:{presetId:settings.presetId,bindingFile:settings.dataDirectory+'/binding.json',stateFile:settings.dataDirectory+'/coordination.sqlite',...roleHost?.characterIdentity}},
  {id:'character-memory-core',name:'dsh-character-memory-core',config:{database:settings.dataDirectory+'/memory.sqlite',autoCapture:true}},
+ require('./semantic-settings.cjs').semanticRow(settings.semanticRecall),
  {id:'qq-remote-ops',name:'dsh-remote-ops-local',config:{root:install.replaceAll('\\','/')}},
  {id:'im-qqbot',name:'dsh-character-qq-adapter',config:{preset:settings.presetId,access:{c2cMode:'allowlist',c2cAllow:[],groupMode:'disabled',groupAllow:[]},...roleHost?.qq}},...workerIds.filter(id=>!externalIds.has(id)).map(workerPreset),...presets];
  write('bundles/character-core/cordis.patch.yml',dump([{insert:host}]));

@@ -1,0 +1,52 @@
+{
+ "frozenAt": "2026-11-17T00:20:13.554Z",
+ "corpusVersion": 1,
+ "queriesVersion": 1,
+ "records": 237,
+ "recordsByScope": {
+  "S0": 187,
+  "S1": 22,
+  "S2": 14,
+  "S3": 14
+ },
+ "lifecycle": {
+  "corrected": 9,
+  "forgotten": 8,
+  "expired": 6,
+  "conflictKeys": 2
+ },
+ "queries": {
+  "dev": 100,
+  "heldout": 100
+ },
+ "categories": {
+  "dev/exact": 12,
+  "dev/syn-zh": 10,
+  "dev/syn-en": 8,
+  "dev/xling": 12,
+  "dev/semantic": 10,
+  "dev/hardneg": 10,
+  "dev/temporal": 8,
+  "dev/acl": 8,
+  "dev/lifecycle": 8,
+  "dev/long-noise": 7,
+  "dev/none": 7,
+  "heldout/exact": 12,
+  "heldout/syn-zh": 10,
+  "heldout/syn-en": 8,
+  "heldout/xling": 12,
+  "heldout/semantic": 10,
+  "heldout/hardneg": 10,
+  "heldout/temporal": 8,
+  "heldout/acl": 8,
+  "heldout/lifecycle": 8,
+  "heldout/long-noise": 7,
+  "heldout/none": 7
+ },
+ "sha256": {
+  "corpus": "269c9f4f3620dbe7fe5bf6adea514b21cbbda782e10e10c78ee7dfd9c6f39b13",
+  "distractors300": "98e365f28696a6538256e8f771c5471d9f16f8f87f61a99258943c30c606ae3b",
+  "dev": "eb76068b8a37de82083992abb43b1eac1482597bce1e942f7dd19392848cbdbe",
+  "heldout": "0bec8335126232bf6132378cd8d077f32ff39b4b7339d6be57a1bbe07645fc41"
+ }
+}

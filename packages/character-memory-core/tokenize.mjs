@@ -56,6 +56,35 @@ export function tokenizeText(input) {
   return tokens;
 }
 
+/**
+ * Selective query terms: whole Latin/digit words and CJK bigrams. A single CJK
+ * character is kept only when it is a run of its own. Unlike tokenizeText this
+ * never matches a record on one shared character of a longer run.
+ */
+export function selectiveTokens(input) {
+  const chars = Array.from(input);
+  const tokens = [];
+  let i = 0;
+  while (i < chars.length) {
+    const c = chars[i];
+    if (LATIN.test(c)) {
+      let j = i + 1;
+      while (j < chars.length && LATIN.test(chars[j])) j++;
+      tokens.push(chars.slice(i, j).join("").toLowerCase());
+      i = j;
+    } else if (CJK.test(c)) {
+      let j = i + 1;
+      while (j < chars.length && CJK.test(chars[j])) j++;
+      if (j - i === 1) tokens.push(c);
+      for (let k = i; k + 1 < j; k++) tokens.push(chars[k] + chars[k + 1]);
+      i = j;
+    } else {
+      i++;
+    }
+  }
+  return tokens;
+}
+
 /** The frozen seam implementation. */
 export const tokenize = tokenizeText;
 
