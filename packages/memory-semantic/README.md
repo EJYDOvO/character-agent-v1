@@ -1,6 +1,6 @@
 # dsh-memory-semantic
 
-Optional semantic recall for the layered Memory Core. Off unless a Profile declares it; with `mode: off` it attaches nothing.
+Semantic recall for the layered Memory Core.
 
 - `index.mjs` — plugin entry (`attach` is usable without a Host)
 - `ranker.mjs` — query-vector cache, ranking, shadow statistics, circuit breaker
@@ -9,4 +9,4 @@ Optional semantic recall for the layered Memory Core. Off unless a Profile decla
 - `models.mjs` — pinned model, file hashes and its similarity floor
 - `provision.mjs` — operator tool that installs the runtime and downloads/verifies the model
 
-Architecture, configuration, test results and remaining risks: `docs/SEMANTIC-RECALL.md`.
+Declared by the Character Core bundle and active by default; without a provisioned model it reports `unavailable` and Memory runs on FTS5. Architecture, configuration, test results and remaining risks: `docs/SEMANTIC-RECALL.md`.
