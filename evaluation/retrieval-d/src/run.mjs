@@ -175,7 +175,7 @@ const meta={split,generatedAt:new Date().toISOString(),codeSha:git('rev-parse','
  budgets:{candidatesPerRetriever:CANDIDATES,output:OUTPUT,rerankDepth:RERANK_DEPTH},params:P,
  models:{dense:Object.fromEntries(Object.entries(E.embedders).map(([k,v])=>[k,v.modelVersion])),reranker:rerank.modelVersion,expansionLLM:E.queryExpansion?.model??null,lexicon:loadLexicon()?{groups:loadLexicon().groups.length,sha256:sha(JSON.stringify(loadLexicon().groups))}:null},
  baselineEquivalence:equivalence,synthetic:true,productionRead:false};
-fs.writeFileSync(`${resultsDir}${split}.json`,JSON.stringify({meta,abstention,arms:out,stress:stressOut},null,1)+'\n');
+fs.writeFileSync(`${resultsDir}${split}.json`,JSON.stringify({meta,abstention,arms:out,stress:stressOut})+'\n');
 
 const f=x=>x===null||x===undefined?'  -  ':x.toFixed(3);
 console.log(`split=${split} queries=${set.length} stress=${stress.length} baseline-equivalence=${equivalence.identical}/${equivalence.checked}`);
