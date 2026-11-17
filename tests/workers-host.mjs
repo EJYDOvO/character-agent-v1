@@ -82,6 +82,7 @@ export function apply(ctx,config){
    manager.commit({sessionId:root.id,agent:root,agentPreset:'qq-character',scope:'c2c',peerId:'mock-owner',senderId:'mock-owner'});await manager.getOrCreate('c2c','mock-owner','mock-owner',{scope:'c2c',targetId:'mock-owner'});
    assert.equal(ctx.tools.checkGuards({agent:root}),undefined);
    root.followup(createUserMessage({content:[{type:'text',text:'Root policy fixture'}],source:{kind:'fixture'}}));await root.whenIdle();assert(bySession.get(root.id)?.system.includes('Worker V2：你是唯一'));
+   assert(config.reminder&&bySession.get(root.id).messages.includes(config.reminder),'The Character style reminder reaches the Root request');
    const trusted=ctx.memoryIdentity.forSession(root.id),spawn=ctx.tools.get('subagent',root),exec={agent:root,signal:AbortSignal.timeout(35000)};
    for(const preset of ['cordis','worker-unlisted','long-task','external-planner','root-admin'])await assert.rejects(()=>spawn.execute({description:'Reject untrusted preset or alias',prompt:'analyze',agent_preset:preset},exec),/agent_preset/);
    assert(bySession.get(root.id).system.includes('agent_preset 必须传'));
