@@ -10,7 +10,7 @@ import {MANIFEST,RUNTIME} from './models.mjs';
 // stopped after `idleUnloadMs` without requests (the model then costs no memory), restarted on demand.
 // It runs below normal priority, so embedding never competes with the Host for a busy CPU.
 export class SubprocessProvider{
- #child=null;#ready=null;#pending=new Map();#seq=0;#idle=null;#verified=false;#closed=false;#state='stopped';#retryAt=0;#backoff=0;
+ #child=null;#ready=null;#drop=null;#pending=new Map();#seq=0;#idle=null;#verified=false;#closed=false;#state='stopped';#retryAt=0;#backoff=0;
  constructor({runtimeDir,modelDir,model,threads=2,idleUnloadMs=1800000,startTimeoutMs=60000,requestTimeoutMs=30000,restartBackoffMs=5000,maxRestartBackoffMs=300000,execPath=process.execPath,worker=fileURLToPath(new URL('./worker.mjs',import.meta.url))}){
   for(const [name,dir]of [['runtimeDir',runtimeDir],['modelDir',modelDir]])if(typeof dir!=='string'||!path.isAbsolute(dir))throw Error(name+' must be an absolute path');
   if(!fs.existsSync(path.join(runtimeDir,'package.json')))throw Error('Embedding runtime is not provisioned');
@@ -39,8 +39,9 @@ export class SubprocessProvider{
   const drop=reason=>{
    if(this.#child!==child)return;this.#child=null;this.#ready=null;this.#state=this.#closed?'closed':'stopped';clearTimeout(this.#idle);
    this.stats.exits++;this.stats.cpuMsEarlierWorkers+=this.stats.cpuMs;this.stats.cpuMs=0;this.stats.rssMB=null;
-   for(const [,p]of this.#pending){clearTimeout(p.timer);p.reject(Error(reason));}this.#pending.clear();
+   for(const [,p]of this.#pending){clearTimeout(p.timer);p.reject(Object.assign(Error(reason),{workerGone:true}));}this.#pending.clear();
   };
+  this.#drop=drop;
   let started=false;
   this.#ready=new Promise((resolve,reject)=>{
    const timer=setTimeout(()=>{reject(Error('Embedding worker start timeout'));try{child.kill();}catch{}},this.startTimeoutMs);
@@ -59,15 +60,30 @@ export class SubprocessProvider{
   return this.#ready;
  }
  #touch(){clearTimeout(this.#idle);if(this.idleUnloadMs>0){this.#idle=setTimeout(()=>{if(!this.#pending.size)this.stop();else this.#touch();},this.idleUnloadMs);this.#idle.unref?.();}}
+ // A worker can die (crash, OS kill) a moment before Node processes its exit event; a request sent in
+ // that window fails. Drop the dead worker and send the request once more to a new one, so a crash
+ // costs one restart instead of leaving the worker down until some later request arrives.
  async embed(texts,kind){
+  try{return await this.#request(texts,kind);}
+  catch(error){
+   if(this.#closed||error?.workerGone!==true)throw error;
+   this.stats.retriedAfterExit=(this.stats.retriedAfterExit??0)+1;
+   return this.#request(texts,kind);
+  }
+ }
+ async #request(texts,kind){
   if(this.#closed)throw Error('Embedding provider closed');
   await this.#start();this.#touch();
-  const child=this.#child,id=++this.#seq;if(!child)throw Error('Embedding worker unavailable');
+  let child=this.#child;
+  if(child&&(child.exitCode!==null||child.signalCode!==null||!child.connected)){this.#drop?.('Embedding worker exited');await this.#start();child=this.#child;}
+  const id=++this.#seq;if(!child)throw Error('Embedding worker unavailable');
+  const gone=error=>{if(this.#child===child)this.#drop?.('Embedding worker unavailable');return Object.assign(error,{workerGone:true});};
   return new Promise((resolve,reject)=>{
    // No answer within the limit means the worker is stuck: reclaim it. The next request starts a new one.
    const timer=setTimeout(()=>{this.#pending.delete(id);this.stats.requestTimeouts++;reject(Error('Embedding request timeout'));if(this.#child===child)this.stop();},this.requestTimeoutMs);
    this.#pending.set(id,{resolve,reject,timer});
-   try{child.send({type:'embed',id,texts,kind});}catch(error){this.#pending.delete(id);clearTimeout(timer);reject(error);}
+   try{child.send({type:'embed',id,texts,kind},error=>{if(error&&this.#pending.delete(id)){clearTimeout(timer);reject(gone(error));}});}
+   catch(error){this.#pending.delete(id);clearTimeout(timer);reject(gone(error));}
   });
  }
  stop(){const child=this.#child;if(child){try{child.disconnect();}catch{}try{child.kill();}catch{}}}

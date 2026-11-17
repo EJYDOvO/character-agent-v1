@@ -295,9 +295,10 @@ test('worker process lifecycle: crash, hang, failed start and recovery are conta
  const gone=async pid=>{for(let i=0;i<150;i++){try{process.kill(pid,0);}catch{return true;}await new Promise(r=>setTimeout(r,20));}return false;};
  try{
   const ok=provider('ok');assert.equal((await ok.embed(['a','b'],'query')).length,2);assert.equal(ok.state(),'ready');const pid=ok.pid;assert(pid);ok.close();assert(await gone(pid),'close ends the worker');await assert.rejects(()=>ok.embed(['a'],'query'),/closed/);
-  // Crash while a request is in flight: the request fails, nothing hangs, the next request starts a new worker.
-  const crash=provider('crash-once');await assert.rejects(()=>crash.embed(['a'],'query'),/exited/);assert.equal(crash.state(),'stopped');
-  assert.equal((await crash.embed(['a'],'query')).length,1);assert.equal(crash.usage().starts,2);assert.equal(crash.usage().exits,1);crash.close();
+  // Crash while a request is in flight: the request is retried once on a new worker; nothing hangs.
+  const crash=provider('crash-once');try{assert.equal((await crash.embed(['a'],'query')).length,1);assert.equal(crash.usage().starts,2);assert.equal(crash.usage().exits,1);assert.equal(crash.usage().retriedAfterExit,1);assert.equal(crash.state(),'ready');}finally{crash.close();}
+  // A worker that crashes on every request fails after exactly one retry, it is not respawned in a loop.
+  const always=provider('crash-on-embed');try{await assert.rejects(()=>always.embed(['a'],'query'),/exited|unavailable/);assert.equal(always.usage().starts,2);}finally{always.close();}
   // No answer: the request times out and the stuck worker is reclaimed instead of being left running.
   const hang=provider('hang',{requestTimeoutMs:150}),first=hang.embed(['a'],'query');await new Promise(r=>setTimeout(r,60));const stuck=hang.pid;assert(stuck);
   const started=performance.now();await assert.rejects(()=>first,/timeout/);assert(performance.now()-started<2000);assert(await gone(stuck),'hung worker is killed');assert.equal(hang.usage().requestTimeouts,1);hang.close();
@@ -490,4 +491,20 @@ test('the archived research evaluation set is byte-identical to the frozen PR #2
  for(const [name,sha]of Object.entries(manifest.sha256))assert.equal(createHash('sha256').update(fs.readFileSync(new URL(name,dir))).digest('hex'),sha,name+' changed: never edit the held-out split or its labels');
  const {queries}=await import(new URL('queries.mjs',dir).href),freeze=JSON.parse(fs.readFileSync(new URL('FREEZE.json',dir),'utf8'));
  assert.equal(queries.filter(q=>q.split==='heldout').length,freeze.queries.heldout);assert.equal(queries.filter(q=>q.split==='dev').length,freeze.queries.dev);
+});
+
+test('a request that meets a worker which just died restarts it once instead of failing and leaving it down',async()=>{
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'semantic-restart-')),worker=fileURLToPath(new URL('./fixtures/semantic-worker-fixture.mjs',import.meta.url));
+ const modelDir=path.join(dir,'models');fs.mkdirSync(path.join(modelDir,'fixture','ok'),{recursive:true});fs.writeFileSync(path.join(modelDir,'fixture','ok','dsh-model.json'),'{}');fs.writeFileSync(path.join(dir,'package.json'),'{}');
+ const p=new SubprocessProvider({runtimeDir:dir,modelDir,worker,model:{repo:'fixture/ok',revision:'0'.repeat(40),dtype:'fp32',pooling:'none',queryPrefix:'',documentPrefix:''},idleUnloadMs:0});
+ try{
+  await p.embed(['warm'],'query');
+  for(let i=0;i<3;i++){
+   // Killed from outside (OS, crash). The very next request races the child's exit event.
+   const pid=p.pid;process.kill(pid);
+   assert.equal((await p.embed(['after kill '+i],'query')).length,1,'the request after a crash is answered by a new worker');
+   assert.notEqual(p.pid,pid);
+  }
+  assert.equal(p.usage().starts,4);
+ }finally{p.close();fs.rmSync(dir,{recursive:true,force:true});}
 });

@@ -64,14 +64,14 @@ export function apply(ctx,config){
    // One real turn through the Character ingress. Returns what this turn's memory context provider
    // produced in the first model request of the turn.
    const turn=async(text,{gapMs=0}={})=>{
-    await agent.whenIdle();const mark=captures.length,before={...(status().counters??{})},t0=performance.now();
+    await agent.whenIdle();const mark=captures.length,before={...(status().counters??{}),workerState:status().worker?.state},t0=performance.now();
     manager.admitInput(manager.record,{platform:'qq-official',adapter:'qq-official-gateway',accountId:'mock-app',conversation:{type:'direct',id:'mock-owner'},sender:{id:'mock-owner'},message:{id:'probe-'+config.phase+'-'+(++n),text}});
     if(gapMs)await sleep(gapMs);
     const t1=performance.now();agent.followup(createUserMessage({content:[{type:'text',text}],source:{kind:'user'}}));await agent.whenIdle();
     const first=captures[mark];assert(first,'The turn made no model request');
     const at=first.prompt.lastIndexOf('Current runtime context.');assert(at>=0,'no runtime context snapshot in the model request');
-    const after=status().counters??{},delta=k=>(after[k]??0)-(before[k]??0);
-    return {context:first.prompt.slice(at),ingressToFirstRequestMs:first.at-t0,turnMs:performance.now()-t1,ranked:delta('ranked'),notReady:delta('notReady'),contextWaits:delta('contextWaits'),contextRecovered:delta('contextRecovered')};
+    const after=status().counters??{};const delta=k=>(after[k]??0)-(before[k]??0);
+    return {context:first.prompt.slice(at),ingressToFirstRequestMs:first.at-t0,turnMs:performance.now()-t1,ranked:delta('ranked'),notReady:delta('notReady'),contextWaits:delta('contextWaits'),contextRecovered:delta('contextRecovered'),contextWaitSkipped:delta('contextWaitSkipped'),workerAtStart:before.workerState};
    };
    const waitIndexed=async(count,seconds=180)=>{const until=Date.now()+seconds*1000;while(Date.now()<until){if((status().vectors??0)>=count)return true;await sleep(250);}return false;};
    const alive=pid=>{try{process.kill(pid,0);return true;}catch{return false;}};
@@ -89,10 +89,15 @@ export function apply(ctx,config){
     let pid=status().worker.pid;process.kill(pid);for(let i=0;i<40&&alive(pid);i++)await sleep(50);
     const cold=await turn(FACTS[0][1]);
     report.metrics.coldWorker={semanticInFirstContext:cold.context.includes(FACTS[0][2]),notReady:cold.notReady,contextWaits:cold.contextWaits,ingressToFirstRequestMs:+cold.ingressToFirstRequestMs.toFixed(1)};
-    for(let i=0;i<80&&status().worker?.state!=='ready';i++)await sleep(100);
+    // Steady state for the warm measurement: the restarted worker must have answered a query.
+    const restartTrace=[],tr0=performance.now();
+    for(let i=0;i<80&&status().worker?.state!=='ready';i++){const w=status().worker,c=status().counters;restartTrace.push([Math.round(performance.now()-tr0),w?.state,w?.starts,w?.startFailures,w?.exits,c.prepareErrors,c.breakerSkips,c.prepareTimeouts]);await sleep(100);}
+    report.metrics.restartTrace=restartTrace.filter((r,i,a)=>i===0||JSON.stringify(r.slice(1))!==JSON.stringify(a[i-1].slice(1))||i===a.length-1);
+    const warmedUp=await store.recallAsync(trusted,'worker warm-up query',5000).then(()=>status().worker?.state);
     // Warm worker, the user message immediately after ingress (no gap): the case that was 12/20 before.
     const warm=[];for(const [,query,marker]of FACTS){const r=await turn(query);warm.push({...r,semantic:r.context.includes(marker)});}
     const hit=warm.filter(r=>r.semantic).length;
+    report.metrics.warmTurns=warm.map(r=>({semantic:r.semantic,notReady:r.notReady,waits:r.contextWaits,recovered:r.contextRecovered,skipped:r.contextWaitSkipped,worker:r.workerAtStart,ms:+r.ingressToFirstRequestMs.toFixed(0)}));report.metrics.workerAfterWarmUp=warmedUp;
     report.metrics.firstContext={turns:warm.length,semanticInFirstContext:hit,ratio:+(hit/warm.length).toFixed(2),fellBackToFts5:warm.length-hit,
      vectorNotReadyAtSyncResolve:warm.filter(r=>r.contextWaits>0).length,recoveredByBoundedWait:warm.filter(r=>r.contextRecovered>0).length,notReadyCounted:warm.reduce((a,r)=>a+r.notReady,0),
      ingressToFirstRequestP50Ms:pct(warm.map(r=>r.ingressToFirstRequestMs),.5),ingressToFirstRequestP95Ms:pct(warm.map(r=>r.ingressToFirstRequestMs),.95),turnP50Ms:pct(warm.map(r=>r.turnMs),.5),turnP95Ms:pct(warm.map(r=>r.turnMs),.95)};
