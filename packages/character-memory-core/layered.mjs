@@ -115,7 +115,9 @@ export class LayeredMemory extends MemoryStore {
     const lexical=(terms,ids,limit)=>terms.length?this.#rows(ctx,query,{terms,ids}).sort((a,b)=>relevance(b,query)-relevance(a,query)||a.id.localeCompare(b.id)).slice(0,limit).map(r=>r.id):[];
     // 1. exact identifier matches; 2. records without a current vector (just written or corrected) that
     // share a whole word/bigram with the query, so index lag cannot hide them; 3. similarity order.
-    for(const id of lexical(identifierTerms(query),undefined,5))push(id);
+    // A term pins only when at most three valid records contain it: an identifier names something,
+    // a number that half the store mentions does not.
+    for(const term of identifierTerms(query)){if(order.length>=5)break;const hits=lexical([term],undefined,4);if(hits.length<=3)for(const id of hits)if(order.length<5)push(id);}
     const pending=Array.isArray(ranked.pending)?ranked.pending.slice(0,500):[];
     if(pending.length)for(const id of lexical(selectiveRecallTerms(query),pending,5))push(id);
     for(const id of ranked.ids.slice(0,64))push(id);
@@ -137,7 +139,11 @@ export class LayeredMemory extends MemoryStore {
   // Which derived entries no longer correspond to live content. Takes only ids and content hashes the
   // caller already holds and returns ids to delete: no statement, scope or source leaves Core.
   semanticOrphans(entries){
-    const live=this.db.prepare("SELECT 1 FROM memories m WHERE m.id=? AND m.fingerprint=? AND m.status IN ('active','uncertain') AND (m.expires_at IS NULL OR m.expires_at>?) AND NOT EXISTS(SELECT 1 FROM blocked b WHERE b.principal=m.principal AND b.project=m.project AND b.fingerprint=m.fingerprint) AND NOT EXISTS(SELECT 1 FROM memory_evidence l JOIN experiences e ON e.id=l.evidence_id WHERE l.memory_id=m.id AND e.status!='active')"),at=now();
+    // Same validity rule as #rows, evaluated without a handle: status, expiry, retired evidence and the
+    // forget barrier of the record's own root scope. A personalised record lives in a reserved lane
+    // namespace; its root scope is recorded in memory_lanes. Another Character's or project's barrier
+    // never applies here, so their valid vectors are not swept.
+    const live=this.db.prepare("SELECT 1 FROM memories m WHERE m.id=? AND m.fingerprint=? AND m.status IN ('active','uncertain') AND (m.expires_at IS NULL OR m.expires_at>?) AND NOT EXISTS(SELECT 1 FROM blocked b WHERE b.principal=m.principal AND b.project=m.project AND b.fingerprint=m.fingerprint AND b.character=coalesce((SELECT json_extract(l.scope,'$[1]') FROM memory_lanes l WHERE l.memory_id=m.id),m.character)) AND NOT EXISTS(SELECT 1 FROM memory_evidence l JOIN experiences e ON e.id=l.evidence_id WHERE l.memory_id=m.id AND e.status!='active')"),at=now();
     return entries.filter(e=>!live.get(String(e.id),String(e.contentHash),at)).map(e=>e.id);
   }
   #resolutionScope(ctx){const p=this.policy(ctx);return hash([p.key,p.agentId,p.mode]);}

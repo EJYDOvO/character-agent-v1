@@ -1,5 +1,9 @@
-// Pinned embedding models. A model is identified by repo@revision:dtype; that string is the
-// embeddingModelVersion every vector is bound to, so changing any part re-embeds everything.
+import {createHash} from 'node:crypto';
+
+// Pinned embedding models. embeddingModelVersion (see modelVersion below) covers everything that
+// changes the numbers in a vector: repo, full revision, quantisation, pooling, both prefixes,
+// dimension, the inference runtime version and which provider produced it. Changing any of them
+// makes every stored vector stale, so the index is rebuilt instead of mixing vector spaces.
 // minScore is the similarity floor measured for exactly this model and quantisation
 // (PR #26, development split). It must be re-calibrated for any other model.
 export const MODELS={
@@ -15,6 +19,10 @@ export const MODELS={
  },
 };
 export const RUNTIME={package:'@huggingface/transformers',version:'4.3.2'};
+export function modelVersion(model,producer){
+ const recipe={revision:model.revision,pooling:model.pooling,queryPrefix:model.queryPrefix??'',documentPrefix:model.documentPrefix??'',dim:model.dim,normalize:true,producer};
+ return `${model.repo}@${model.revision.slice(0,12)}:${model.dtype}#${createHash('sha256').update(JSON.stringify(recipe)).digest('hex').slice(0,12)}`;
+}
 export const MANIFEST='dsh-model.json';
 
 export function resolveModel(config={}){
@@ -23,5 +31,6 @@ export function resolveModel(config={}){
  const model={...base,...Object.fromEntries(['repo','revision','dtype','dim','pooling','queryPrefix','documentPrefix','minScore'].filter(k=>config[k]!==undefined).map(k=>[k,config[k]]))};
  if(!/^[\w.-]+\/[\w.-]+$/.test(model.repo)||!/^[0-9a-f]{40}$/.test(model.revision))throw Error('Embedding model must be pinned to a repo and a full commit');
  if(!Number.isInteger(model.dim)||model.dim<8||model.dim>4096||!(model.minScore>=-1&&model.minScore<=1))throw Error('Invalid embedding model settings');
- return {...model,version:`${model.repo}@${model.revision.slice(0,12)}:${model.dtype}`};
+ if(typeof model.pooling!=='string'||!model.pooling||typeof (model.queryPrefix??'')!=='string'||typeof (model.documentPrefix??'')!=='string')throw Error('Invalid embedding model settings');
+ return model;
 }

@@ -7,7 +7,9 @@ import fs from 'node:fs';import os from 'node:os';import path from 'node:path';
 import {LayeredMemory} from '../packages/character-memory-core/layered.mjs';
 import {attach} from '../packages/memory-semantic/index.mjs';
 import {VectorIndex} from '../packages/memory-semantic/vector-index.mjs';
-import {resolveModel} from '../packages/memory-semantic/models.mjs';
+import {resolveModel,modelVersion,RUNTIME} from '../packages/memory-semantic/models.mjs';
+import {identifierTerms} from '../packages/character-memory-core/store.mjs';
+import {fileURLToPath} from 'node:url';
 import {HttpProvider,SubprocessProvider} from '../packages/memory-semantic/provider.mjs';
 import {createHash} from 'node:crypto';
 const contentHash=text=>createHash('sha256').update(text.normalize('NFKC').trim()).digest('hex');
@@ -35,8 +37,8 @@ function world({mode='active',provider=fakeProvider(),config={},model=MODEL}={})
  const add=(ctx,statement,extra={})=>store.remember(ctx,{kind:'semantic',statement,...extra},evidence(ctx,statement));
  const indexFile=path.join(dir,'vectors.sqlite');
  const runtime=attach(store,{mode,indexFile,model,indexIntervalMs:3600000,...config},{provider});
- const sync=async()=>{for(let i=0;i<20;i++){const r=await runtime.cycle();if(!r.embedded)break;}};
- return {dir,store,a,b,bind,issued,add,evidence,runtime,provider,indexFile,sync,ids:rows=>rows.map(r=>r.id),
+ 
+ return {dir,store,a,b,bind,issued,add,evidence,runtime,provider,indexFile,async sync(){for(let i=0;i<40;i++){const r=await this.runtime.cycle({force:true});if(!r.embedded)break;}},ids:rows=>rows.map(r=>r.id),
   close(){this.runtime?.close();try{store.close();}catch{}fs.rmSync(dir,{recursive:true,force:true});}};
 }
 
@@ -179,7 +181,8 @@ test('shadow mode returns the lexical result unchanged and records id-only compa
   assert.equal(status.mode,'shadow');assert.equal(status.shadow.compared,3);assert.equal(status.shadow.semanticUnavailable,0);assert.equal(status.shadow.semanticEmpty,1);
   assert(!JSON.stringify(status).includes('远足')&&!JSON.stringify(status).includes('徒步'),'no query or statement text in status');
   w.runtime.close();
-  const reopened=new VectorIndex(w.indexFile,resolveModel(MODEL).version,DIM),saved=reopened.meta('shadow');reopened.close();
+  const version=w.runtime.modelVersion;w.runtime.close();
+  const reopened=new VectorIndex(w.indexFile,version,DIM),saved=reopened.meta('shadow');reopened.close();
   assert.equal(saved.stats.compared,3);assert(!JSON.stringify(saved).includes('远足'));
   w.runtime=null;
  }finally{w.close();}
@@ -188,7 +191,7 @@ test('shadow mode returns the lexical result unchanged and records id-only compa
 test('a partly built index and a changed model both stay on FTS5 until the vectors exist',async()=>{
  const w=world({config:{indexBatch:2}});try{
   for(let i=0;i<10;i++)w.add(w.a,`用户喜欢的徒步路线 ${i}。`);
-  await w.runtime.cycle();assert.equal(w.runtime.index.size,2);
+  await w.runtime.cycle({force:true});assert.equal(w.runtime.index.size,2);
   assert.deepEqual(await w.store.recallAsync(w.a,'徒步',5000),w.store.recall(w.a,'徒步',5000),'20% coverage: lexical result');
   assert(w.store.layersStatus(w.a).semantic.counters.lowCoverage>0);
   await w.sync();assert.equal(w.runtime.index.size,10);
@@ -222,10 +225,134 @@ test('configuration is validated and providers refuse unsafe settings',()=>{
   assert.throws(()=>attach({},{mode:'active',indexFile:path.join(w.dir,'v.sqlite'),model:MODEL},{provider:fakeProvider()}),/without semantic recall support/);
   assert.throws(()=>resolveModel({model:'nope'}),/Unknown embedding model/);
   assert.throws(()=>resolveModel({repo:'a/b',revision:'main',dtype:'q8',dim:8,pooling:'cls',minScore:0.4}),/pinned/);
-  assert.equal(resolveModel({}).version,'Xenova/bge-m3@4de132583038:q8');
+  assert.match(modelVersion(resolveModel({}),{kind:'subprocess',runtime:RUNTIME.version}),/^Xenova\/bge-m3@4de132583038:q8#[0-9a-f]{12}$/);
   assert.throws(()=>new HttpProvider({baseUrl:'https://embeddings.example.com',modelName:'m',model:MODEL}),/allowRemote/);
   assert.doesNotThrow(()=>new HttpProvider({baseUrl:'http://127.0.0.1:11434',modelName:'bge-m3',model:MODEL}));
   assert.throws(()=>new SubprocessProvider({runtimeDir:'relative',modelDir:w.dir,model:resolveModel({})}),/absolute/);
   assert.throws(()=>new SubprocessProvider({runtimeDir:w.dir,modelDir:w.dir,model:resolveModel({})}),/not provisioned/);
+ }finally{w.close();}
+});
+
+// ---------------------------------------------------------------- review regressions (PR #27)
+
+test('orphan sweep follows the root scope of the record: another Character keeps its valid vector',async()=>{
+ const w=world();try{
+  const text='用户周末通常去郊外徒步。',other=w.bind('session-c',{namespaceId:'char-two'}),project=w.bind('session-d',{projectId:'proj-two'});
+  const mine=w.add(w.a,text),theirs=w.add(other,text),elsewhere=w.add(project,text);await w.sync();
+  assert.equal(w.runtime.index.size,3);
+  w.store.forget(w.a,mine.id,mine.revision);
+  // Same principal, identical text, but a different Character namespace / project: their records are
+  // still valid and retrievable, so their vectors must not be reported as orphans.
+  assert.deepEqual(w.store.semanticOrphans([{id:mine.id,contentHash:theirs.fingerprint},...w.runtime.index.entries()]),[mine.id]);
+  await w.runtime.cycle({force:true});assert.equal(w.runtime.index.size,2);
+  assert.deepEqual(w.ids(await w.store.recallAsync(other,'远足',5000)),[theirs.id]);
+  assert.deepEqual(w.ids(await w.store.recallAsync(project,'hiking',5000)),[elsewhere.id]);
+  assert.deepEqual(await w.store.recallAsync(w.a,'远足',5000),[]);
+ }finally{w.close();}
+});
+
+test('embeddingModelVersion covers pooling, prefixes, dimension, runtime and provider; any change rebuilds the index',async()=>{
+ const base=resolveModel({}),producer={kind:'subprocess',runtime:RUNTIME.version},v=modelVersion(base,producer);
+ assert.equal(modelVersion(resolveModel({}),{...producer}),v,'stable for identical settings');
+ const http={kind:'http',endpoint:'http://127.0.0.1:1/v1/embeddings',modelName:'bge-m3'};
+ for(const [label,changed,by]of [['pooling',{...base,pooling:'mean'},producer],['query prefix',{...base,queryPrefix:'query: '},producer],['document prefix',{...base,documentPrefix:'passage: '},producer],['dimension',{...base,dim:512},producer],['quantisation',{...base,dtype:'fp32'},producer],['revision',{...base,revision:'f'.repeat(40)},producer],['runtime version',base,{...producer,runtime:'9.9.9'}],['provider kind',base,http],['served model name',base,{...http,modelName:'other'}]])
+  assert.notEqual(modelVersion(changed,by),v,label+' must change the version');
+ assert.equal(modelVersion({...base,minScore:0.1},producer),v,'the similarity floor does not change vectors');
+ // End to end: same sidecar file, only the query prefix differs -> vectors are dropped, FTS5 until rebuilt.
+ const w=world();try{
+  w.add(w.a,'用户周末通常去郊外徒步。');await w.sync();assert.equal(w.runtime.index.size,1);const first=w.runtime.modelVersion;w.runtime.close();
+  const next=attach(w.store,{mode:'active',indexFile:w.indexFile,model:{...MODEL,queryPrefix:'query: '},indexIntervalMs:3600000},{provider:w.provider});w.runtime=next;
+  assert.notEqual(next.modelVersion,first);assert.equal(next.index.size,0);
+  assert.deepEqual(await w.store.recallAsync(w.a,'徒步',5000),w.store.recall(w.a,'徒步',5000));
+ }finally{w.close();}
+});
+
+test('identifier detection: codes are pinned; years, dates, counts and common numbers are not',async()=>{
+ const none=['2026 年有什么计划','他 2025 年 10 月去了哪里','12 月 18 日的截止日期','每分钟 120 次请求','Node.js 24.13 的版本','周五下午 3 点之后','他今年 30 岁了吗','100 元以内的礼物','What happened in 1999?','top 10 things','第 3 版','Q4 的计划'];
+ for(const q of none)assert.deepEqual(identifierTerms(q),[],q);
+ assert.deepEqual(identifierTerms('ATL-2317 是什么问题'),['2317']);assert.deepEqual(identifierTerms('记录编号 W1137'),['w1137']);
+ assert.deepEqual(identifierTerms('生产端口 8443 和 7805'),['8443','7805']);assert.deepEqual(identifierTerms('Sony WH-1000XM5'),['1000xm5']);
+ assert.deepEqual(identifierTerms('工单 20261218 的状态'),['20261218']);
+ const w=world();try{
+  // Eight records mention 2026; one of them is the hiking plan the query is about.
+  const plan=w.add(w.a,'2026 年用户打算每个月去郊外徒步一次。');for(let i=0;i<7;i++)w.add(w.a,`2026 年第 ${i+1} 季度的预算评审安排在月底。`);
+  // Near-identical codes, and a number that many records share.
+  const t17=w.add(w.a,'ATL-2317 是看板首页加载慢的问题。'),t18=w.add(w.a,'ATL-2318 是导出乱码的问题。'),t170=w.add(w.a,'ATL-23170 是权限模型改造。');
+  for(let i=0;i<6;i++)w.add(w.a,`服务 ${i} 的健康检查端口是 9090，路径各不相同。`);
+  await w.sync();
+  assert.equal((await w.store.recallAsync(w.a,'2026 年的远足计划',5000))[0].id,plan.id,'a year is not an identifier: similarity decides');
+  assert.equal((await w.store.recallAsync(w.a,'ATL-2317',5000))[0].id,t17.id);assert.equal((await w.store.recallAsync(w.a,'ATL-2318 怎么样了',5000))[0].id,t18.id);assert.equal((await w.store.recallAsync(w.a,'ATL-23170',5000))[0].id,t170.id);
+  // 9090 looks like a code but six valid records contain it: not selective, so it pins nothing.
+  assert.equal((await w.store.recallAsync(w.a,'9090 徒步',5000))[0].id,plan.id);
+ }finally{w.close();}
+});
+
+test('worker process lifecycle: crash, hang, failed start and recovery are contained and visible',async()=>{
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'semantic-worker-')),worker=fileURLToPath(new URL('./fixtures/semantic-worker-fixture.mjs',import.meta.url));
+ const fixtureModel=behaviour=>({repo:'fixture/'+behaviour,revision:'0'.repeat(40),dtype:'fp32',dim:8,pooling:'none',minScore:0.5,queryPrefix:'',documentPrefix:path.join(dir,behaviour+'.marker')});
+ const provider=(behaviour,extra={})=>{const modelDir=path.join(dir,'models');fs.mkdirSync(path.join(modelDir,'fixture',behaviour),{recursive:true});fs.writeFileSync(path.join(modelDir,'fixture',behaviour,'dsh-model.json'),'{}');fs.writeFileSync(path.join(dir,'package.json'),'{}');
+  return new SubprocessProvider({runtimeDir:dir,modelDir,worker,model:fixtureModel(behaviour),idleUnloadMs:0,...extra});};
+ const gone=async pid=>{for(let i=0;i<150;i++){try{process.kill(pid,0);}catch{return true;}await new Promise(r=>setTimeout(r,20));}return false;};
+ try{
+  const ok=provider('ok');assert.equal((await ok.embed(['a','b'],'query')).length,2);assert.equal(ok.state(),'ready');const pid=ok.pid;assert(pid);ok.close();assert(await gone(pid),'close ends the worker');await assert.rejects(()=>ok.embed(['a'],'query'),/closed/);
+  // Crash while a request is in flight: the request fails, nothing hangs, the next request starts a new worker.
+  const crash=provider('crash-once');await assert.rejects(()=>crash.embed(['a'],'query'),/exited/);assert.equal(crash.state(),'stopped');
+  assert.equal((await crash.embed(['a'],'query')).length,1);assert.equal(crash.usage().starts,2);assert.equal(crash.usage().exits,1);crash.close();
+  // No answer: the request times out and the stuck worker is reclaimed instead of being left running.
+  const hang=provider('hang',{requestTimeoutMs:150}),first=hang.embed(['a'],'query');await new Promise(r=>setTimeout(r,60));const stuck=hang.pid;assert(stuck);
+  const started=performance.now();await assert.rejects(()=>first,/timeout/);assert(performance.now()-started<2000);assert(await gone(stuck),'hung worker is killed');assert.equal(hang.usage().requestTimeouts,1);hang.close();
+  // A worker that cannot start is not respawned on every call.
+  const fatal=provider('fatal-load',{restartBackoffMs:60000});await assert.rejects(()=>fatal.embed(['a'],'query'),/synthetic load failure|exited/);
+  for(let i=0;i<5;i++)await assert.rejects(()=>fatal.embed(['a'],'document'),/backoff/);assert.equal(fatal.usage().starts,1);assert.equal(fatal.usage().startFailures,1);fatal.close();
+  // ...and recovers by itself once the cause is gone and the backoff has passed.
+  const flaky=provider('fatal-then-ok',{restartBackoffMs:80});await assert.rejects(()=>flaky.embed(['a'],'query'));await assert.rejects(()=>flaky.embed(['a'],'query'),/backoff/);
+  await new Promise(r=>setTimeout(r,120));assert.equal((await flaky.embed(['a'],'query')).length,1);assert.equal(flaky.usage().starts,2);flaky.close();
+  // Through the whole stack: a hung worker never delays recall beyond the prepare timeout and the result is exactly the FTS5 one.
+  const w=world({provider:provider('hang',{requestTimeoutMs:5000}),model:fixtureModel('hang'),config:{prepareTimeoutMs:60}});
+  try{w.add(w.a,'预发环境的网关端口是 7805。');const t=performance.now(),got=await w.store.recallAsync(w.a,'网关端口',5000);assert(performance.now()-t<1500);assert.deepEqual(got,w.store.recall(w.a,'网关端口',5000));
+   const c=w.store.layersStatus(w.a).semantic.counters;assert.equal(c.ranked,0);assert.equal(c.notReady,1);assert(c.prepareTimeouts>=1);assert.equal(c.prepared,0);}finally{w.close();}
+ }finally{fs.rmSync(dir,{recursive:true,force:true});}
+});
+
+test('indexing yields to foreground work, with a bound',async()=>{
+ let running=true;const provider=fakeProvider(),w=world({provider});try{
+  w.runtime.close();const runtime=attach(w.store,{mode:'active',indexFile:w.indexFile,model:MODEL,indexIntervalMs:3600000,maxIndexDeferMs:150,quietAfterQueryMs:0},{provider,busy:()=>running});w.runtime=runtime;
+  w.add(w.a,'用户周末通常去郊外徒步。');
+  assert.deepEqual(await runtime.cycle(),{deferred:true});assert.equal(runtime.index.size,0);
+  await new Promise(r=>setTimeout(r,180));assert.equal((await runtime.cycle()).embedded,1,'a Host that is never idle still gets indexed after the bound');
+  w.add(w.a,'用户早上习惯喝一杯美式咖啡。');assert.deepEqual(await runtime.cycle(),{deferred:true});running=false;assert.equal((await runtime.cycle()).embedded,1);
+  assert.equal(w.store.layersStatus(w.a).semantic.indexer.deferred,2);
+  // A query that just arrived also holds indexing back for a moment (the model cannot be interrupted).
+  runtime.close();const quiet=attach(w.store,{mode:'active',indexFile:w.indexFile,model:MODEL,indexIntervalMs:3600000,quietAfterQueryMs:120},{provider});w.runtime=quiet;
+  w.add(w.a,'用户不会游泳。');await quiet.ranker.prepare('刚到的一条消息');assert.deepEqual(await quiet.cycle(),{deferred:true});
+  await new Promise(r=>setTimeout(r,150));assert.equal((await quiet.cycle()).embedded,1);
+ }finally{w.close();}
+});
+
+test('a damaged sidecar is discarded and rebuilt; a failing sidecar write is counted and cannot resurrect anything',async()=>{
+ const w=world();try{
+  const hike=w.add(w.a,'用户周末通常去郊外徒步。'),dive=w.add(w.a,'用户最近开始学习潜水。');await w.sync();w.runtime.close();
+  for(const suffix of ['','-wal','-shm'])fs.rmSync(w.indexFile+suffix,{force:true});fs.writeFileSync(w.indexFile,Buffer.alloc(8192,0x5a));
+  const next=attach(w.store,{mode:'active',indexFile:w.indexFile,model:MODEL,indexIntervalMs:3600000},{provider:w.provider});w.runtime=next;
+  assert.equal(next.index.recreated,true);assert.equal(next.index.size,0);assert.equal(w.store.layersStatus(w.a).semantic.indexer.recreated,true);
+  assert.deepEqual(await w.store.recallAsync(w.a,'徒步',5000),w.store.recall(w.a,'徒步',5000),'FTS5 while the index is empty');
+  await w.sync();assert.deepEqual(w.ids(await w.store.recallAsync(w.a,'远足',5000)),[hike.id]);
+  // Sidecar write fails during forget: the Core forget still succeeds, the failure is visible, and the
+  // record cannot be returned even though its vector is still on disk.
+  const remove=next.index.remove.bind(next.index);next.index.remove=()=>{throw Error('disk I/O error');};
+  w.store.forget(w.a,dive.id,dive.revision);
+  const status=w.store.layersStatus(w.a).semantic;assert.equal(status.counters.invalidateErrors,1);assert.match(status.lastError,/disk I\/O error/);
+  assert.deepEqual(await w.store.recallAsync(w.a,'scuba diving',5000),[]);
+  next.index.remove=remove;await next.cycle({force:true});assert(!next.index.entries().some(e=>e.id===dive.id),'the sweep retries the delete');
+ }finally{w.close();}
+});
+
+test('a removed vector leaves no copy in the sidecar file or its write-ahead log',async()=>{
+ const w=world();try{
+  const secret=w.add(w.a,'用户最近开始学习潜水。');w.add(w.a,'用户周末通常去郊外徒步。');await w.sync();
+  const needle=Buffer.from(conceptVector('用户最近开始学习潜水。').buffer),bytes=()=>Buffer.concat(['','-wal'].map(x=>fs.existsSync(w.indexFile+x)?fs.readFileSync(w.indexFile+x):Buffer.alloc(0)));
+  assert(bytes().includes(needle),'vector is on disk before forget');
+  w.store.forget(w.a,secret.id,secret.revision);await w.runtime.cycle({force:true});
+  assert(!bytes().includes(needle),'freed pages are overwritten and the WAL is truncated');
  }finally{w.close();}
 });

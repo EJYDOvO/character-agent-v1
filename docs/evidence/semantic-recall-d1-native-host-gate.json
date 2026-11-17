@@ -1,0 +1,90 @@
+{
+ "ok": true,
+ "runId": "6a12fe97-7d46-4104-aa6a-4b83abb6c4f1",
+ "host": "0.2.2-rc.1",
+ "runtime": "v24.21.0",
+ "electron": "44.7.0",
+ "provenance": {
+  "baseSha": "950bd848ff23471fedce8b6a51aab32871e4c9e0",
+  "workingTreeDirty": true,
+  "codeSha256": "6361981aee20e9794c211115cb0943f78b61e6cdcc228e7ca059cc953685864a",
+  "node": "v24.13.0"
+ },
+ "model": "deterministic chat fixture; real embedding worker",
+ "synthetic": true,
+ "productionRead": false,
+ "qqNetwork": false,
+ "checks": [
+  "Loader-declared plugin with mode off: no ranker, no index file, no worker; recall tool and 10 real turns use FTS5",
+  "Shadow via ctx.plugin: real worker built 62 vectors; contexts and recall tool identical to FTS5; id-only comparison statistics recorded",
+  "Dispose stops the worker and restores FTS5; switching shadow -> active reuses 62 persisted vectors",
+  "Real turns, ingress immediately followed by the user message: 12/20 first contexts already semantic, the rest counted notReady fallbacks; 10/10 with a 120 ms gap",
+  "Native memory tools: semantic recall, exact identifier first, unrelated query empty; correct -> only new text; forget -> vector deleted, never returned",
+  "Unauthorised preset and forged handle are refused before any ranking",
+  "Killed worker: next turn completes on FTS5 (notReady counted), a new worker starts and semantic recall resumes",
+  "Corrupt sidecar: recreated empty, turns keep working on FTS5 during the rebuild, semantic recall returns afterwards",
+  "Final unload leaves the Host on FTS5"
+ ],
+ "metrics": {
+  "indexBuild": {
+   "records": 62,
+   "seconds": 7.9,
+   "workerLoadMs": 2777
+  },
+  "shadow": {
+   "compared": 40,
+   "semanticUnavailable": 10,
+   "meanOverlapAt5": 0.107,
+   "meanLexicalRows": 5.1,
+   "meanSemanticRows": 3.4
+  },
+  "firstContext": {
+   "turns": 20,
+   "semanticInFirstContext": 12,
+   "ratio": 0.6,
+   "fellBackNotReady": 8,
+   "ingressToFirstRequestP50Ms": 101.4,
+   "ingressToFirstRequestP95Ms": 118.9,
+   "turnP50Ms": 404.1,
+   "turnP95Ms": 450.7,
+   "offTurnP50Ms": 405.2,
+   "offTurnP95Ms": 675.5,
+   "semanticWith120msGap": "10/10"
+  },
+  "turnsWhileIndexing": {
+   "p50Ms": 405.4,
+   "p95Ms": 473.8
+  },
+  "resources": {
+   "hostRssMB": 223,
+   "hostCpuMs": 11422,
+   "wallSeconds": 48.4,
+   "workerRssMB": 1362,
+   "workerCpuMs": 13921,
+   "workerStarts": 1,
+   "counters": {
+    "prepared": 11,
+    "prepareTimeouts": 8,
+    "prepareErrors": 0,
+    "breakerSkips": 0,
+    "ranked": 2,
+    "notReady": 18,
+    "lowCoverage": 2,
+    "empty": 0,
+    "errors": 0,
+    "invalidated": 0,
+    "invalidateErrors": 0
+   },
+   "indexer": {
+    "indexed": 61,
+    "removed": 0,
+    "cycles": 5,
+    "deferred": 15,
+    "recreated": true,
+    "lastError": null
+   }
+  }
+ },
+ "phase": "corrupt-index",
+ "status": "PASS"
+}

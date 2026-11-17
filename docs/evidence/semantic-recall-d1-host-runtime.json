@@ -1,5 +1,5 @@
 {
- "at": "2026-11-17T07:10:23.815Z",
+ "at": "2026-11-17T09:15:19.224Z",
  "runtime": "v24.21.0",
  "electron": "44.7.0",
  "platform": "win32 x64",
@@ -7,13 +7,12 @@
  "noise": 300,
  "synthetic": true,
  "productionRead": false,
- "modelVersion": "Xenova/bge-m3@4de132583038:q8",
+ "modelVersion": "Xenova/bge-m3@4de132583038:q8#a5c31ef39b22",
  "minScore": 0.469,
  "index": {
   "records": 523,
-  "buildMs": 58776,
-  "msPerRecord": 112.4,
-  "workerLoadMs": 2773,
+  "buildMs": 41820,
+  "msPerRecord": 80,
   "bytes": 6266384
  },
  "quality": {
@@ -26,8 +25,8 @@
     "rowsWhenAnswerable": 15.8,
     "rowsWhenNothingRelevant": 13.5,
     "violations": 0,
-    "p50Ms": 13.76,
-    "p95Ms": 80.92,
+    "p50Ms": 12.6,
+    "p95Ms": 78.19,
     "recallAt5ByCategory": {
      "exact": 1,
      "syn-zh": 0.3,
@@ -45,16 +44,16 @@
     "queries": 100,
     "answerable": 83,
     "recallAt1": 0.735,
-    "recallAt5": 0.926,
-    "rowsWhenAnswerable": 11.9,
-    "rowsWhenNothingRelevant": 4.5,
+    "recallAt5": 0.932,
+    "rowsWhenAnswerable": 11.7,
+    "rowsWhenNothingRelevant": 4.8,
     "violations": 0,
-    "p50Ms": 33.3,
-    "p95Ms": 51.79,
+    "p50Ms": 32.76,
+    "p95Ms": 50.65,
     "recallAt5ByCategory": {
-     "exact": 1,
+     "exact": 0.96,
      "syn-zh": 0.95,
-     "syn-en": 0.75,
+     "syn-en": 0.88,
      "xling": 0.96,
      "semantic": 0.68,
      "hardneg": 1,
@@ -73,8 +72,8 @@
      "rowsWhenAnswerable": 1,
      "rowsWhenNothingRelevant": null,
      "violations": 0,
-     "p50Ms": 0.56,
-     "p95Ms": 1.07,
+     "p50Ms": 0.59,
+     "p95Ms": 0.8,
      "recallAt5ByCategory": {
       "id-stress": 1
      }
@@ -87,8 +86,8 @@
      "rowsWhenAnswerable": 19.9,
      "rowsWhenNothingRelevant": null,
      "violations": 0,
-     "p50Ms": 27.68,
-     "p95Ms": 31.7,
+     "p50Ms": 23.28,
+     "p95Ms": 33.26,
      "recallAt5ByCategory": {
       "id-stress": 1
      }
@@ -104,8 +103,8 @@
     "rowsWhenAnswerable": 15.7,
     "rowsWhenNothingRelevant": 14.7,
     "violations": 0,
-    "p50Ms": 14.08,
-    "p95Ms": 69.88,
+    "p50Ms": 14.94,
+    "p95Ms": 69.84,
     "recallAt5ByCategory": {
      "exact": 1,
      "syn-zh": 0.5,
@@ -122,16 +121,16 @@
    "semantic": {
     "queries": 100,
     "answerable": 83,
-    "recallAt1": 0.845,
-    "recallAt5": 0.954,
-    "rowsWhenAnswerable": 12.3,
+    "recallAt1": 0.888,
+    "recallAt5": 0.95,
+    "rowsWhenAnswerable": 12.4,
     "rowsWhenNothingRelevant": 4,
     "violations": 0,
-    "p50Ms": 31.08,
-    "p95Ms": 50.31,
+    "p50Ms": 33.24,
+    "p95Ms": 63.68,
     "recallAt5ByCategory": {
      "exact": 1,
-     "syn-zh": 0.97,
+     "syn-zh": 0.93,
      "syn-en": 0.88,
      "xling": 1,
      "semantic": 0.75,
@@ -151,8 +150,8 @@
      "rowsWhenAnswerable": 20,
      "rowsWhenNothingRelevant": null,
      "violations": 0,
-     "p50Ms": 46.06,
-     "p95Ms": 53.46,
+     "p50Ms": 46.66,
+     "p95Ms": 85.03,
      "recallAt5ByCategory": {
       "id-stress": 1
      }
@@ -165,8 +164,8 @@
      "rowsWhenAnswerable": 20,
      "rowsWhenNothingRelevant": null,
      "violations": 0,
-     "p50Ms": 38.64,
-     "p95Ms": 59.71,
+     "p50Ms": 41.25,
+     "p95Ms": 55.53,
      "recallAt5ByCategory": {
       "id-stress": 1
      }
@@ -177,50 +176,88 @@
  "perTurn": {
   "messages": 40,
   "semanticContextUsed": 40,
-  "ingressToVectorP50Ms": 31.33,
-  "ingressToVectorP95Ms": 49.35,
-  "contextP50Ms": 4.4,
-  "contextP95Ms": 8.07,
-  "lexicalContextP50Ms": 20.01,
-  "lexicalContextP95Ms": 62.93
+  "ingressToVectorP50Ms": 37.86,
+  "ingressToVectorP95Ms": 56.62,
+  "contextP50Ms": 4.5,
+  "contextP95Ms": 9.74,
+  "lexicalContextP50Ms": 18.59,
+  "lexicalContextP95Ms": 68.4
  },
  "lifecycle": {
   "newRecordBeforeIndexing": true,
+  "freshRecordIndexed": true,
   "newRecordSemanticAfterIndexing": true,
   "correctionReturnsOnlyNewText": true,
   "forgottenGoneImmediately": true,
   "foreignScopeTextNotReturned": true
  },
+ "queryDuringIndexing": {
+  "batchEmbedded": 32,
+  "batchMs": 11360,
+  "queries": 12,
+  "answeredBeforeBatchEnd": 12,
+  "p50Ms": 378.46,
+  "p95Ms": 735.5
+ },
  "failover": {
-  "afterWorkerKillEqualsLexical": true,
-  "recoveredOnNextQuery": true
+  "stopped": {
+   "equalsLexical": true,
+   "rankedDelta": 0,
+   "notReadyDelta": 1,
+   "recovered": true
+  },
+  "killedMidBatch": {
+   "indexerReportedError": true
+  },
+  "killed": {
+   "equalsLexical": true,
+   "rankedDelta": 0,
+   "notReadyDelta": 1,
+   "recovered": true
+  },
+  "indexCompleteAfterCrash": true,
+  "ok": true
  },
  "status": {
   "mode": "active",
-  "modelVersion": "Xenova/bge-m3@4de132583038:q8",
+  "modelVersion": "Xenova/bge-m3@4de132583038:q8#a5c31ef39b22",
   "minScore": 0.469,
-  "vectors": 523,
+  "vectors": 571,
   "provider": "ready",
   "counters": {
-   "prepared": 287,
-   "prepareTimeouts": 1,
-   "prepareErrors": 1,
+   "prepared": 296,
+   "prepareTimeouts": 8,
+   "prepareErrors": 0,
    "breakerSkips": 0,
-   "ranked": 286,
-   "notReady": 1,
+   "ranked": 287,
+   "notReady": 2,
    "lowCoverage": 0,
    "empty": 12,
    "errors": 0,
-   "invalidated": 8
+   "invalidated": 8,
+   "invalidateErrors": 0
   },
-  "lastError": "Embedding worker error",
+  "lastError": null,
   "indexer": {
-   "indexed": 524,
+   "indexed": 572,
    "removed": 0,
-   "cycles": 11,
+   "cycles": 16,
+   "deferred": 0,
+   "recreated": false,
    "lastError": null
+  },
+  "worker": {
+   "starts": 3,
+   "startFailures": 0,
+   "exits": 2,
+   "requestTimeouts": 0,
+   "loadMs": 2014,
+   "rssMB": 825,
+   "cpuMs": 135654,
+   "state": "ready",
+   "pid": 33432
   }
  },
- "hostRssMB": 151,
+ "hostRssMB": 150,
  "ok": true
 }

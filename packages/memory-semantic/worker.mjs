@@ -6,9 +6,11 @@ import fs from 'node:fs';import path from 'node:path';import {createHash} from '
 import {createRequire} from 'node:module';import {pathToFileURL} from 'node:url';
 
 const options=JSON.parse(process.env.DSH_SEMANTIC_WORKER??'{}');
-const fail=message=>{process.send?.({type:'fatal',error:String(message).slice(0,300)});process.exit(1);};
+const usage=()=>{const cpu=process.cpuUsage();return {rssMB:Math.round(process.memoryUsage().rss/1048576),cpuMs:Math.round((cpu.user+cpu.system)/1000)};};
+const fail=message=>{try{process.send?.({type:'fatal',error:String(message).slice(0,300)});}catch{}process.exit(1);};
 process.on('disconnect',()=>process.exit(0));
 process.on('uncaughtException',error=>fail(error?.message??error));
+process.on('unhandledRejection',error=>fail(error?.message??error));
 
 let extractor;
 async function load(){
@@ -24,23 +26,33 @@ async function load(){
  tf.env.allowRemoteModels=false;tf.env.allowLocalModels=true;tf.env.localModelPath=modelDir;tf.env.useFSCache=false;tf.env.useBrowserCache=false;
  extractor=await tf.pipeline('feature-extraction',model.repo,{dtype:model.dtype,local_files_only:true,...(threads>0?{session_options:{intraOpNumThreads:threads,interOpNumThreads:1}}:{})});
 }
-async function embed(texts,kind){
- const prefix=kind==='query'?options.model.queryPrefix:options.model.documentPrefix,out=[];
- for(let i=0;i<texts.length;i+=8){
-  const tensor=await extractor(texts.slice(i,i+8).map(t=>prefix+t),{pooling:options.model.pooling,normalize:true});
-  for(const row of tensor.tolist())out.push(Float32Array.from(row));
- }
- return out;
+// Two queues. A query embedding (someone is waiting for a turn) always runs before the next document
+// of an indexing batch. Documents are encoded one at a time: a query then waits for at most one
+// document, and a vector never depends on which other texts happened to share its padded batch
+// (measured on CPU, batching did not make indexing faster).
+const SLICE=1,queries=[],documents=[];let running=false;
+async function run(texts,kind){
+ const prefix=kind==='query'?options.model.queryPrefix:options.model.documentPrefix;
+ const tensor=await extractor(texts.map(t=>prefix+t),{pooling:options.model.pooling,normalize:true});
+ return tensor.tolist().map(row=>Float32Array.from(row));
 }
-let queue=Promise.resolve();
+async function pump(){
+ if(running)return;running=true;
+ try{
+  for(;;){
+   const job=queries.shift()??documents[0];if(!job)break;
+   try{
+    if(job.kind==='query'){job.vectors.push(...await run(job.texts,'query'));job.done=job.texts.length;}
+    else{job.vectors.push(...await run(job.texts.slice(job.done,job.done+SLICE),'document'));job.done=Math.min(job.texts.length,job.done+SLICE);}
+    if(job.done>=job.texts.length){if(job.kind!=='query')documents.shift();process.send({type:'result',id:job.id,vectors:job.vectors,...usage()});}
+   }catch(error){if(job.kind!=='query')documents.shift();process.send({type:'result',id:job.id,error:String(error?.message??error).slice(0,300),...usage()});}
+  }
+ }finally{running=false;}
+}
 process.on('message',message=>{
  if(message?.type!=='embed')return;
- queue=queue.then(async()=>{
-  try{
-   if(!Array.isArray(message.texts)||message.texts.length>64||message.texts.some(t=>typeof t!=='string'||t.length>8000)||!['query','document'].includes(message.kind))throw Error('Invalid request');
-   process.send({type:'result',id:message.id,vectors:await embed(message.texts,message.kind)});
-  }catch(error){process.send({type:'result',id:message.id,error:String(error?.message??error).slice(0,300)});}
- });
+ if(!Array.isArray(message.texts)||!message.texts.length||message.texts.length>64||message.texts.some(t=>typeof t!=='string'||t.length>8000)||!['query','document'].includes(message.kind)){process.send({type:'result',id:message.id,error:'Invalid request'});return;}
+ (message.kind==='query'?queries:documents).push({id:message.id,kind:message.kind,texts:message.texts,vectors:[],done:0});void pump();
 });
 const started=performance.now();
-load().then(()=>process.send({type:'ready',loadMs:Math.round(performance.now()-started)})).catch(error=>fail(error?.message??error));
+load().then(()=>process.send({type:'ready',loadMs:Math.round(performance.now()-started),...usage()})).catch(error=>fail(error?.message??error));

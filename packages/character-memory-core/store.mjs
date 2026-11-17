@@ -6,10 +6,13 @@ import { tokenizeText, selectiveTokens } from './tokenize.mjs';
 const normalize=text=>text.normalize('NFKC').toLowerCase();
 const terms=text=>[...new Set(tokenizeText(normalize(text)))];
 export function recallTerms(query){if(typeof query!=='string'||query.length>200)throw Error('Invalid query');return terms(query).slice(0,64);}
-// Semantic recall helpers. Identifier terms are Latin/digit tokens of at least three characters that
-// contain a digit ("atl-2317" -> "2317", "w1137", "8443"): exact matches of these are pinned first.
+// Semantic recall helpers. An identifier term is a Latin/digit token that looks like a code rather
+// than a quantity or a date: letters mixed with digits and at least three characters ("w1137",
+// "1000xm5"), or four or more digits that are not a calendar year ("atl-2317" -> "2317", "8443").
+// Years, day/month numbers, counts and versions ("2026", "18", "120", "24.13") are not identifiers.
+// Whether a candidate really is one is decided by the caller from how rare it is in the store.
 export const selectiveRecallTerms=query=>typeof query==='string'&&query.length<=200?[...new Set(selectiveTokens(normalize(query)))].slice(0,64):[];
-export const identifierTerms=query=>selectiveRecallTerms(query).filter(t=>t.length>=3&&/[0-9]/.test(t)&&/^[a-z0-9_]+$/.test(t)).slice(0,16);
+export const identifierTerms=query=>selectiveRecallTerms(query).filter(t=>/^[a-z0-9_]+$/.test(t)&&/[0-9]/.test(t)&&(/[a-z]/.test(t)?t.length>=3:t.length>=4&&!/^(?:19|20)[0-9]{2}$/.test(t))).slice(0,8);
 export const similarity=(a,b)=>{const x=new Set(terms(a)),y=new Set(terms(b));return [...x].filter(t=>y.has(t)).length/Math.max(1,new Set([...x,...y]).size);};
 export const relevance=(row,query)=>(query&&normalize(row.statement).includes(normalize(query))?2:0)+similarity(query,row.statement)+(row.confidence??0.5)*0.1-(row.rank??0);
 const hash = text => createHash('sha256').update(text.normalize('NFKC').trim()).digest('hex');
