@@ -10,8 +10,14 @@
 // data directory includes it, restoring an old copy cannot bring a forgotten record back (Core
 // decides what is valid), and the next orphan sweep deletes whatever no longer matches live content.
 import {DatabaseSync} from 'node:sqlite';
-import {mkdirSync,rmSync} from 'node:fs';
+import {mkdirSync,rmSync,openSync,readSync,closeSync} from 'node:fs';
 import {dirname} from 'node:path';
+
+const SQLITE_HEADER=Buffer.from('SQLite format 3\0','latin1');
+function isSqliteFile(file){
+ let fd;try{fd=openSync(file,'r');const head=Buffer.alloc(SQLITE_HEADER.length);return readSync(fd,head,0,head.length,0)===head.length&&head.equals(SQLITE_HEADER);}
+ catch{return false;}finally{if(fd!==undefined)closeSync(fd);}
+}
 
 const SCHEMA=`PRAGMA journal_mode=WAL;PRAGMA busy_timeout=3000;PRAGMA secure_delete=ON;
  CREATE TABLE IF NOT EXISTS vectors(memory_id TEXT NOT NULL,model_version TEXT NOT NULL,revision INTEGER NOT NULL,content_hash TEXT NOT NULL,dim INTEGER NOT NULL,vec BLOB NOT NULL,PRIMARY KEY(memory_id,model_version));
@@ -28,6 +34,8 @@ export class VectorIndex{
    // leave semantic recall broken. Anything else (permissions, locked file) is reported to the caller.
    if(file===':memory:'||error?.code==='FOREIGN_DATABASE'||!/malformed|not a database|corrupt/i.test(String(error?.message)))throw error;
    try{this.#db?.close();}catch{}
+   // Only a SQLite file is ever discarded: a misconfigured indexFile naming any other file is refused.
+   if(!isSqliteFile(file))throw Object.assign(Error('indexFile is not a SQLite file; refusing to replace it'),{code:'FOREIGN_DATABASE'});
    for(const suffix of ['','-wal','-shm'])rmSync(file+suffix,{force:true});
    this.#vectors.clear();this.#open(file);this.recreated=true;
   }
@@ -60,8 +68,16 @@ export class VectorIndex{
   this.#vectors.delete(memoryId);this.#rebind.delete(memoryId);
   if(this.#db.prepare('DELETE FROM vectors WHERE memory_id=?').run(memoryId).changes)this.#dirty=true;
  }
- // Make removals durable outside the main file too: fold the WAL back and truncate it.
- scrub(){if(!this.#dirty)return false;this.#db.exec('PRAGMA wal_checkpoint(TRUNCATE)');this.#dirty=false;return true;}
+ // Make removals durable outside the main file too: fold the WAL back and truncate it. A checkpoint
+ // blocked by another connection does not throw, it reports busy: the index then stays dirty and the
+ // next scrub retries. It does not wait for the busy timeout, which would hold the Host's thread.
+ scrub(){
+  if(!this.#dirty)return false;
+  let result;this.#db.exec('PRAGMA busy_timeout=0');
+  try{result=this.#db.prepare('PRAGMA wal_checkpoint(TRUNCATE)').get();}finally{this.#db.exec('PRAGMA busy_timeout=3000');}
+  if(result?.busy)return false;
+  this.#dirty=false;return true;
+ }
  // What is persisted, not what is cached: a row whose DELETE failed after its in-memory entry was
  // dropped is still listed here, so the orphan sweep finds it and retries.
  entries(){return this.#db.prepare('SELECT memory_id id,revision,content_hash contentHash FROM vectors WHERE model_version=?').all(this.#model).map(r=>({id:r.id,revision:r.revision,contentHash:r.contentHash}));}
