@@ -3,7 +3,7 @@
 // character-current link; role grants in data/account), the actual QQ
 // Gateway/middleware, Agent I/O, Conversation Manager, Character Identity and
 // Identity & Access; synthetic QQ transport and LLM only.
-// Three fresh Host processes run as character A, then B, then A again.
+// Fresh Host processes run as A, B, B after interrupted rollback, and A again.
 // It is not QQ network delivery, a real model or the watchdog switch.
 import fs from 'node:fs';import path from 'node:path';import assert from 'node:assert/strict';import {pathToFileURL} from 'node:url';
 import {LlmAdapter} from '@deepseek-ai/dsh-llm';
@@ -127,6 +127,19 @@ export function apply(ctx,config){
    }
 
    const previous=JSON.parse(fs.readFileSync(phaseFile,'utf8'));
+   if(phase===4){
+    const {deriveSessionId}=await import(pathToFileURL(config.toolkit+'/plugin-sources/dsh-conversation-manager/session-id.mjs').href);
+    assert.equal(health().characterId,'b');
+    const turn=await say('mock-quiet','QUIET_ROLLBACK_MARK');
+    const request=turn.requests.find(r=>r.body.includes('QUIET_ROLLBACK_MARK'));
+    assert(request,'the Guest reaches the previous role after interrupted rollback');
+    assert.equal(record('mock-quiet').sessionId,deriveSessionId('qqbot:mock-app:c2c:mock-quiet','b'));
+    assert(request.body.includes('QUIET_B_HISTORY_MARK'),'the native Guest Session retains B’s history');
+    assert(!request.body.includes('QUIET_A_HISTORY_MARK'),'the restored Session has no A history');
+    noTools('mock-quiet',request);
+    scenario('interruptedRollback','The previous native Host restarts and resumes its Guest Session after the target and missing-junction interruption checks');
+    report.ok=true;return;
+   }
    if(phase===3){
     assert.equal(health().characterId,'a');
     const quietTurn=await say('mock-quiet','QUIET_RETURN_MARK');

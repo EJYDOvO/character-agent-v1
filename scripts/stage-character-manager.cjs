@@ -5,9 +5,11 @@
 // Character A is the old layout (data/character-a) brought in by
 // adopt-character.cjs --link; character B is imported through the registry.
 // Synthetic QQ and LLM only; no production data, card or credential.
-// --phase2/--phase3 <home>: prepare the next role and move the link with
-// plain fs (the watchdog switch itself is tested in QQTK).
+// --phase2/--phase3 <home>: prepare the next role and move the link.
+// --phase4 <home>: interrupt a switch back to A, then recover B's junction
+// with the QQTK journal before a new native Host verifies B.
 const fs=require('node:fs'),path=require('node:path'),cp=require('node:child_process'),{pathToFileURL}=require('node:url');
+const {randomUUID}=require('node:crypto'),assert=require('node:assert/strict');
 const project=path.resolve(__dirname,'..'),toolkit=path.resolve(process.env.DSH_QQTK_PROJECT||project+'/../harness-qq-toolkit');
 const yaml=require('js-yaml'),dialect=require('./deployment-plan.cjs').entryYaml(yaml),{parseCardYaml}=require('./card-yaml.cjs');
 const local=p=>pathToFileURL(path.join(project,p)).href,manager=p=>import(local('packages/character-manager/'+p));
@@ -25,7 +27,22 @@ async function stageSwitch(home,phase){
  if(!fs.lstatSync(current).isSymbolicLink()||fs.realpathSync(current)!==fs.realpathSync(characterDir(data,from)))throw Error(`character-current must be the link to ${from}`);
  prepareTarget({root:data,target:to,current:from});
  const target=characterDir(data,to);
- fs.unlinkSync(current);fs.symlinkSync(target,current,'junction');
+ if(phase===4){
+  const state=path.join(data,'maintenance');fs.mkdirSync(state,{recursive:true});
+  const run=action=>JSON.parse(cp.execFileSync(process.execPath,[path.join(toolkit,'maintenance','character-switch.cjs'),action,home],{encoding:'utf8',windowsHide:true}));
+  const nonce=randomUUID();
+  fs.writeFileSync(path.join(state,'character-switch.json'),JSON.stringify({previous:from,target:to,requestedAt:Date.now(),nonce}),{flag:'wx'});
+  assert.equal(run('pending').nonce,nonce);
+  assert.equal(run('check').target,to);
+  assert.equal(run('apply').target,to);
+  assert.equal(run('recover').link,'target');
+  fs.unlinkSync(current);
+  assert.equal(run('recover').link,'missing');
+  assert.equal(run('revert').previous,from);
+  assert.equal(fs.realpathSync(current),fs.realpathSync(characterDir(data,from)));
+ }else{
+  fs.unlinkSync(current);fs.symlinkSync(target,current,'junction');
+ }
  entry.config.phase=phase;
  if(phase===2){
   const seeded=JSON.parse(fs.readFileSync(target+'/conversations.json','utf8')).sessionIds;
@@ -77,5 +94,5 @@ async function phase1(){
  console.log(JSON.stringify({home:probe.home,runId:probe.runId,characters:registry.readRegistry(data).characters.map(c=>c.id),presets:presets.map(p=>p.config.id),qqNetwork:false,credentialsCopied:false}));
 }
 
-const switchPhase=process.argv.findIndex(arg=>arg==='--phase2'||arg==='--phase3');
+const switchPhase=process.argv.findIndex(arg=>['--phase2','--phase3','--phase4'].includes(arg));
 (switchPhase>=0?stageSwitch(path.resolve(process.argv[switchPhase+1]),Number(process.argv[switchPhase].at(-1))):phase1()).catch(e=>{console.error(e);process.exitCode=1;});
