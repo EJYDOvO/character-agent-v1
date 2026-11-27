@@ -333,7 +333,9 @@ test('indexing yields to foreground work, with a bound',async()=>{
 test('a damaged sidecar is discarded and rebuilt; a failing sidecar write is counted and cannot resurrect anything',async()=>{
  const w=world();try{
   const hike=w.add(w.a,'用户周末通常去郊外徒步。'),dive=w.add(w.a,'用户最近开始学习潜水。');await w.sync();w.runtime.close();
-  for(const suffix of ['','-wal','-shm'])fs.rmSync(w.indexFile+suffix,{force:true});fs.writeFileSync(w.indexFile,Buffer.alloc(8192,0x5a));
+  // A SQLite file whose pages are garbage: the header says SQLite, nothing after it is readable.
+  const damaged=Buffer.alloc(8192,0x5a);damaged.write('SQLite format 3\0','latin1');
+  for(const suffix of ['','-wal','-shm'])fs.rmSync(w.indexFile+suffix,{force:true});fs.writeFileSync(w.indexFile,damaged);
   const next=attach(w.store,{mode:'active',indexFile:w.indexFile,model:MODEL,indexIntervalMs:3600000},{provider:w.provider});w.runtime=next;
   assert.equal(next.index.recreated,true);assert.equal(next.index.size,0);assert.equal(w.store.layersStatus(w.a).semantic.indexer.recreated,true);
   assert.deepEqual(await w.store.recallAsync(w.a,'徒步',5000),w.store.recall(w.a,'徒步',5000),'FTS5 while the index is empty');
@@ -375,6 +377,43 @@ test('a sidecar DELETE that fails after the in-memory entry is gone is retried u
   assert.deepEqual(await w.store.recallAsync(w.a,'scuba diving',5000),[],'never returned in the meantime');
   await w.runtime.cycle({force:true});
   assert.equal(onDisk(),0,'the retry removes the persisted row even though the in-memory entry was already gone');
+ }finally{w.close();}
+});
+
+test('a sidecar DELETE that keeps failing is retried on the next cycle, not only at the periodic sweep',async()=>{
+ const {DatabaseSync}=await import('node:sqlite');
+ const w=world();try{
+  const secret=w.add(w.a,'用户最近开始学习潜水。');await w.sync();
+  const onDisk=()=>{const db=new DatabaseSync(w.indexFile);try{return db.prepare('SELECT count(*) n FROM vectors WHERE memory_id=?').get(secret.id).n;}finally{db.close();}};
+  const lock=new DatabaseSync(w.indexFile);lock.exec('PRAGMA busy_timeout=0;BEGIN EXCLUSIVE');
+  try{w.store.forget(w.a,secret.id,secret.revision);assert.match((await w.runtime.cycle({force:true})).error,/locked/,'the retry fails too');}
+  finally{lock.exec('ROLLBACK');lock.close();}
+  await w.runtime.cycle({force:true});
+  assert.equal(onDisk(),0,'the next cycle retries without waiting for sweepIntervalMs');
+ }finally{w.close();}
+});
+
+test('a WAL checkpoint blocked by a reader keeps the index dirty and does not wait for the busy timeout',async()=>{
+ const {DatabaseSync}=await import('node:sqlite');
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'semantic-wal-')),file=path.join(dir,'v.sqlite');
+ const index=new VectorIndex(file,'v',DIM);try{
+  index.upsert('a',1,'h',conceptVector('潜水'));
+  const reader=new DatabaseSync(file);reader.exec('BEGIN');reader.prepare('SELECT count(*) FROM vectors').get();
+  try{
+   index.remove('a');const started=Date.now();
+   assert.equal(index.scrub(),false,'a blocked checkpoint is not reported as done');
+   assert(Date.now()-started<1000,'the indexer thread is not held for the busy timeout');
+  }finally{reader.exec('ROLLBACK');reader.close();}
+  assert.equal(index.scrub(),true,'still dirty, so the next scrub retries');
+  assert.equal(fs.statSync(file+'-wal').size,0,'the WAL is truncated');
+ }finally{index.close();fs.rmSync(dir,{recursive:true,force:true});}
+});
+
+test('an indexFile that is not a SQLite file is refused and left untouched',()=>{
+ const w=world({mode:'off'});try{
+  const notes=path.join(w.dir,'notes.txt'),text='用户的笔记\n'.repeat(200);fs.writeFileSync(notes,text);
+  assert.throws(()=>attach(w.store,{mode:'active',indexFile:notes,model:MODEL,indexIntervalMs:3600000},{provider:fakeProvider()}),/not a SQLite file/);
+  assert.equal(fs.readFileSync(notes,'utf8'),text);
  }finally{w.close();}
 });
 
