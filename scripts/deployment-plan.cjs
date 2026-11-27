@@ -23,7 +23,7 @@ function select({profile,core,extras,extrasEnabled=false}){
  const names=new Set(active(rows));
  const selected=[...requiredFolders];
  if(extrasEnabled)selected.push('bundles/character-extras');
- for(const [name,folder]of [['dsh-memory-inspector','packages/memory-inspector'],['dsh-interaction-policy','packages/interaction-policy'],['dsh-character-long-tasks','packages/long-tasks']])if([...names].some(n=>n===name||n.startsWith(name+'/')))selected.push(folder);
+ for(const [name,folder]of [['dsh-memory-inspector','packages/memory-inspector'],['dsh-interaction-policy','packages/interaction-policy'],['dsh-character-long-tasks','packages/long-tasks'],['dsh-character-manager','packages/character-manager']])if([...names].some(n=>n===name||n.startsWith(name+'/')))selected.push(folder);
  return selected;
 }
 function disableLegacyMemory(rows){for(const row of entries(rows))if(row.id==='task-memory')row.disabled=true;}

@@ -82,13 +82,15 @@ DSH agent-loop 在调用 `agent/pre-step` **之前**就用 `inbox.claim()` 把�
 
 重启恢复（`settleOrphans`）只看 per-run 任务最近 20 条原生投递（`schedule.history`）中、**早于本 Host 进程启动**（`performance.timeOrigin`）且没有 run 的那些：若 Session 正在运行一轮（可能正等待认领）或是仍在收件箱中的最近一次投递（原生会重新唤醒），保持不动；否则按上表结算一次。本进程内的投递从不被恢复逻辑结算。插件在同一进程内停用后再启用期间被消耗的投递不在此范围内（停用期间执行守卫本就拒绝执行）。
 
+任务账本是整个安装共用的原生 storageDomain，而每个角色以自己的 Identity 作用域运行（角色 ID 不同、数据目录不同）。换角色后，账本里会有其他角色创建的任务：恢复时它们和它们的 run 原样保留，不对账、不结算、不通知、不执行，只记一条警告；它们的计划到期时，投递因作用域不符被拒绝，换回原角色后由上面的重启恢复按 `restart_unclaimed` 结算。账本中找不到所属任务的 run 同样跳过并警告。两者都不会让当前角色的长期任务整体不可用。
+
 ### 历史任务兼容
 
 此前创建的任务（记录中没有 `delivery` 字段，计划为 `target:{kind:'session'}`，预先创建的独立根 Session）不迁移，继续按原方式执行、修改、取消和重启恢复：同一根 Session 承载其所有周期，`taskAgent`、工具守卫、认领、活动汇报与通知都与新任务共用同一代码路径；旧版本指令的投递同样结算为 `stale_revision`。两种任务可以共存。配置 `sessionMode: task-root` 可以让新任务也使用旧方式（仅用于没有 Session 创建器的 Host，属于显式选择）；默认 `per-run`。
 
 ### 已知限制
 
-- DSH 0.2.2-rc.1 的 `sessionController`、`agents` 与 `workspaceRegistry` 都没有卸载或释放 Session 的公开 API：Agent 句柄只属于创建者，归档（archive）只是禁止执行的显示集合，不卸载。每个 run 的 Session 在 Host 进程内保持加载直到 Host 重启（与 Web 界面里原生 `new` 目标计划相同）。隔离 Host 实测：每个最小任务 Session（一轮、无工具）约常驻 50–70 KB 堆；真实 run 的历史更大。60 秒周期每天约 1440 个 Session，至少约 100 MB/天。为此每个 Host 进程最多绑定 `runSessionBudget`（默认 1000，可配置 1–1000000）个 per-run Session（运行中、已结算、未执行结算的都计入；Host 已不再持有的不计入；历史根 Session 任务不计入）。达到上限后新的 occurrence 不执行，按上表记为 `session_budget` 并通知一次；重启 Host 后计数清零。原生仍会为这些 occurrence 创建 Session（无法在 Character 层阻止），所以预算只限制执行，不限制 Session 创建。原生对 `new` 目标设有 60 秒最小投递间隔（`newSessionIntervalSeconds`）。
+- DSH 0.2.2-rc.1 的 `sessionController`、`agents` 与 `workspaceRegistry` 都没有卸载或释放 Session 的公开 API：Agent 句柄只属于创建者，归档（archive）只是禁止执行的显示集合，不卸载。每个 run 的 Session 在 Host 进程内保持加载直到 Host 重启（与 Web 界面里原生 `new` 目标计划相同）。隔离 Host 实测：每个最小任务 Session（一轮、无工具）约常驻 50–70 KB 堆；真实 run 的历史更大。60 秒周期每天约 1440 个 Session，至少约 100 MB/天。为此每个 Host 进程最多绑定 `runSessionBudget`（默认 1000，可配置 1–1000000）个 per-run Session（运行中、已结算、未执行结算的都计入；Host 已不再持有的不计入；历史根 Session 任务不计入）。达到上限后新的 occurrence 不执行，按上表记为 `session_budget` 并通知一次；重启 Host 后计数清零。原生仍会为这些 occurrence 创建 Session（无法在 Character 层阻止），所以预算只限制执行，不限制 Session 创建。原生对 `new` 目标设有最小投递间隔（Schedule 插件配置 `newSessionIntervalSeconds`，默认 60 秒，可设 60–604800）：同一任务的两次新建 Session 的投递至少相隔这么久，期间到期的触发不各自新建 Session。建议在 Profile 中把它设为 1800（`- id: schedule` / `config: {newSessionIntervalSeconds: 1800}`；宿主的 `schedule` 行没有其他配置，整体替换不会丢失设置），每个任务每天最多 48 个 Session。
 - 原生 `new` 目标不占用执行槽（`runNow`/定时投递对 `new` 目标的 held 集为空）：周期间隔短于单次执行时间时，同一任务的相邻两个 run 会在各自 Session 中并行。它们是不同的 run，分别认领、汇报、结算和通知；工具错误只标记所属 run；取消对该任务所有运行中的 run Session 请求原生 cancel，尚未认领的已投递 Session 结算为 cancelled。历史根 Session 任务则在同一 Session 中排队。本版本不提供 overlapPolicy：工具副作用不能并行的任务应选择明显长于单次执行时间的间隔（默认任务没有工具，不受影响）。
 - 新 Session 会按 `cwd` 加入已注册的 Workspace，并以“任务标题 · 时间”命名，因此会出现在 DSH 会话列表中。
 

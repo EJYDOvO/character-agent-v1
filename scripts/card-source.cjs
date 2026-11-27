@@ -11,7 +11,7 @@ const RULES_KEYS = ['systemFile', 'reminderFile'];
 // Every key a build config may hold (card-source and build-settings). Any
 // other key fails: a misspelled cardPath or rules would otherwise be ignored
 // and the build would quietly ship a different character or no rules.
-const CONFIG_KEYS = ['characterId', 'cardPath', 'rules', 'userName', 'presetId', 'dataDirectory', 'interaction', 'specialistWorkers', 'communityWorkerPresets', 'roles', 'semanticRecall'];
+const CONFIG_KEYS = ['characterId', 'cardPath', 'rules', 'userName', 'presetId', 'dataDirectory', 'interaction', 'specialistWorkers', 'communityWorkerPresets', 'roles', 'semanticRecall', 'characterManager'];
 // Spellings that have a dedicated message.
 const RENAMED_KEYS = {
   card: 'Unknown build config key "card": use cardPath',
@@ -106,4 +106,12 @@ function cardRevisions({cardPath, systemRulesPath, reminderPath}) {
   return revisionsOf({card: read(cardPath), systemRules: read(systemRulesPath), reminder: read(reminderPath)});
 }
 
-module.exports = {readConfig, cardSettings, cardRevisions, revisionsOf};
+/**
+ * With the character manager the card is chosen at runtime and nothing of it is
+ * built in, so callers that fingerprint the effective card skip it.
+ */
+function characterManagerEnabled() {
+  return readConfig().characterManager?.enabled === true;
+}
+
+module.exports = {readConfig, cardSettings, cardRevisions, revisionsOf, characterManagerEnabled};

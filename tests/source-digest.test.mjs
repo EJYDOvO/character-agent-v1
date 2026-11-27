@@ -8,11 +8,12 @@ import {join, resolve} from 'node:path';
 const root = resolve(import.meta.dirname, '..');
 
 // Runs the digest in a child process: pack.cjs calls it with the deployment
-// environment, so the test does too, with a build config naming the template.
-function digest(env) {
+// environment, so the test does too. The default config names the template.
+const TEMPLATE_CONFIG = {characterId: 'test-a', cardPath: 'characters/template/card.yaml'};
+function digest(env, buildConfig = TEMPLATE_CONFIG) {
   const dir = mkdtempSync(join(tmpdir(), 'source-digest-'));
   const config = join(dir, 'build-config.json');
-  writeFileSync(config, JSON.stringify({characterId: 'test-a', cardPath: 'characters/template/card.yaml'}));
+  writeFileSync(config, JSON.stringify(buildConfig));
   const clean = Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^DSH_/.test(key)));
   const result = spawnSync(process.execPath, ['-e', "console.log(require('./scripts/source-digest.cjs')())"],
     {cwd: root, encoding: 'utf8', env: {...clean, DSH_CHARACTER_BUILD_CONFIG: config, ...env}, windowsHide: true});
@@ -26,4 +27,15 @@ test('the release source digest covers the effective character card', () => {
   const card = join(mkdtempSync(join(tmpdir(), 'source-digest-card-')), 'card.json');
   writeFileSync(card, JSON.stringify({spec: 'chara_card_v3', spec_version: '3.0', data: {name: 'A', description: 'd'}}));
   assert.notEqual(digest({DSH_CHARACTER_CARD: card}), first);
+});
+
+test('with the character manager the digest ignores the card', () => {
+  const managed = {characterManager: {enabled: true}};
+  const first = digest({}, managed);
+  assert.match(first, /^[0-9a-f]{64}$/);
+  const card = join(mkdtempSync(join(tmpdir(), 'source-digest-card-')), 'card.json');
+  writeFileSync(card, JSON.stringify({spec: 'chara_card_v3', spec_version: '3.0', data: {name: 'A', description: 'd'}}));
+  assert.equal(digest({DSH_CHARACTER_CARD: card}, managed), first);
+  assert.equal(digest({DSH_CHARACTER_CARD: join(tmpdir(), 'missing-card.json')}, managed), first);
+  assert.notEqual(first, digest({}));
 });

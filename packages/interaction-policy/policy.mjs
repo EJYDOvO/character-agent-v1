@@ -4,13 +4,16 @@ export const replyPolicy = `Interaction Policy V1：沿用既定 Persona 的语�
 
 // Same limit as the Character card build (tests/reminder-limit.test.mjs).
 export const MAX_STYLE_REMINDER_CHARS=4000;
+export const DEFAULT_HANG_ON_TEXT='还在处理中，稍等一下。';
+export const MAX_HANG_ON_TEXT_CHARS=200;
+const ABSOLUTE_PATH=/^(?:[A-Za-z]:[\\/]|\/|\\\\)/u;
 
 export function options(input={}) {
   const hangOnMs=input.hangOnMs??8000;
-  const result={enabled:input.enabled!==false,hangOnMs,hangOnDraftMs:input.hangOnDraftMs??(Number.isInteger(hangOnMs)?Math.round(hangOnMs/2):0),throttleMs:input.throttleMs??180,maxBubbles:input.maxBubbles??3,chatMaxChars:input.chatMaxChars??240,bubbleTargetChars:input.bubbleTargetChars??300,hangOnText:input.hangOnText??'还在处理中，稍等一下。'};
+  const result={enabled:input.enabled!==false,hangOnMs,hangOnDraftMs:input.hangOnDraftMs??(Number.isInteger(hangOnMs)?Math.round(hangOnMs/2):0),throttleMs:input.throttleMs??180,maxBubbles:input.maxBubbles??3,chatMaxChars:input.chatMaxChars??240,bubbleTargetChars:input.bubbleTargetChars??300,hangOnText:input.hangOnText??DEFAULT_HANG_ON_TEXT};
   for(const [key,min,max]of [['hangOnMs',10,300000],['throttleMs',0,5000],['maxBubbles',1,4],['chatMaxChars',20,1000]])if(!Number.isInteger(result[key])||result[key]<min||result[key]>max)throw Error('Invalid interaction option: '+key);
   if(!Number.isInteger(result.hangOnDraftMs)||result.hangOnDraftMs<0||result.hangOnDraftMs>=result.hangOnMs)throw Error('Invalid interaction option: hangOnDraftMs');
-  if(typeof result.hangOnText!=='string'||!result.hangOnText.trim()||result.hangOnText.length>200)throw Error('Invalid hangOnText');
+  if(typeof result.hangOnText!=='string'||!result.hangOnText.trim()||result.hangOnText.length>MAX_HANG_ON_TEXT_CHARS)throw Error('Invalid hangOnText');
   if(!Number.isInteger(result.bubbleTargetChars)||result.bubbleTargetChars<100||result.bubbleTargetChars>1000)throw Error('Invalid bubbleTargetChars');
   // Character card style reminder, appended to the hang-on draft prompt.
   if(input.styleReminder!==undefined){
@@ -19,8 +22,19 @@ export function options(input={}) {
   }
   // Location of the optional hangon-model.json route; not a feature switch.
   if(input.hangOnModelFile!==undefined){
-    if(typeof input.hangOnModelFile!=='string'||!/^(?:[A-Za-z]:[\\/]|\/|\\\\)/u.test(input.hangOnModelFile))throw Error('Invalid interaction option: hangOnModelFile');
+    if(typeof input.hangOnModelFile!=='string'||!ABSOLUTE_PATH.test(input.hangOnModelFile))throw Error('Invalid interaction option: hangOnModelFile');
     result.hangOnModelFile=input.hangOnModelFile;
+  }
+  // compiled.json of the current character. The plugin index reads the style
+  // reminder and hang-on text from it at use time, so a static reminder is a conflict.
+  if(input.compiledFile!==undefined){
+    if(typeof input.compiledFile!=='string'||!ABSOLUTE_PATH.test(input.compiledFile)||input.styleReminder!==undefined)throw Error('Invalid interaction option: compiledFile');
+    result.compiledFile=input.compiledFile;
+  }
+  // Getters handed in by the plugin index stay live; copying their value would freeze it.
+  for(const key of ['hangOnText','styleReminder']){
+    const {get}=Object.getOwnPropertyDescriptor(input,key)??{};
+    if(get)Object.defineProperty(result,key,{get,enumerable:true});
   }
   return Object.freeze(result);
 }

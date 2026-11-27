@@ -85,3 +85,32 @@ test('legacy qq-character Owner Sessions stay bound; the scope moves only with t
  assert.equal(after.characterIdentity.canDeliverReminder({...legacy.agent}),false,'an unregistered Agent object is not trusted');
  const audit=await after.characterIdentity.auditSchedules().catch(e=>e.message);assert.match(String(audit),/unavailable|rows/);
 });
+
+// ── Character manager: the public Persona is a plugin row, not static text ──
+const runtimeRow=()=>({id:'persona',name:'dsh-character-manager/runtime-persona.mjs',config:{audience:'public',compiledFile:'C:/data/character-current/compiled.json',bindingFile:'C:/data/character-current/binding.json'}});
+test('public persona row replaces the static persona',()=>{
+ const source=owner(),before=structuredClone(source),row=runtimeRow(),rows=rolePresets({owner:source,publicPersonaRow:row});
+ assert.deepEqual(source,before);assert.deepEqual(rows.map(r=>r.config.id),['character','character-contact','character-guest']);
+ assert.equal(rows[0].config.plugins.find(p=>p.id==='persona').config.prefix,'private-owner-definition','Owner is unchanged');
+ for(const preset of rows.slice(1)){
+  assert.deepEqual(preset.config.plugins.map(p=>p.id),['persona','role-tool-scope']);
+  assert.deepEqual(preset.config.plugins[0],row);assert.notEqual(preset.config.plugins[0],row,'each Preset gets its own copy');
+  assert(!JSON.stringify(preset).includes('private-owner-definition'));
+ }
+ assert.notEqual(rows[1].config.plugins[0],rows[2].config.plugins[0]);
+});
+test('exactly one public persona source',()=>{
+ assert.throws(()=>rolePresets({owner:owner(),publicPersona:'p',publicPersonaRow:runtimeRow()}),/public Persona/);
+ assert.throws(()=>rolePresets({owner:owner()}),/public Persona/);
+ assert.throws(()=>rolePresets({owner:owner(),publicPersonaRow:{...runtimeRow(),id:'other'}}),/public Persona/);
+ assert.throws(()=>rolePresets({owner:owner(),publicPersonaRow:null}),/public Persona/);
+});
+test('the public persona row must read the public audience',()=>{
+ for(const audience of ['owner',undefined,'Public'])
+  assert.throws(()=>rolePresets({owner:owner(),publicPersonaRow:{...runtimeRow(),config:{...runtimeRow().config,audience}}}),/audience/,String(audience));
+ assert.throws(()=>rolePresets({owner:owner(),publicPersonaRow:{id:'persona',name:'x'}}),/audience/,'no config');
+});
+test('the legacy Owner alias is unchanged with a persona row',()=>{
+ const rows=rolePresets({owner:owner(),publicPersonaRow:runtimeRow(),legacyOwner:'qq-character'});
+ assert.deepEqual(rows.at(-1).config.plugins,rows[0].config.plugins);
+});
