@@ -1,24 +1,23 @@
 # 当前状态
 
-本文件区分六类事实：当前 main 的代码、未合并的分支、已合并但未部署的改动、DSH 0.2.2-rc.1 隔离验证、尚未验证的范围，以及历史验收记录。历史数字只代表当时的提交与宿主，不是当前验证结果。本仓库不记录生产部署；源码 HEAD 不等于部署 SHA，生产实际版本须由 Owner 在生产环境核实。
+本文件区分五类事实：当前 main 的代码、已合并但未部署的改动、DSH 0.2.2-rc.1 隔离验证、尚未验证的范围，以及历史验收记录。历史数字只代表当时的提交与宿主，不是当前验证结果。本仓库不记录生产部署；源码 HEAD 不等于部署 SHA，生产实际版本须由 Owner 在生产环境核实。
 
 ## 当前 main 代码
 
 | 范围 | 状态 |
 |---|---|
-| Character | 0.1.0-test.40（角色卡 V3 第一期、默认开启的语义检索，含可选角色模式），Semantic Recall 0.1.0-test.1，Long Tasks 0.1.0-test.6，Interaction 0.1.0-test.10 |
-| 配套 QQTK | I/O test.9、Manager test.5、Remote Ops 1.1.1-test.3、QQ0.5.2 / SDK1.0.5 |
+| Character | 0.1.0-test.41（角色卡 V3 第一期、默认开启的语义检索、默认关闭的运行时角色管理，含可选角色模式），Semantic Recall 0.1.0-test.1，Character Manager 0.1.0-test.3，Long Tasks 0.1.0-test.7，Interaction 0.1.0-test.11 |
+| 配套 QQTK | I/O test.9、Manager test.6、Remote Ops 1.1.1-test.3、QQ0.5.2 / SDK1.0.5 |
 | 官方宿主目标 | DSH 0.2.2-rc.1 / Node 24 / Windows；源码不再支持 0.2.1 Schedule API |
 
-源码已实现：四核心插件、Creator 构建派生、通用 Memory L1–L3/FTS5/CAS/遗忘屏障、可信 Identity、原生独立 Worker、可选 Interaction、原生内嵌 Inspector 与 Long Tasks。QQTK 独立维护唯一 I/O/Manager/QQ Gateway，通知为 at-most-once handoff。
+源码已实现：四核心插件、Creator 构建派生、通用 Memory L1–L3/FTS5/CAS/遗忘屏障、可信 Identity、原生独立 Worker、可选 Interaction、原生内嵌 Inspector、Long Tasks 与默认关闭的运行时角色管理。QQTK 独立维护唯一 I/O/Manager/QQ Gateway，通知为 at-most-once handoff。
 
 新 portable 入口显式指定发行目录、新 Home、模型、账号、Owner、Persona 与可选插件；根依赖锁和版本清单进入 Git，生成 Core/包/Profile 与数据不进入 Git。旧布局脚本仍用于现有兼容回归，不代表新设备配置默认值。
 
-## 未合并、未部署（角色管理候选）
-
-- 候选 Character 0.1.0-test.41 整合 `main` 的 D1 默认语义召回和 `feat/character-manager`。角色管理默认关闭。开启时，Identity、Memory、语义索引和 Conversation 状态随 `character-current` 联接切换。Character Manager 0.1.0-test.3，Long Tasks 0.1.0-test.7，Interaction 0.1.0-test.11。角色切换需要 QQTK 的切换维护后端和 Conversation Manager 0.1.0-test.6。切换中断时恢复原角色，切回时保留显式及派生会话路由。见 [角色管理](MANAGEMENT.md#角色管理设置--角色管理)。
-
 ## 已合并、未部署
+
+- semantic-sidecar-cleanup：修复语义旁路索引清理失败时重置 `sweepDue` 导致未在下一轮重试、WAL checkpoint 被只读连接阻塞时等待 3 秒 `busy_timeout` 的问题，并拒绝删除或覆盖非 SQLite 文件头（`SQLite format 3`）的 `indexFile`。
+- test.41（Character #28 / QQTK #20，角色管理，默认关闭）：整合 D1 默认语义召回与 `feat/character-manager`。开启 `characterManager: {enabled: true}` 时，Identity、Memory、语义索引和 Conversation 状态随 `character-current` 联接切换，首次初始化 `sessionNamespace` 并在切回时保留显式及派生会话路由；QQTK 侧配套 Conversation Manager 0.1.0-test.6 与切换中断恢复。跨角色恢复跳过其他角色的长期任务（Long Tasks 0.1.0-test.7），Interaction 实时读取角色 `compiled.json`（Interaction 0.1.0-test.11）。见 [角色管理](MANAGEMENT.md#角色管理设置--角色管理)。
 
 - test.36（C1 执行边界审计修复，PR #24 同一分支）：DSH agent-loop 在 `agent/pre-step` 之前就把投递从持久收件箱取出，被拒绝的投递不会放回。修复前，已投递但在认领前遇到任务修改（旧版本指令）、取消或无法读取原生计划的 occurrence 会被消耗而不留 run、也不通知；Host 在取出后、认领前停止的 occurrence 重启后同样无痕丢失（真实 Host 门禁在修复前确实失败）。现在这些可信投递一律以 `executed:false` 的终态 run 结算并经 Outbox 通知（`stale_revision`/`cancelled`/`unverified_delivery`/`task_unavailable`/重启后的 `restart_unclaimed`），从不执行旧版本指令、不补跑、不标 completed；伪造帧仍直接拒绝。新增每 Host 进程 `runSessionBudget`（默认 1000）限制可执行的 per-run Session 数（0.2.2-rc.1 无公开 API 释放 Session；实测每个最小 Session 约 50–70 KB 堆），超出的 occurrence 结算为 `session_budget` 并每任务通知一次。Session→任务索引避免 pre-step 线性扫描账本。同一周期任务的并行 run 保持默认允许（原生 `new` 目标不占执行槽），身份、状态、通知与取消已测试独立。生产 2026-11-13 已部署的是 test.35（本分支早先提交），不含这些修复。
 - test.35（C1 统一执行层）：需要 Agent 执行的定时任务只走 Long Tasks 一套 Task / Run 生命周期，不为普通 Schedule 另建结果回传。新任务使用原生 Schedule `target:{kind:'new',create:{agentPreset:long-task,cwd}}`：每次 occurrence 由 Host `sessionController` 新建任务 Preset 的独立 Session，Run ID 仍为任务 ID + occurrence；pre-step 认领时凭原生投递帧、任务自己的计划 ID 与当前指令、实时 `view()`（已提交时 `lastDelivery.targetSessionId` 必须是该 Session）把 Session 绑定到一个 run，先写账本再执行，之后该 Session 不再接受任何回合。最终结果复用既有 `turn/end` 结算与 Outbox（`long-task:<runId>`），活动汇报不变；正常结束但没有可用最终回复改为 `needs_review`。Host 缺少 Session 创建器时创建明确失败，不降级。历史 `target:session` 根 Session 任务原样执行、修改、取消、恢复，可与新任务共存；`sessionMode: task-root` 为显式兼容选项。纯提醒仍是 `schedule_create` + Identity 到期提醒，不启动 Agent；Skill 与工具说明写明选择规则。已知限制：0.2.2-rc.1 无公开 API 卸载 per-run Session（保持加载至 Host 重启）；原生 `new` 目标不占执行槽，同一周期任务的相邻 run 可并行。详见 [Long Tasks README](../packages/long-tasks/README.md)。

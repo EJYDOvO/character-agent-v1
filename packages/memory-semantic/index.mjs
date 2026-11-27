@@ -69,7 +69,8 @@ export function attach(store,config={},{provider:injected,logger,busy}={}){
   state.busy=true;
   try{
    state.cycles++;state.lastRun=Date.now();let embedded=0;
-   if(ranker.sweepDue||Date.now()-state.lastSweep>=sweepEvery){state.lastSweep=Date.now();ranker.sweepDue=false;for(const id of store.semanticOrphans(index.entries())){index.remove(id);state.removed++;}}
+   // sweepDue is cleared only once the sweep has finished, so a delete that fails again is retried next cycle.
+   if(ranker.sweepDue||Date.now()-state.lastSweep>=sweepEvery){state.lastSweep=Date.now();ranker.sweepDue=true;for(const id of store.semanticOrphans(index.entries())){index.remove(id);state.removed++;}ranker.sweepDue=false;}
    for(const ctx of store.activeContexts()){
     if(state.closed||embedded>=batch)break;
     let rows;try{rows=store.semanticCandidates(ctx);}catch{continue;}

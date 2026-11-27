@@ -21,7 +21,9 @@ try{
   if($phase -eq 'shadow'){
    # A damaged sidecar: the plugin must rebuild it, never fail the Host or touch memory.sqlite.
    foreach($suffix in @('-wal','-shm')){Remove-Item -LiteralPath ($run.indexFile+$suffix) -ErrorAction SilentlyContinue}
-   [IO.File]::WriteAllBytes($run.indexFile,[byte[]](,0x5a*16384))
+   # SQLite header, garbage pages: a file without the header is refused, not replaced.
+   $damaged=[byte[]](,0x5a*16384);[Text.Encoding]::ASCII.GetBytes("SQLite format 3`0").CopyTo($damaged,0)
+   [IO.File]::WriteAllBytes($run.indexFile,$damaged)
   }
   $result=Join-Path $run.home "result-$phase.json"
   $p=Start-Process -FilePath $exe -ArgumentList @('--expose-internals','--import',$resolver,('"{0}"' -f $cli),'--profile','semantic','--no-open','--port','0') -WorkingDirectory $run.home -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $run.home "stdout-$phase.log") -RedirectStandardError (Join-Path $run.home "stderr-$phase.log")
