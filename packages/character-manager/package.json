@@ -1,0 +1,39 @@
+{
+  "name": "dsh-character-manager",
+  "version": "0.1.0-test.3",
+  "type": "module",
+  "main": "index.mjs",
+  "files": [
+    "*.mjs",
+    "card",
+    "template",
+    "client.js",
+    "README.md"
+  ],
+  "dependencies": {
+    "js-yaml": "4.1.1"
+  },
+  "engines": {
+    "node": ">=24",
+    "dsh": ">=0.2.2-rc.1"
+  },
+  "exports": {
+    ".": "./index.mjs",
+    "./runtime-persona.mjs": "./runtime-persona.mjs",
+    "./client": "./client.js",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-connection"
+      ],
+      "external": [
+        "react",
+        "@deepseek-ai/dsh-client-ui-primitives"
+      ]
+    }
+  }
+}

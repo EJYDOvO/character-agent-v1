@@ -22,6 +22,8 @@
     bubbleTargetChars: 300
 ```
 
+`styleReminder`（可选，≤4000 字符）是附在等待提示提示词里的角色末尾提醒。角色管理方式下改用 `compiledFile: '<absolute-path>/compiled.json'`（与 `styleReminder` 互斥，同时给出会抛 `Invalid interaction option: compiledFile`）：每次生成等待提示或发送固定等待提示时读取该文件的 `reminder` 和 `hangOnText`，按 `mtimeMs`/大小缓存，所以编辑或切换角色无需重建。文件缺失、JSON 错误、`hangOnText` 为空或超过 200 字符、`reminder` 超过 4000 字符时退回无提醒和默认等待提示 `还在处理中，稍等一下。`；此时配置里的 `hangOnText` 不生效。插件只解析这两个字段，不引用角色管理包。
+
 这是插件条目，不是 Host 根插件，也不是自动启用的 Bundle。`enabled: false` 时不注册服务和提示词。既有 Session 可能保留旧 Preset revision；按 DSH 原生机制切换/重载，在空闲时创建新 Session 验证关闭，不强制取消运行中的工具。
 
 Host 适配器通过 `ctx.agentPresets.serviceFor(agent, 'interactionPolicy')` 获取该 Agent 的实例服务，再调用 `get(agent)`。禁止把模型提供的 Session ID 转成任意 Agent；查找只接受已由原生 scoped 事件登记的真实对象。

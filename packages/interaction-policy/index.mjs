@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import { readFileSync } from 'node:fs';
-import { Interaction, options, replyPolicy } from './policy.mjs';
+import { readFileSync, statSync } from 'node:fs';
+import { DEFAULT_HANG_ON_TEXT, Interaction, MAX_HANG_ON_TEXT_CHARS, MAX_STYLE_REMINDER_CHARS, options, replyPolicy } from './policy.mjs';
 export const name='interaction-policy';
 export const inject=['systemPrompt','llm'];
 const PERSONA_SECTIONS=['deployment:persona-prefix','deployment:persona-suffix'];
@@ -20,8 +20,37 @@ export function hangOnModel(file,read=readFileSync){
  if(keys.join()!=='model,provider'||[value.provider,value.model].some(v=>typeof v!=='string'||!v.trim()||v.length>200))throw Error('hangon-model.json must contain only provider and model');
  return {provider:value.provider,model:value.model};
 }
+// The current character's compiled.json carries the style reminder and the
+// hang-on text. Interaction parses just those two fields itself, so it needs no
+// Character code. Anything unusable gives neutral values: no reminder and the
+// default wait text. The parsed file is cached until its mtime or size changes;
+// a read that fails (a lock, a read during a replace) is not cached: that call
+// keeps the previous style and the next call reads again.
+const liveFiles=new Map();
+export function liveStyle(file,fallbackHangOnText,read=readFileSync){
+ const neutral={styleReminder:'',hangOnText:fallbackHangOnText};
+ let key;try{const stat=statSync(file);key=`${stat.mtimeMs}:${stat.size}`;}catch{liveFiles.delete(file);return neutral;}
+ let entry=liveFiles.get(file);
+ if(entry?.key!==key){
+  let text;try{text=read(file,'utf8');}catch{return entry?.style?{...entry.style}:neutral;}
+  entry={key,style:null};
+  try{
+   const {reminder,hangOnText}=JSON.parse(text);
+   if(typeof reminder==='string'&&[...reminder].length<=MAX_STYLE_REMINDER_CHARS&&typeof hangOnText==='string'&&hangOnText.trim()&&hangOnText.length<=MAX_HANG_ON_TEXT_CHARS)entry.style={styleReminder:reminder,hangOnText};
+  }catch{}
+  liveFiles.set(file,entry);
+ }
+ return entry.style?{...entry.style}:neutral;
+}
+// Interaction reads its config on every use, so getters keep the style live.
+// The build's hangOnText is ignored: it is the character's, not the deployment's.
+function liveConfig({compiledFile,...config}){
+ const style=()=>liveStyle(compiledFile,DEFAULT_HANG_ON_TEXT);
+ return Object.defineProperties(config,{hangOnText:{get:()=>style().hangOnText,enumerable:true},styleReminder:{get:()=>style().styleReminder,enumerable:true}});
+}
 export function apply(ctx,input={}){
- const config=options(input);if(!config.enabled)return;
+ const validated=options(input);if(!validated.enabled)return;
+ const config=validated.compiledFile?liveConfig({...validated}):validated;
  const controllers=new Map();let disposed=false,warned='';
  const warn=message=>{if(warned!==message){warned=message;ctx.logger?.warn?.(message);}};
  const route=agent=>{

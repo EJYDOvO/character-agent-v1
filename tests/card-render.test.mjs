@@ -75,3 +75,31 @@ test('the character name heading is kept when description is empty', () => {
   const result = renderCard(card({description: '', personality: '慵懒'}), {userName: '用户', rules: ''});
   assert.equal(result.prefix, `${PREAMBLE}\n\n## 角色：宁栖\n\n## 性格\n慵懒\n\n## 场景\n用户是朋友`);
 });
+
+test('relationship sits between rules and the preamble', () => {
+  const {prefix} = renderCard(card(), {userName: '用户', rules: '规则甲', relationship: '主人'});
+  const order = ['规则甲', '## 与对话者的关系\n主人', PREAMBLE, '## 角色：'].map(part => prefix.indexOf(part));
+  assert(order.every(index => index >= 0), prefix);
+  assert.deepEqual([...order].sort((a, b) => a - b), order);
+});
+
+test('empty relationship adds no heading', () => {
+  const {prefix} = renderCard(card(), {userName: '用户', rules: '规则甲', relationship: ''});
+  assert(!prefix.includes('## 与对话者的关系'));
+  assert(!renderCard(card(), {userName: '用户', rules: ''}).prefix.includes('## 与对话者的关系'));
+});
+
+test('excluded fields are left out', () => {
+  const result = renderCard(card(), {userName: '用户', rules: '', exclude: ['scenario', 'examples']});
+  assert(!result.prefix.includes('## 场景'));
+  assert.equal(result.suffix, '');
+  assert.equal(result.parts.scenario, '用户是朋友');
+  assert(result.parts.examples.includes('你好'));
+});
+
+test('userFields lists fields that address the user', () => {
+  const data = card({description: '对{{User}}好', scenario: '<user>是朋友', mes_example: '<START>\n{{char}}: 嗯'});
+  assert.deepEqual(renderCard(data, {userName: '用户', rules: ''}).userFields, ['description', 'scenario']);
+  assert.deepEqual(renderCard(data, {userName: '用户', rules: '', exclude: ['description']}).userFields, ['description', 'scenario']);
+  assert.deepEqual(renderCard(card({description: '甲', scenario: '', mes_example: '{{user}}: 嗨'}), {userName: '用户', rules: ''}).userFields, ['examples']);
+});

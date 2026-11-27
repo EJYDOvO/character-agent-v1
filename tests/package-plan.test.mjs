@@ -1,11 +1,16 @@
 import test from 'node:test';import assert from 'node:assert/strict';import {mkdtempSync,mkdirSync,writeFileSync} from 'node:fs';import {tmpdir} from 'node:os';import {join} from 'node:path';import {createRequire} from 'node:module';
-const {folders,inventory,verifiedPlan}=createRequire(import.meta.url)('../scripts/package-plan.cjs');
+const {folders,requiredFolders,inventory,verifiedPlan}=createRequire(import.meta.url)('../scripts/package-plan.cjs');
 const enableInspector=createRequire(import.meta.url)('../scripts/inspector-declaration.cjs');
 test('T14 packaging includes independently versioned Inspector/Interaction and rejects stale or changed artifacts',()=>{
  const root=mkdtempSync(join(tmpdir(),'package-plan-'));mkdirSync(join(root,'artifacts/packages'),{recursive:true});
  folders.forEach((folder,i)=>{const name='fixture-'+i,version='0.1.0-test.'+(i+1);mkdirSync(join(root,folder),{recursive:true});writeFileSync(join(root,folder,'package.json'),JSON.stringify({name,version}));writeFileSync(join(root,'artifacts/packages',name+'-'+version+'.tgz'),'synthetic package '+i);});
  const entries=inventory(root);writeFileSync(join(root,'artifacts/package-source.json'),JSON.stringify({sourceDigest:'current-source',artifacts:entries}));
- assert.equal(verifiedPlan(root,'current-source').length,10);assert(entries.some(e=>e.folder==='packages/memory-semantic'));assert(entries.some(e=>e.folder==='packages/memory-inspector'));assert(entries.some(e=>e.folder==='packages/interaction-policy'));assert(entries.some(e=>e.folder==='packages/long-tasks'));
+ assert.equal(verifiedPlan(root,'current-source').length,11);
+ for(const folder of ['memory-semantic','memory-inspector','interaction-policy','long-tasks','character-manager']){
+  assert(entries.some(e=>e.folder===`packages/${folder}`),folder);
+ }
+ assert(requiredFolders.includes('packages/memory-semantic'));
+ assert(!requiredFolders.includes('packages/character-manager'));
  assert.throws(()=>verifiedPlan(root,'new-source'),/different source/);writeFileSync(join(root,'artifacts/packages',entries[0].filename),'changed');assert.throws(()=>verifiedPlan(root,'current-source'),/mismatch/);
 });
 test('T14 Inspector uses native insert once or overrides its existing Bundle declaration, initially read-only',()=>{

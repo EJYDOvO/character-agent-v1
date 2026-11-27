@@ -9,6 +9,8 @@ const unbound=prompt=>typeof prompt==='string'?prompt.replace(/\n\[HOST BINDING 
 const stopped=task=>!task||['cancelled','cancelling','failed'].includes(task.state);
 const missed=result=>!result||typeof result!=='object'||'code' in result;
 const actorOf=agent=>agent?.session?.id??agent?.id;
+// The Identity scope a task belongs to (Owner, Character, project, Conversation).
+const SCOPE_KEYS=['principalId','characterId','projectId','conversationId'];
 // Per-run Sessions bound in one Host process before new occurrences are refused (see residentCount).
 export const RUN_SESSION_BUDGET=1000;
 // Newest native deliveries of a per-run task checked for an unexecuted receipt after a restart.
@@ -45,7 +47,7 @@ export class LongTasks {
   this.clock={now:clock.now??Date.now,setTimeout:clock.setTimeout??setTimeout,clearTimeout:clock.clearTimeout??clearTimeout};this.timers=new Map();this.chain=Promise.resolve();this.active=new Map();this.closed=false;this.ready=new Promise((resolve,reject)=>{this.resolveReady=resolve;this.rejectReady=reject;});this.ready.catch(()=>{});}
  serial(fn){const p=this.chain.then(()=>{if(this.closed)throw Error('Long tasks disabled');return fn();});this.chain=p.catch(()=>{});return p;}
  owner(agent){if(this.h.agents.get(agent?.id)!==agent)throw Error('Actual Host Agent required');const c=this.h.identity.forSession(agent.id);return this.h.identity.authorize(c,'write');}
- scoped(task,scope){if(!task||['principalId','characterId','projectId','conversationId'].some(k=>task.scope[k]!==scope[k]))throw Error('Task not found in authorized scope');return task;}
+ scoped(task,scope){if(!task||SCOPE_KEYS.some(k=>task.scope[k]!==scope[k]))throw Error('Task not found in authorized scope');return task;}
  // options.sessionMode: Host-internal override (compatibility tests); the
  // model tool never passes it.
  async create(agent,args,signal,operationId,{sessionMode=this.sessionMode}={}){await this.ready;return this.serial(async()=>{
@@ -77,7 +79,7 @@ export class LongTasks {
   const catalog=await this.h.schedule.catalog();
   const byTask=new Map();for(const [,run]of this.h.runs.entries()){const rows=byTask.get(run.taskId)??[];rows.push(run);byTask.set(run.taskId,rows);}
   const state=(t,schedule)=>t.state!=='active'||!schedule?t.state:!ownsTarget(t,schedule)?'schedule_mismatch':schedule.status==='ended'?'ended':schedule.status==='paused'?'paused':t.state;
-  return [...this.h.tasks.entries()].map(([,t])=>t).filter(t=>['principalId','characterId','projectId','conversationId'].every(k=>t.scope[k]===scope[k])).map(t=>{const schedule=catalog.find(s=>s.id===t.scheduleId),all=(byTask.get(t.id)??[]).map(r=>runView(this.h.identity,t.scope,r)),runs=all.slice(-20);
+  return [...this.h.tasks.entries()].map(([,t])=>t).filter(t=>SCOPE_KEYS.every(k=>t.scope[k]===scope[k])).map(t=>{const schedule=catalog.find(s=>s.id===t.scheduleId),all=(byTask.get(t.id)??[]).map(r=>runView(this.h.identity,t.scope,r)),runs=all.slice(-20);
    // Attention covers every run, not only the 20 shown: an older uncertain or
    // never-enqueued notification must stay visible. Ids, times and states only.
    const deliveryAttention=all.filter(r=>r.delivery.attention).slice(-20).map(r=>({runId:r.id,occurrenceAt:r.occurrenceAt,endedAt:r.endedAt??null,execution:r.execution,...r.delivery}));
@@ -310,17 +312,35 @@ export class LongTasks {
    await this.removeSchedule(task,undefined);await this.h.tasks.put(id,{...task,state:'cancelled'});
   }
  }
+ // Whether a task belongs to the Identity this Host runs. The ledger is a
+ // Home-wide storageDomain shared by every Character of the installation, so
+ // after a character switch it holds tasks another Character created.
+ ownTask(task){
+  const current=this.h.identity.conversationScope?.();
+  if(!current){this.h.identity.validateConversation(task.scope);return true;}
+  return SCOPE_KEYS.every(k=>task.scope?.[k]===current[k]);
+ }
+ // A task of another Character, and its runs, are kept exactly as they are:
+ // not reconciled, settled, notified or run until that Character runs again.
+ // A run without its task cannot run either; both are reported, and neither
+ // stops this Character's long tasks.
  recover(){const recovery=this.serial(async()=>{
-  for(const [,task]of this.h.tasks.entries())await this.reconcile(task.id);
+  const foreign=new Set();let orphans=0;
+  for(const [,task]of this.h.tasks.entries()){if(!this.ownTask(task)){foreign.add(task.id);continue;}await this.reconcile(task.id);}
+  if(foreign.size)this.h.warn?.(`${foreign.size} long task(s) of another Character are kept but not recovered or run here`);
   for(const [,run]of this.h.runs.entries()){
-   const task=this.h.tasks.get(run.taskId);if(!task)throw Error('Orphan task run');this.h.identity.validateConversation(task.scope);
+   const task=this.h.tasks.get(run.taskId);
+   if(!task){orphans++;continue;}
+   if(foreign.has(task.id))continue;
+   this.h.identity.validateConversation(task.scope);
    if(run.status==='running'){
     // The run's own Session: its per-run Session, or the historical task root.
     const log=await this.h.load(run.sessionId),end=(log.events??[]).find(e=>e.type==='turn/end'&&e.data.turn===run.turn);
     const next={...run,status:end?.data.reason?.kind==='completed'?'needs_review':'interrupted',reason:'restart_recovery',endedAt:new Date().toISOString(),notification:'pending'};await this.h.runs.put(run.id,next);await this.notify(task,next);
    }else if(run.notification==='pending')await this.notify(task,run);
   }
-  for(const [,task]of this.h.tasks.entries())if(perRun(task)&&task.scheduleId)await this.settleOrphans(task);
+  if(orphans)this.h.warn?.(`${orphans} long task run(s) have no task in the ledger; left for inspection`);
+  for(const [,task]of this.h.tasks.entries())if(perRun(task)&&task.scheduleId&&!foreign.has(task.id))await this.settleOrphans(task);
   // Overdue work: DSH 0.2.2 Schedule resumes due tasks itself (latest-only
   // catch-up, restored-inbox recovery). The occurrence ledger above still
   // rejects any repeat execution; no rebind, timer or replay queue here.

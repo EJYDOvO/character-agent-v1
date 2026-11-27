@@ -1,6 +1,6 @@
 # 当前状态
 
-本文件区分五类事实：当前 main 的代码、已合并但未部署的改动、DSH 0.2.2-rc.1 隔离验证、尚未验证的范围，以及历史验收记录。历史数字只代表当时的提交与宿主，不是当前验证结果。本仓库不记录生产部署；源码 HEAD 不等于部署 SHA，生产实际版本须由 Owner 在生产环境核实。
+本文件区分六类事实：当前 main 的代码、未合并的分支、已合并但未部署的改动、DSH 0.2.2-rc.1 隔离验证、尚未验证的范围，以及历史验收记录。历史数字只代表当时的提交与宿主，不是当前验证结果。本仓库不记录生产部署；源码 HEAD 不等于部署 SHA，生产实际版本须由 Owner 在生产环境核实。
 
 ## 当前 main 代码
 
@@ -13,6 +13,10 @@
 源码已实现：四核心插件、Creator 构建派生、通用 Memory L1–L3/FTS5/CAS/遗忘屏障、可信 Identity、原生独立 Worker、可选 Interaction、原生内嵌 Inspector 与 Long Tasks。QQTK 独立维护唯一 I/O/Manager/QQ Gateway，通知为 at-most-once handoff。
 
 新 portable 入口显式指定发行目录、新 Home、模型、账号、Owner、Persona 与可选插件；根依赖锁和版本清单进入 Git，生成 Core/包/Profile 与数据不进入 Git。旧布局脚本仍用于现有兼容回归，不代表新设备配置默认值。
+
+## 未合并、未部署（角色管理候选）
+
+- 候选 Character 0.1.0-test.41 整合 `main` 的 D1 默认语义召回和 `feat/character-manager`。角色管理默认关闭。开启时，Identity、Memory、语义索引和 Conversation 状态随 `character-current` 联接切换。Character Manager 0.1.0-test.3，Long Tasks 0.1.0-test.7，Interaction 0.1.0-test.11。角色切换需要 QQTK 的切换维护后端和 Conversation Manager 0.1.0-test.6。切换中断时恢复原角色，切回时保留显式及派生会话路由。见 [角色管理](MANAGEMENT.md#角色管理设置--角色管理)。
 
 ## 已合并、未部署
 
@@ -27,9 +31,11 @@
 
 ## DSH 0.2.2-rc.1 隔离验证
 
-固定测试宿主见 [native-host-pin.json](evidence/native-host-pin.json)；`scripts/run-native-gates.ps1` 先校验宿主，再运行 lifecycle（含 Long Tasks）、workers、roles、schedule-restart 四项必需门禁。宿主缺失、版本或哈希不符、签名不符、门禁失败或未运行，都不判为通过。隔离 Home 建在系统临时目录下的 `dsh-character-gates`（可用 `DSH_CHARACTER_TEST_ROOT` 指定），必须位于任何 git 工作树之外：DSH workspace-changes 会在每轮结束时对 Session 工作目录所在仓库做快照，Home 放在项目内时，宿主在快照中途被停止会留下孤儿 `git add`，并因继承的句柄挂住运行器。运行器只等待各门禁进程本身（输出写文件，单项超时 20 分钟），残留子进程不再阻塞。GitHub Hosted CI 不含 DSH，只跑单元与安全审计；`native-host.yml` 需要专用 self-hosted Windows runner，在注册之前不会运行，也不是必需检查。
+固定测试宿主见 [native-host-pin.json](evidence/native-host-pin.json)；`scripts/run-native-gates.ps1` 先校验宿主，再运行 lifecycle（含 Long Tasks）、workers、roles、schedule-restart、character-manager 五项必需门禁。character-manager（`scripts/run-character-manager.ps1`）使用三个 Host 进程覆盖 A → B → A，验证人设热生效、切换后的记忆/身份/会话隔离，以及切回后的未登记 Guest 会话续接与旧角色提醒被拦下、公开版只给 Contact / Guest 已确认的文本、封禁与 Contact 授权跨切换保留、Contact / Guest 没有工具；切换在门禁里直接改联接，watchdog 切换由 QQTK 单独测试。宿主缺失、版本或哈希不符、签名不符、门禁失败或未运行，都不判为通过。隔离 Home 建在系统临时目录下的 `dsh-character-gates`（可用 `DSH_CHARACTER_TEST_ROOT` 指定），必须位于任何 git 工作树之外：DSH workspace-changes 会在每轮结束时对 Session 工作目录所在仓库做快照，Home 放在项目内时，宿主在快照中途被停止会留下孤儿 `git add`，并因继承的句柄挂住运行器。运行器只等待各门禁进程本身（输出写文件，单项超时 20 分钟），残留子进程不再阻塞。GitHub Hosted CI 不含 DSH，只跑单元与安全审计；`native-host.yml` 需要专用 self-hosted Windows runner，在注册之前不会运行，也不是必需检查。
 
-最近一次本地运行（2026-11-13，C1 审计修复 `525702f`；本机 Windows，非 CI runner）：Character 单元 406/406、安全审计 35/35，QQTK 审计 36/36；`run-native-gates.ps1` 宿主校验通过，lifecycle 118 s、workers 20 s、roles 21 s、schedule-restart 22 s 全部通过。lifecycle 在真实 Host 上新增：修改/取消与已投递未认领 occurrence 的竞态（夹具在 role 认领前暂停已取走的投递）各结算一次、未执行任何步骤、各通知一次；真实重启前已取走并落盘但未认领的投递在重启后结算为 `restart_unclaimed` 一次、未执行步骤；已预留 pendingDelivery 并创建 Session 但未投递的 occurrence 在重启后用同一 Session ID 投递并只执行一次。把对应修复回退后，这两项真实 Host 检查分别失败（`Race update is in the ledger`、`the claimed receipt is settled exactly once: 0 !== 1`）；单元层 14 个关键守卫的变异全部被测试捕获。仍未覆盖：重启时收件箱中尚未被取走的投递由原生重新唤醒的路径（无法确定性制造），只有单元测试。
+最近一次本地运行（2026-11-16，分支 `feat/character-manager` 终审修复后的代码 `f6959ac`；本机 Windows，非 CI runner）：Character 单元 623/623、安全审计 35/35；`run-native-gates.ps1` 宿主校验通过（版本、三项哈希、Authenticode 签名有效），五项必需门禁全部通过：lifecycle 122 s、workers 20 s、roles 22 s、schedule-restart 21 s、character-manager 94 s。character-manager 新增一个始终是 Guest、在 A 下换过一次 Session 的私聊：切换到 B 后进入 B 预置的新 Session，请求里没有 A 的历史；把切换准备回退到修复前（只预置 Owner）时，这项在真实 Host 上失败（`the Guest does not resume a Session of A`）。模型与 QQ 传输为合成夹具。
+
+上一次（2026-11-13，C1 审计修复 `525702f`；本机 Windows，非 CI runner）：Character 单元 406/406、安全审计 35/35，QQTK 审计 36/36；`run-native-gates.ps1` 宿主校验通过，lifecycle 118 s、workers 20 s、roles 21 s、schedule-restart 22 s 全部通过。lifecycle 在真实 Host 上新增：修改/取消与已投递未认领 occurrence 的竞态（夹具在 role 认领前暂停已取走的投递）各结算一次、未执行任何步骤、各通知一次；真实重启前已取走并落盘但未认领的投递在重启后结算为 `restart_unclaimed` 一次、未执行步骤；已预留 pendingDelivery 并创建 Session 但未投递的 occurrence 在重启后用同一 Session ID 投递并只执行一次。把对应修复回退后，这两项真实 Host 检查分别失败（`Race update is in the ledger`、`the claimed receipt is settled exactly once: 0 !== 1`）；单元层 14 个关键守卫的变异全部被测试捕获。仍未覆盖：重启时收件箱中尚未被取走的投递由原生重新唤醒的路径（无法确定性制造），只有单元测试。
 
 更早一次（2026-11-13，C1 分支代码 `a402a6f`；本机 Windows，非 CI runner）：Character 单元 394/394（含 per-run 13 项、历史根 Session 兼容 34 项）、安全审计 35/35，QQTK 审计 36/36；`run-native-gates.ps1` 宿主校验通过（版本、三项哈希、Authenticode 签名有效），lifecycle 112 s、workers 19 s、roles 21 s、schedule-restart 21 s 全部通过。lifecycle 新增 C1 检查：per-run 周期任务经原生 run-now 与一次定时触发，在两个由 Host Session 创建器新建的 `long-task` Session 中各执行一个 run，各自结算 `completed` 并各发一条结果通知；这些 Session 不是 QQ Session、无 Memory 身份、只有任务工具白名单、不含 QQ 聊天历史，每个 Session 只有一条投递；一次性、工具错误、日/周/Cron 与活动汇报任务均为 per-run，历史根 Session 周期任务继续执行与取消。未证明归属目标 18 次冷恢复尝试、0 次被接受。重启后恢复“已投递未认领”的 per-run 投递只在单元测试中覆盖，未在真实 Host 中演练。
 
@@ -37,7 +43,7 @@
 
 ## 尚未验证
 
-真实 QQ Gateway 与补丁 SDK 在 0.2.2 的联网装配、手机送达与 Owner 阅读；真实模型的 Memory 形成质量、Worker 委派质量与成本；预算账本在真实 Provider 下的取消延迟；生产数据迁移；Mac/Linux 原生环境。其余限制：Mac/Linux 原生环境未验收；历史 Session 的 cwd/附件绝对路径可能需要人工审阅；旧非标准数据布局无自动导入保证。真实 QQ、已有提醒/通知以及私有业务数据迁移须在另行授权的停机流程验证。
+真实 QQ Gateway 与补丁 SDK 在 0.2.2 的联网装配、手机送达与 Owner 阅读；角色管理在真实 QQ 与真实模型下的表现（运行时人设、公开版对 Contact / Guest 的效果）、生产首次接入（`adopt-character.cjs` 收编 `data/character-yuha`）以及生产上由 watchdog 执行的真实切换与退回；真实模型的 Memory 形成质量、Worker 委派质量与成本；预算账本在真实 Provider 下的取消延迟；生产数据迁移；Mac/Linux 原生环境。其余限制：Mac/Linux 原生环境未验收；历史 Session 的 cwd/附件绝对路径可能需要人工审阅；旧非标准数据布局无自动导入保证。真实 QQ、已有提醒/通知以及私有业务数据迁移须在另行授权的停机流程验证。
 
 已知非阻断事项：未证明归属的提醒到期后，原生 Schedule 每次 drive 请求都会重试冷恢复目标，并被 Identity 拒绝（隔离 lifecycle 中每次运行约 20 次，每次 15–55 ms，无执行、无投递），只造成重复开销与警告日志；Home 位于 git 仓库内时，DSH workspace-changes 启动的 git（`add`、`rev-parse`）在宿主停止后可能成为孤儿并长时间不退出，原因未查明，隔离 Home 后不再触发。
 
