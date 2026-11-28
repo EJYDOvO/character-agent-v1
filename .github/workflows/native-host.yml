@@ -1,16 +1,15 @@
-name: Native Host gates (DSH 0.2.2-rc.1)
+name: Native Host gates (DSH 0.2.3-alpha.2)
 # Runs only on a dedicated self-hosted Windows runner that holds the pinned,
 # signed test Host (docs/evidence/native-host-pin.json). Not enabled until such
-# a runner with the labels below is registered and DSH_TEST_HOST_ROOT is set;
+# a runner with the labels below is registered and DSH_ALPHA2_TEST_HOST_ROOT is set;
 # until then this workflow never runs and is NOT a required check. Isolated
 # Homes and synthetic model/QQ transport only: no production data or QQ.
 on:
   workflow_dispatch:
     inputs:
       qqtk_ref:
-        description: QQTK commit or branch to test against
+        description: QQTK Alpha.2 candidate commit or branch
         required: true
-        default: main
 permissions:
   contents: read
 concurrency:
@@ -18,11 +17,11 @@ concurrency:
   cancel-in-progress: false
 jobs:
   native:
-    runs-on: [self-hosted, Windows, dsh-0.2.2-rc.1]
+    runs-on: [self-hosted, Windows, dsh-0.2.3-alpha.2]
     timeout-minutes: 90
     env:
-      DSH_CHARACTER_HOST_ROOT: ${{ vars.DSH_TEST_HOST_ROOT }}
-      DSH_INSTALL_ROOT: ${{ vars.DSH_TEST_HOST_ROOT }}
+      DSH_CHARACTER_HOST_ROOT: ${{ vars.DSH_ALPHA2_TEST_HOST_ROOT }}
+      DSH_INSTALL_ROOT: ${{ vars.DSH_ALPHA2_TEST_HOST_ROOT }}
       DSH_QQTK_PROJECT: ${{ github.workspace }}\qqtk
     steps:
       - uses: actions/checkout@v4
@@ -33,7 +32,7 @@ jobs:
           path: qqtk
       - uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: '24.22.3'
       - name: Locked dependencies
         shell: pwsh
         run: npm ci; if($LASTEXITCODE){exit $LASTEXITCODE}; Push-Location qqtk; npm ci; $c=$LASTEXITCODE; Pop-Location; exit $c

@@ -1,3 +1,5 @@
+import {fixtureWorkerSettlement} from './fixture-worker-settlement.mjs';
+import {fixtureOwnerCookie} from './fixture-owner-cookie.mjs';
 // Actual installed DSH, synthetic model/materials, isolated home. No QQ connection.
 import fs from 'node:fs';import assert from 'node:assert/strict';import {randomUUID} from 'node:crypto';
 import {LlmAdapter,createUserMessage} from '@deepseek-ai/dsh-llm';
@@ -13,6 +15,7 @@ export const inject=['agents','agentPresets','tools','llm','subagents','sessions
 let brokenMountAttempts=0;
 export function apply(ctx,config){
  if(config.brokenFixture){brokenMountAttempts++;throw Error('Fixture target cannot be mounted');}
+ const settlement=fixtureWorkerSettlement(ctx);
  const observed=new Map(),bySession=new Map(),attempted=new Set(),ids=selectedWorkerIds(['worker-review'],['worker-community',{id:'root-planner-worker',alias:'external-planner'}]);let effects=0,globalEffects=0;
  class Fixture extends LlmAdapter{async *stream(request){
   const system=JSON.stringify(request.messages.filter(m=>m.role==='system')),messages=JSON.stringify(request.messages),role=/你是独立的 ([a-z-]+)/.exec(system)?.[1]??'root';
@@ -30,7 +33,7 @@ export function apply(ctx,config){
  async function run(){
   const handles=[],registrations=[],report={ok:false,runId:config.runId,host:config.version,provenance:config.provenance,restart:fs.existsSync(config.cwd+'/worker-state.json'),qqNetwork:false,model:'deterministic fixture',checks:[]};let release;
   try{
-   assert.equal(config.version,'0.2.2-rc.1');
+   assert.equal(config.version,'0.2.3-alpha.2');
    const create=async(preset,sessionId=randomUUID(),resume=false)=>{
     const options={agentOptions:{provider:'worker-v2-fixture',model:'fixture'},setup:async c=>{await ctx.agentPresets.mount(c,preset);}};
     const h=await (resume?ctx.agents.resume({...options,resumeSessionId:sessionId}):ctx.agents.create({...options,sessionId,meta:{cwd:config.cwd,agentPreset:preset}}));handles.push(h);return h.agent;
@@ -52,16 +55,17 @@ export function apply(ctx,config){
    const targetPlugins=[{id:'legacy-boundary',name:new URL('../packages/character-memory-tools/worker.mjs',import.meta.url).href},{id:'persona',name:'@deepseek-ai/dsh-persona',config:{prefix:'你是独立的 restore-community-worker。WorkerResult V1。Only analyze supplied evidence.'}}];
    const target=await register('restore-community-worker',targetPlugins),recoveryParent=await parentFor('fixture-recovery-parent','restore-community-worker');
    const native=ctx.tools.get('subagent',recoveryParent),child=await native.execute({description:'Persist real preset',prompt:'fixture',agent_preset:'restore-community-worker'},{agent:recoveryParent,signal:AbortSignal.timeout(10000)});
-   await ctx.agents.get(child.subagentId).whenIdle();await ctx.subagents.drainChildren(recoveryParent,[child.subagentId]);await target.dispose();
-   await assert.rejects(()=>ctx.subagents.sendMessage(recoveryParent,child.subagentId,[{type:'text',text:'Must not fall back to Creator'}],{signal:AbortSignal.timeout(5000)}));
-   assert.equal(ctx.agents.get(child.subagentId),undefined);
+   const childId=await ctx.subagents.resolveName(recoveryParent,child.name,AbortSignal.timeout(5000));
+   await ctx.agents.get(childId).whenIdle();await settlement.settle(childId);await target.dispose();
+   await assert.rejects(()=>ctx.subagents.sendMessage(recoveryParent,childId,[{type:'text',text:'Must not fall back to Creator'}],{signal:AbortSignal.timeout(5000)}));
+   assert.equal(ctx.agents.get(childId),undefined);
    await register('restore-community-worker',targetPlugins);
-   await ctx.subagents.sendMessage(recoveryParent,child.subagentId,[{type:'text',text:'Restore original real ID only'}],{signal:AbortSignal.timeout(10000)});
-   const restored=ctx.agents.get(child.subagentId);assert.equal(ctx.agentPresets.composedPreset(restored.ctx),'restore-community-worker');assert.equal(ctx.tools.checkGuards({agent:restored}),undefined);await restored.whenIdle();
+   await ctx.subagents.sendMessage(recoveryParent,childId,[{type:'text',text:'Restore original real ID only'}],{signal:AbortSignal.timeout(10000)});
+   const restored=ctx.agents.get(childId);assert.equal(ctx.agentPresets.composedPreset(restored.ctx),'restore-community-worker');assert.equal(ctx.tools.checkGuards({agent:restored}),undefined);await restored.whenIdle();await settlement.settle(childId);
    report.checks.push('Native missing declaration, broken mount and removed cold target reject without Creator fallback; original ID can be restored');
    const saved=report.restart?JSON.parse(fs.readFileSync(config.cwd+'/worker-state.json')):null;
    if(config.managerProbe){
-    const origin=ctx.webServer.getOrigin(),login=await fetch(ctx.connection.authenticatedUrl(origin+'/'),{redirect:'manual'}),cookie=login.headers.get('set-cookie').split(';')[0];
+    const origin=ctx.webServer.getOrigin(),cookie=await fixtureOwnerCookie(ctx);
     const call=async(action,body={})=>{const response=await fetch(origin+'/api/dsh-preset-manager',{method:'POST',headers:{cookie,origin,'content-type':'application/json'},body:JSON.stringify({action,...body})});assert.equal(response.status,200);const result=await response.json();assert.equal(result.ok,true,JSON.stringify(result));return result.value;};
     const preset=async id=>(await call('list')).presets.find(p=>p.id===id);
     if(!saved)for(const id of ids){
@@ -91,7 +95,7 @@ export function apply(ctx,config){
    for(const id of ids){
     let worker;
     if(saved){const child=saved.children.find(c=>c.preset===id);assert(child);await ctx.subagents.sendMessage(root,child.id,[{type:'text',text:'Continue analysis with supplied evidence only.'}],{signal:AbortSignal.timeout(10000)});worker=ctx.agents.get(child.id);}
-    else {const result=await spawn.execute({description:'Independent '+id,prompt:'Analyze only supplied fixture evidence; reference fixture:1.',agent_preset:id},exec);worker=ctx.agents.get(result.subagentId);}
+    else {const result=await spawn.execute({description:'Independent '+id,prompt:'Analyze only supplied fixture evidence; reference fixture:1.',agent_preset:id},exec);worker=ctx.agents.get(await ctx.subagents.resolveName(root,result.name,exec.signal));}
     assert(worker);await worker.whenIdle();
     assert.notEqual(worker.id,root.id);assert.equal(ctx.agentPresets.composedPreset(worker.ctx),id);
     assert(ctx.tools.get('worker_fixture_tool',worker));assert(!ctx.tools.get('root_only_fixture',worker));assert(!ctx.tools.get('character_recall',worker));// Host-global tools may be visible natively; visibility never grants task identity.
@@ -125,6 +129,7 @@ export function apply(ctx,config){
     worker.followup(createUserMessage({content:[{type:'text',text:'attack-late-tool'}],source:{kind:'fixture'}}));await worker.whenIdle();remove();allow();
     const called=name=>worker.session.snapshotEvents().some(e=>e.type==='assistant/message'&&e.data?.message?.content?.some(b=>b.type==='tool-call'&&b.name===name));
     assert(called('late_worker_write'),'Attack was not actually submitted');assert.equal(effects,beforeLate+1);
+    await settlement.settle(worker.id);
     // The WorkerResult reaches the Root as a native settlement, not via job_output.
     if(!saved){
      const settled=()=>root.session.snapshotEvents().find(e=>e.type==='user/message'&&(e.data?.message??e.data)?.source?.kind==='subagent-settled'&&(e.data?.message??e.data).source.senderSessionId===worker.id);
@@ -136,7 +141,7 @@ export function apply(ctx,config){
      assert.equal(ctx.dshMemory.db.prepare('SELECT count(*) n FROM experiences WHERE instr(body,?)>0').get(UNTRUSTED_WORKER).n,0,'Worker success/approval prose is not admitted as human or verified task evidence');
      assert(JSON.stringify((note.data?.message??note.data).content).includes(`\\"worker\\":\\"${id}\\"`),'Settlement must carry the WorkerResult');
     }
-    if(!saved){await ctx.subagents.drainChildren(root,[worker.id]);assert.equal(ctx.agents.get(worker.id),undefined);await ctx.subagents.sendMessage(root,worker.id,[{type:'text',text:'Cold resume analysis only.'}],{signal:AbortSignal.timeout(10000)});const cold=ctx.agents.get(worker.id);await cold.whenIdle();assert.equal(ctx.agentPresets.composedPreset(cold.ctx),id);assert.equal(ctx.tools.checkGuards({agent:cold}),undefined);assert(ctx.tools.get('worker_fixture_tool',cold));const beforeCold=nativeToolExecutions.get(cold.id)??0;cold.followup(createUserMessage({content:[{type:'text',text:'invoke-configured-tool after cold recovery'}],source:{kind:'fixture'}}));await cold.whenIdle();assert.equal(nativeToolExecutions.get(cold.id),beforeCold+1);await ctx.sessions.flush(cold.session);}
+    if(!saved){await ctx.subagents.sendMessage(root,worker.id,[{type:'text',text:'Cold resume analysis only.'}],{signal:AbortSignal.timeout(10000)});const cold=ctx.agents.get(worker.id);await cold.whenIdle();assert.equal(ctx.agentPresets.composedPreset(cold.ctx),id);assert.equal(ctx.tools.checkGuards({agent:cold}),undefined);assert(ctx.tools.get('worker_fixture_tool',cold));const beforeCold=nativeToolExecutions.get(cold.id)??0;cold.followup(createUserMessage({content:[{type:'text',text:'invoke-configured-tool after cold recovery'}],source:{kind:'fixture'}}));await cold.whenIdle();assert.equal(nativeToolExecutions.get(cold.id),beforeCold+1);await settlement.settle(cold.id);}
    }
    report.checks.push(`${ids.length} actual native independent Presets: configured tools execute, no parent history/Persona or inherited QQ/Memory/Long Tasks authority`);
    report.checks.push('Every WorkerResult reaches the Root as a native subagent-settled message');
@@ -144,12 +149,12 @@ export function apply(ctx,config){
    report.checks.push('Worker scope masks Host-global tools, including ones registered after spawn; model-submitted calls to them never execute; read-only search allowlist stays available');
    report.checks.push('Native whitelist, depth=1 and parent communication restrictions hold; configured and late scoped tools execute');
    report.checks.push('Real root-planner-worker ID spawns and persists; display alias and undeclared high-privilege roots rejected');
-   report.checks.push(saved?'Full Host restart restores parent and every saved child with original Preset and native tools':'Every Worker drained and cold-restored with its original Preset and native tools');
+   report.checks.push(saved?'Full Host restart restores parent and every saved child with original Preset and native tools':'Every Worker settled and cold-restored with its original Preset and native tools');
    await ctx.sessions.flush(root.session);
    if(!saved)fs.writeFileSync(config.cwd+'/worker-state.json',JSON.stringify({root:root.id,children}));
    report.ok=true;
   }catch(e){report.error=e.stack;}finally{
-   release?.();for(const h of handles)await h.dispose().catch(()=>{});for(const fork of registrations.reverse())await Promise.resolve().then(()=>fork.dispose()).catch(()=>{});
+   settlement.releaseAll();release?.();for(const h of handles)await h.dispose().catch(()=>{});for(const fork of registrations.reverse())await Promise.resolve().then(()=>fork.dispose()).catch(()=>{});
    fs.writeFileSync(config.result,JSON.stringify(report,null,2));
   }
  }

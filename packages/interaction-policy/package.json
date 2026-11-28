@@ -1,8 +1,8 @@
 {
   "name": "dsh-interaction-policy",
-  "version": "0.1.0-test.11",
+  "version": "0.1.0-test.12",
   "type": "module",
   "main": "index.mjs",
   "files": ["*.mjs", "README.md"],
-  "engines": {"node": ">=24"}
+  "engines": {"node": ">=24", "dsh": ">=0.2.3-alpha.2"}
 }

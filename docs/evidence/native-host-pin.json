@@ -1,9 +1,9 @@
 {
   "purpose": "Pinned official DSH test Host for native gates. Isolated verification only; not a deployment record.",
-  "version": "0.2.2-rc.1",
+  "version": "0.2.3-alpha.2",
   "executable": "DeepSeek Harness.exe",
   "signerIncludes": "Hangzhou DeepSeek Artificial Intelligence Co., Ltd.",
-  "executableSha256": "bad50d18a3cf42621ac03aeaf1dc527ee20384ca4c0b7eee64512954ddb9a76e",
-  "appAsarSha256": "5fa8a6b21bceb8f3e99e30efa2270efd0cc773a11e42aa0488f804a64b34e637",
-  "appAsarUnpackedTreeSha256": "ee9869e8b11d65d0d7d4682130103fc3cc6079476036827c80cf38d3e883e057"
+  "executableSha256": "6037110dadec3a6954e36da0b67be158324d3ec546b44b64ef374d075b92ac8b",
+  "appAsarSha256": "dbd860998178fb23fe5802704fa1cf919f5b6957e4b3cc2c1b778efdb61297ab",
+  "appAsarUnpackedTreeSha256": "6eb9b988b09c347694f8ea931e7746258bf0f6ff32937464e3a1855aeb1425ea"
 }

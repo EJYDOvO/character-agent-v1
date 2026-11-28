@@ -6,7 +6,7 @@ const args=process.argv.slice(2),get=name=>{const i=args.indexOf('--'+name);if(i
 const files=Object.fromEntries(['binding','state','prefs','schedule','sessions'].map(k=>[k,path.resolve(get(k))]));
 const presetId=get('preset'),read=file=>JSON.parse(fs.readFileSync(file,'utf8').replace(/^\uFEFF/,'')),hash=s=>createHash('sha256').update(s).digest('hex');
 if(!process.env.DSH_INSTALL_ROOT||!path.isAbsolute(process.env.DSH_INSTALL_ROOT))throw Error('Set absolute DSH_INSTALL_ROOT; run using its Electron with ELECTRON_RUN_AS_NODE=1');
-if(read(process.env.DSH_INSTALL_ROOT+'/resources/app.asar/dsh/package.json').version!=='0.2.2-rc.1')throw Error('Audit requires revalidation against this DSH build');
+if(read(process.env.DSH_INSTALL_ROOT+'/resources/app.asar/dsh/package.json').version!=='0.2.3-alpha.2')throw Error('Audit requires revalidation against this DSH build');
 // DSH 0.2.2 reads Schedule v1 rows unchanged and writes v2 on the next edit or
 // delivery. Mirror its decoding: an explicit target wins; otherwise the v1
 // Session binding is a fixed target; a row with neither has a create-once

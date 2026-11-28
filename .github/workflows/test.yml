@@ -16,7 +16,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: '24.22.3'
       - name: Locked build dependencies
         run: npm ci
       - name: Unit and security regression (no credentials or production services)

@@ -1,6 +1,6 @@
 {
   "name": "dsh-character-manager",
-  "version": "0.1.0-test.3",
+  "version": "0.1.0-test.4",
   "type": "module",
   "main": "index.mjs",
   "files": [
@@ -15,7 +15,7 @@
   },
   "engines": {
     "node": ">=24",
-    "dsh": ">=0.2.2-rc.1"
+    "dsh": ">=0.2.3-alpha.2"
   },
   "exports": {
     ".": "./index.mjs",

@@ -65,7 +65,7 @@ export function apply(ctx,input={}){
  const persona=agent=>{
   const sections=ctx.systemPrompt.layers?.merge?.(agent,layer=>layer.sections);
   if(!sections)throw Error('Persona sections unavailable');
-  return PERSONA_SECTIONS.map(id=>{const s=sections.get(id);return String((typeof s?.text==='function'?s.text({agent,scope:agent}):s?.text)??'');}).join('\n\n').trim().slice(0,PERSONA_MAX_CHARS);
+  return PERSONA_SECTIONS.map(id=>{const s=sections.get(id)?.at(-1)?.definition;return String((typeof s?.text==='function'?s.text({agent,scope:agent}):s?.text)??'');}).join('\n\n').trim().slice(0,PERSONA_MAX_CHARS);
  };
  // No sessionId or purpose: the call stays outside Session checkpoints, titles
  // and history. The result is presentation only and is never persisted.

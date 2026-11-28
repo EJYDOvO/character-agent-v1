@@ -9,7 +9,7 @@ import {writeJsonAtomic} from './compiled.mjs';
 import {personaState} from './runtime-persona.mjs';
 
 export const name = 'character-manager';
-export const inject = ['webServer', 'connection', 'characterIdentity'];
+export const inject = ['webServer', 'connection', 'connection.authentication', 'characterIdentity'];
 
 const ROUTE = '/character-manager';
 // Same schema as scripts/card-yaml.cjs: no YAML-only types in cards.
@@ -39,7 +39,7 @@ export function apply(ctx, config = {}) {
     isClosed: () => closed,
   });
   ctx.effect(() => {
-    const release = ctx.webServer.register({kind: 'prefix', path: ROUTE, handler: serve});
+    const release = ctx.webServer.register({kind: 'prefix', path: ROUTE, auth: 'required', handler: serve});
     return () => {
       closed = true;
       release();

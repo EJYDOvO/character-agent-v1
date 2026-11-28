@@ -1,6 +1,6 @@
 {
   "name": "dsh-character-system-local",
-  "version": "0.1.0-test.41",
+  "version": "0.1.0-test.42",
   "private": true,
   "type": "module",
   "scripts": {
@@ -10,7 +10,7 @@
     "portable": "node scripts/portable.cjs"
   },
   "engines": {
-    "node": ">=24"
+    "node": "^24.22.3 || >=26.13.1"
   },
   "packageManager": "pnpm@11.7.0",
   "devDependencies": {

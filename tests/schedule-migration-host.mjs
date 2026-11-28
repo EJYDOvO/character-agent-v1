@@ -47,7 +47,7 @@ export function apply(ctx,config){
     fs.writeFileSync(state,JSON.stringify({sessions,file:files[0],v1Hash:sha(files[0]),tasks,deleted:gone.id,ended:ended.id,every:made[1].id}));
     report.checks.push(`rc.3 wrote ${catalog.length} v1 tasks (one deleted, ended delivered: ${report.observations.endedDelivered})`);
    }else if(phase===1){
-    assert.equal(version,'0.2.2-rc.1');
+    assert.equal(version,'0.2.3-alpha.2');
     report.observations.startupWrite=sha(saved.file)!==saved.v1Hash;
     assert.equal(report.observations.startupWrite,false,'rc.1 startup must not rewrite v1 storage');
     const catalog=await ctx.schedule.catalog();assert.equal(sha(saved.file),saved.v1Hash,'Catalog read must not write');
@@ -69,7 +69,7 @@ export function apply(ctx,config){
     fs.writeFileSync(state,JSON.stringify({...saved,v2Hash:sha(saved.file),edited:summary(edited)}));
     report.checks.push('Stale CAS writes nothing; first real edit upgrades storage to v2; other rows keep id/target/due time');
    }else if(phase===2){
-    assert.equal(version,'0.2.2-rc.1');
+    assert.equal(version,'0.2.3-alpha.2');
     const catalog=await ctx.schedule.catalog();const e=catalog.find(r=>r.id===saved.every);assert.deepEqual(summary(e),saved.edited);
     assert.equal(JSON.parse(fs.readFileSync(saved.file,'utf8')).unit.version,2);
     for(const [id,v1] of Object.entries(saved.tasks)){const row=catalog.find(r=>r.id===id);assert(row);assert.deepEqual(row.target,{kind:'session',sessionId:v1.sessionId});}

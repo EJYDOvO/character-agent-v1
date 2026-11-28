@@ -122,7 +122,7 @@ test('without a drafter the fixed hang-on behaviour is unchanged',async()=>{
 // Plugin wiring: model routing, Persona-only prompt, no Session attribution.
 function plugin(config={},{chunks,header={provider:'main',model:'main-model'},persona='你是小A，说话温和。',selection}={}){
  const listeners=new Map(),calls=[],warnings=[];let service;
- const sections=new Map([['deployment:persona-prefix',{text:persona}],['deployment:persona-suffix',{text:()=>'（后缀）'}],['other',{text:'不应包含'}]]);
+ const sections=new Map([['deployment:persona-prefix',[{definition:{text:persona}}]],['deployment:persona-suffix',[{definition:{text:()=>'（后缀）'}}]],['other',[{definition:{text:'不应包含'}}]]]);
  const ctx={provide:(_n,v)=>service=v,on:(n,f)=>listeners.set(n,f),effect(){},logger:{warn:m=>warnings.push(m)},get:n=>n==='agentDefaultModel'?{currentSelection:()=>selection}:undefined,
   systemPrompt:{context(){},layers:{merge:(scope,pick)=>{calls.push(['merge',scope]);return sections;}}},
   llm:{stream(options){calls.push(['stream',options]);return (async function*(){for(const c of chunks??[{type:'text-delta',index:0,text:'嗯，'},{type:'text-delta',index:0,text:'稍等我一下。'},{type:'finish',reason:{kind:'stop'}}])yield c;})();}}};

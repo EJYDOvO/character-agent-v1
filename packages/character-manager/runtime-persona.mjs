@@ -10,6 +10,9 @@ export const inject = ['systemPrompt'];
 
 const REMINDER_CONTEXT = 'character:reminder';
 const REMINDER_ORDER = 95;
+// Alpha keeps prior section updates in the same Session's history. Identify
+// the effective Persona when an in-history model receives another update.
+const PERSONA_REPLACEMENT = '角色设定更新：先前同一部分的设定停止使用，以当前版本为准。';
 const AUDIENCES = ['owner', 'public'];
 const NEUTRAL = Object.freeze({prefix: NEUTRAL_PERSONA, suffix: '', reminder: ''});
 
@@ -27,10 +30,10 @@ export function apply(ctx, config = {}) {
   const view = () => textFor(state.read(), audience);
   const {systemPrompt} = ctx;
   ctx.effect(() => systemPrompt.section({
-    name: 'deployment:persona-prefix', order: systemPrompt.getSectionOrder('DEPLOYMENT_PERSONA_PREFIX'), text: () => view().prefix,
+    name: 'deployment:persona-prefix', order: systemPrompt.getSectionOrder('DEPLOYMENT_PERSONA_PREFIX'), text: () => view().prefix, replacement: PERSONA_REPLACEMENT,
   }));
   ctx.effect(() => systemPrompt.section({
-    name: 'deployment:persona-suffix', order: systemPrompt.getSectionOrder('DEPLOYMENT_PERSONA_SUFFIX'), text: () => view().suffix,
+    name: 'deployment:persona-suffix', order: systemPrompt.getSectionOrder('DEPLOYMENT_PERSONA_SUFFIX'), text: () => view().suffix, replacement: PERSONA_REPLACEMENT,
   }));
   // The reminder is deployment-authored: prompt interpolation stays off.
   ctx.effect(() => systemPrompt.context({name: REMINDER_CONTEXT, order: REMINDER_ORDER, interpolate: false, text: () => view().reminder}));

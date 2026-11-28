@@ -1,14 +1,17 @@
-import fs from 'node:fs';import assert from 'node:assert/strict';import {randomUUID} from 'node:crypto';import {pathToFileURL} from 'node:url';
+import {fixtureWorkerSettlement} from './fixture-worker-settlement.mjs';
+import {fixtureOwnerCookie,fixtureLoginUrl} from './fixture-owner-cookie.mjs';
+import fs from 'node:fs';import assert from 'node:assert/strict';import {randomUUID} from 'node:crypto';
 import {verifyCompaction} from './probe-verification.mjs';
 import {managerFixture} from './qq-manager-fixture.mjs';
 import {notifierFixture} from './notifier-fixture.mjs';
 import {onceAfter} from './rrule-fixture.mjs';
-const sdk=(process.env.DSH_CHARACTER_HOST_ROOT||process.env.DSH_INSTALL_ROOT)+'/resources/app.asar/dsh/node_modules/@deepseek-ai/';
-const {LlmAdapter,createUserMessage}=await import(pathToFileURL(sdk+'dsh-llm/lib/index.js').href);
-const {defineTool}=await import(pathToFileURL(sdk+'dsh-tools/lib/index.js').href);
+import {LlmAdapter,createUserMessage} from '@deepseek-ai/dsh-llm';
+import {defineTool} from '@deepseek-ai/dsh-tools';
+import hostArchive from '../scripts/host-archive.cjs';
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 export const name='inspector-worker-host-test';export const inject=['agents','agentPresets','tools','llm','characterIdentity','memoryIdentity','dshMemory','webServer','connection','subagents','commands','configEditor'];
 export function apply(ctx,config){
+ const settlement=fixtureWorkerSettlement(ctx);
  class Fixture extends LlmAdapter{async *stream(request){
   const prompt=JSON.stringify(request.messages);
   if(prompt.includes('guard-attack')&&!request.messages.some(m=>m.role==='tool')){yield {type:'tool-call-delta',index:0,id:'guard-fixture-call',name:'worker_scoped_danger',argumentsDelta:'{}'};yield {type:'finish',reason:{kind:'stop'}};return;}
@@ -41,7 +44,7 @@ export function apply(ctx,config){
   await assert.rejects(()=>spawn.execute({description:'forged',prompt:'test',agent_preset:'cordis'},exec),/agent_preset/);
   if(!config.extras)await assert.rejects(()=>spawn.execute({description:'disabled specialist',prompt:'test',agent_preset:'worker-review'},exec),/agent_preset/);
   const spawned=await spawn.execute({description:'native independent worker',prompt:'Analyze supplied material only.'},exec);
-  let worker=ctx.agents.get(spawned.subagentId);assert(worker);assert.notEqual(worker.id,parent.id);assert.equal(ctx.agentPresets.composedPreset(worker.ctx),'worker-general');
+  let worker=ctx.agents.get(await ctx.subagents.resolveName(parent,spawned.name,exec.signal));assert(worker);assert.notEqual(worker.id,parent.id);assert.equal(ctx.agentPresets.composedPreset(worker.ctx),'worker-general');
   assert(!ctx.tools.get('inspector_fixture_danger',worker));assert(!ctx.tools.get('character_recall',worker));assert.equal(ctx.tools.checkGuards({agent:worker}),undefined);assert.equal(ctx.tools.checkGuards({agent:parent}),undefined);
   assert.throws(()=>ctx.memoryIdentity.forSession(worker.id));assert.throws(()=>memory.recall({...trusted,sessionId:worker.id},''));
   await worker.whenIdle();assert.equal(executed,0);report.checks.push('Actual native Spawn: independent preset/session, inherited tool denied, Memory ACL denies forged capability');
@@ -49,10 +52,10 @@ export function apply(ctx,config){
   worker.followup(createUserMessage({content:[{type:'text',text:'guard-attack'}],source:{kind:'user'}}));await worker.whenIdle();removeScoped();assert.equal(executed,1);
   assert(Array.from({length:worker.session.seq},(_,i)=>worker.session.eventAt(i)).some(e=>JSON.stringify(e).includes('guard-fixture-call')),'No actual attack tool call');
   await assert.rejects(()=>ctx.subagents.sendMessage(second,worker.id,[{type:'text',text:'unauthorized'}],{signal:AbortSignal.timeout(5000)}));
-  const workerId=worker.id;await ctx.subagents.drainChildren(parent,[workerId]);assert.equal(ctx.agents.get(workerId),undefined);
+  const workerId=worker.id;await settlement.settle(workerId);
   await ctx.subagents.sendMessage(parent,workerId,[{type:'text',text:'Resume the analysis without executing.'}],{signal:AbortSignal.timeout(10000)});worker=ctx.agents.get(workerId);assert(worker);assert.equal(ctx.agentPresets.composedPreset(worker.ctx),'worker-general');assert.equal(ctx.tools.checkGuards({agent:worker}),undefined);assert.throws(()=>ctx.memoryIdentity.forSession(workerId));await worker.whenIdle();
   report.checks.push('Native configured scoped tool executes; unrelated parent denied; cold resume preserves Worker preset and ACL');
-  if(config.extras){const review=await spawn.execute({description:'specialist',prompt:'Review only supplied evidence.',agent_preset:'worker-review'},exec);const a=ctx.agents.get(review.subagentId);assert.equal(ctx.agentPresets.composedPreset(a.ctx),'worker-review');await a.whenIdle();report.checks.push('Optional specialist native Spawn');}
+  if(config.extras){const review=await spawn.execute({description:'specialist',prompt:'Review only supplied evidence.',agent_preset:'worker-review'},exec);const a=ctx.agents.get(await ctx.subagents.resolveName(parent,review.name,exec.signal));assert.equal(ctx.agentPresets.composedPreset(a.ctx),'worker-review');await a.whenIdle();report.checks.push('Optional specialist native Spawn');}
   await identity.notify(trusted,{eventId:'fixture-dedup',kind:'task_completed',text:'synthetic completion'});await identity.notify(trusted,{eventId:'fixture-dedup',kind:'task_completed',text:'synthetic completion'});assert.equal(deliveries.length,1);
   const schedule=await ctx.tools.get('schedule_create',parent).execute({title:'Isolated schedule',prompt:'fixture reminder',rrule:onceAfter(1),target:'this_session'},exec);assert.deepEqual(schedule.target,{kind:'session',sessionId:parent.session.id});
   const until=Date.now()+12000;while(deliveries.length<2&&Date.now()<until)await sleep(100);assert.equal(deliveries.length,2);assert(deliveries[1].startsWith('[提醒到期]'));report.checks.push('Native Schedule due → existing outbox, notification dedup');
@@ -74,8 +77,8 @@ export function apply(ctx,config){
   const origin=ctx.webServer.getOrigin(),path=origin+'/memory-inspector/api';
   if(config.extras){
    assert.equal((await fetch(path,{method:'POST',headers:{origin,'content-type':'application/json'},body:'{}'})).status,401);
-   const login=await fetch(ctx.connection.authenticatedUrl(origin+'/'),{redirect:'manual'});assert.equal(login.status,303);const cookie=login.headers.get('set-cookie').split(';')[0];
-   const call=async(operation,extra={},override={})=>{const response=await fetch(path,{method:'POST',headers:{origin,cookie,'content-type':'application/json',...override},body:JSON.stringify({operation,context:parent.id,...extra})});return {status:response.status,body:await response.json()};};
+   const cookie=await fixtureOwnerCookie(ctx);
+   const call=async(operation,extra={},override={})=>{const response=await fetch(path,{method:'POST',headers:{origin,cookie,'content-type':'application/json',...override},body:JSON.stringify({operation,context:parent.id,...extra})});const body=response.headers.get('content-type')?.includes('application/json')?await response.json():await response.text();return {status:response.status,body};};
    const contexts=await call('contexts');assert.equal(contexts.status,200);assert.equal(contexts.body.state,'ready');assert(contexts.body.contexts.some(c=>c.id===parent.id));
    assert.equal((await call('browse',{filter:{layer:'l2',query:'isolated-no-such-record'}})).body.total,0);
    assert.equal((await call('browse',{}, {origin:'http://foreign.invalid'})).status,403);
@@ -94,7 +97,9 @@ export function apply(ctx,config){
    assert(envelope.result.value.contexts.some(c=>c.id===parent.id));
    // Execute the exact installed Desktop relay in isolation, with this fixture's
    // cookie only. No production process, credentials or desktop config is read.
-   const desktopSource=fs.readFileSync((process.env.DSH_CHARACTER_HOST_ROOT||process.env.DSH_INSTALL_ROOT)+'/resources/app.asar/lib/main.js','utf8');
+   const archive=hostArchive.openArchive();
+   let desktopSource;
+   try{desktopSource=archive.read('lib/main.js');}finally{archive.close();}
    const start=desktopSource.indexOf('//#region lib/types/web-document.js'),end=desktopSource.indexOf('//#endregion',start);
    assert(start>=0&&end>start,'Installed Desktop relay seam changed');
    const relay=await import('data:text/javascript;base64,'+Buffer.from(desktopSource.slice(start,end)+'\nexport { forwardWebRequest };').toString('base64'));
@@ -119,9 +124,9 @@ export function apply(ctx,config){
    release=identity.attach({manager,config:{appId:'mock-app',preset:'qq-character',access:{c2cMode:'allowlist',c2cAllow:['mock-owner'],groupMode:'disabled'}},sender:{sendMarkdown:async()=>{throw Error('no direct Gateway send');}},notifications:notifierFixture(async()=>{})});await bind(parent);
    const previewCapability=identity.forSession(parent.id);
    for(let i=0;i<24;i++)memory.remember(previewCapability,{kind:'semantic',statement:'合成分页验收条目 '+String(i).padStart(2,'0')},{sessionId:parent.id,eventSeq:1000+i,messageId:'preview:'+i,origin:'direct_user',quote:'合成分页验收条目 '+i});
-   ctx.webServer.register({kind:'exact',path:'/fixture-login',handler(req,res){req.url=new URL(ctx.connection.authenticatedUrl(origin+'/')).search;req.url='/'+req.url;ctx.connection.authorizeIndex(req,res);}});
+   ctx.webServer.register({kind:'exact',path:'/fixture-login',auth:'anonymous',handler(_req,res){res.writeHead(303,{Location:fixtureLoginUrl(ctx),'Cache-Control':'no-store'});res.end();}});
    report.previewOrigin=origin;fs.writeFileSync(config.result,JSON.stringify(report,null,2));const until=Date.now()+600000;while(Date.now()<until&&!fs.existsSync(config.cwd+'/preview.done'))await sleep(250);
   }
- }catch(e){report.ok=false;report.error=e.stack;}finally{release?.();for(const h of handles)await h.dispose().catch(()=>{});fs.writeFileSync(config.result,JSON.stringify(report,null,2));}
+ }catch(e){report.ok=false;report.error=e.stack;}finally{settlement.releaseAll();release?.();for(const h of handles)await h.dispose().catch(()=>{});fs.writeFileSync(config.result,JSON.stringify(report,null,2));}
  }
 }

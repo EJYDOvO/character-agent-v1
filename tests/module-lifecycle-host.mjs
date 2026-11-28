@@ -1,8 +1,9 @@
+import {fixtureOwnerCookie} from './fixture-owner-cookie.mjs';
 // Native Cordis lifecycle regression; synthetic data only, no QQ or LLM calls.
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
-import {createRequire} from 'node:module';
+import yaml from 'js-yaml';
 import {composeEntries,loadOptionalPatches} from '@deepseek-ai/dsh-app-boot';
 import deployment from '../scripts/deployment-plan.cjs';
 import {defineTool} from '@deepseek-ai/dsh-tools';
@@ -22,7 +23,6 @@ export function apply(ctx,config){
   const report={ok:false,runId:config.runId,host:config.version,provenance:config.provenance,qqNetwork:false,model:'none',checks:[]},fibers=[];let handle;
   try{
    {
-   const yaml=createRequire(import.meta.url)((process.env.DSH_CHARACTER_HOST_ROOT||process.env.DSH_INSTALL_ROOT)+'/resources/app.asar/dsh/node_modules/js-yaml');
    const expression='- insert:\n    - id: conditional\n      name: dsh-interaction-policy\n      disabled: !!js process.platform !== "win32"\n';
    const dialect=deployment.entryYaml(yaml),parsed=dialect.load(expression);
    const fixturePath=config.cwd+'/expression.patch.yml';fs.writeFileSync(fixturePath,expression);
@@ -43,7 +43,7 @@ export function apply(ctx,config){
    const core=await ctx.plugin(memoryCore,{database:config.cwd+'/generic-memory.sqlite',autoCapture:false,consolidation:false});fibers.push(core);
    const store=ctx.get('dshMemory'),trusted=ctx.get('memoryIdentity').forSession(agent.id);
    const row=store.remember(trusted,{kind:'semantic',statement:'通用项目保持来源与权限。'},{sessionId:agent.id,eventSeq:1,messageId:'fixture',origin:'direct_user',quote:'通用项目保持来源与权限。'});
-   const origin=ctx.webServer.getOrigin(),login=await fetch(ctx.connection.authenticatedUrl(origin+'/'),{redirect:'manual'}),cookie=login.headers.get('set-cookie').split(';')[0];
+   const origin=ctx.webServer.getOrigin(),cookie=await fixtureOwnerCookie(ctx);
    const call=async(payload)=>fetch(origin+'/memory-inspector/api',{method:'POST',headers:{origin,cookie,'content-type':'application/json'},body:JSON.stringify(payload)});
    const absentStatus=(await call({operation:'contexts'})).status;assert.equal(absentStatus,405,'Installed native shell rejects POST to an unregistered route');
    const ui=await ctx.plugin(inspector,{writable:false});fibers.push(ui);

@@ -7,9 +7,10 @@
 // It is not QQ network delivery, a real model or the watchdog switch.
 import fs from 'node:fs';import path from 'node:path';import assert from 'node:assert/strict';import {pathToFileURL} from 'node:url';
 import {LlmAdapter} from '@deepseek-ai/dsh-llm';
+import {fixtureOwnerCookie} from './fixture-owner-cookie.mjs';
 import {NEUTRAL_PERSONA,readCompiled,writeJsonAtomic} from '../packages/character-manager/compiled.mjs';
 import {approvePublic} from '../packages/character-manager/compile.mjs';
-export const inject=['agents','agentPresets','agentIO','conversationManager','llm','tools','sessions','schedule'];
+export const inject=['agents','agentPresets','agentIO','conversationManager','llm','tools','sessions','schedule','webServer'];
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 const noYaml=()=>{throw Error('JSON cards only');};
 // Text the Host must pass through verbatim: single braces and replacement patterns are not macros.
@@ -20,9 +21,19 @@ export function apply(ctx,config){
  // Every model request: the system prompt, the whole request and how many tools it offered.
  const requests=[];
  class Fixture extends LlmAdapter{async *stream(request){
-  // The system prompt is the system message DSH assembled (persona sections, rules, contexts).
-  const system=(request.messages??[]).filter(m=>m.role==='system').flatMap(m=>Array.isArray(m.content)?m.content:[{type:'text',text:m.content}]).map(b=>b.text??'').join('\n');
-  requests.push({system,body:JSON.stringify(request),tools:(request.tools??[]).length});
+  // Alpha logs prompt deltas. Fold the source records to inspect the current
+  // instructions, and retain the raw request for cross-audience privacy checks.
+  const active=new Map(), notices=[];
+  for(const message of request.messages.filter(m=>m.role==='system')){
+   const {sections,reset}=message.source;
+   if(reset)active.clear();
+   for(const section of sections??[]){
+    if(section.state==='active')active.set(section.name,message.content[section.contentIndex].text);
+    else active.delete(section.name);
+    for(const index of section.noticeIndex??[])notices.push(message.content[index].text);
+   }
+  }
+  requests.push({system:[...active.values()].join('\n'),notices,body:JSON.stringify(request),tools:(request.tools??[]).length});
   yield {type:'text-delta',index:0,text:'reply '+requests.length};yield {type:'finish',reason:{kind:'stop'}};
  }}
  ctx.llm.registerAdapter(['character-manager-fixture'],new Fixture());
@@ -61,6 +72,13 @@ export function apply(ctx,config){
    const phaseFile=config.cwd+'/character-manager-phase1.json';
 
    if(phase===1){
+    const origin=ctx.webServer.getOrigin(),cookie=await fixtureOwnerCookie(ctx);
+    const list=headers=>fetch(origin+'/character-manager/api',{method:'POST',headers:{'content-type':'application/json',...headers},body:JSON.stringify({operation:'list'})});
+    assert.equal((await list({origin})).status,401);
+    const ownerList=await list({origin,cookie});assert.equal(ownerList.status,200);
+    assert.deepEqual((await ownerList.json()).characters.map(c=>c.id).sort(),['a','b']);
+    assert.equal((await list({origin:'http://foreign.invalid',cookie})).status,403);
+    report.checks.push('Alpha.2 Token exchange authorizes Owner list; unauthenticated and foreign Origin requests denied');
     assert.deepEqual({...health(),at:0},{pid:process.pid,characterId:'a',personaSource:'compiled',compiledRevision:2,at:0});
     // Owner of A: the Owner version, rendered with the Owner's name and relationship.
     let request=one(await say('mock-owner','hello'));const ownerSession=record('mock-owner').sessionId;
@@ -77,7 +95,9 @@ export function apply(ctx,config){
     approvePublic({dir:config.current,characterId:'a',parseYaml:noYaml,hash:pending.pendingPublic.hash});
     request=one(await say('mock-friend','hello again'));
     for(const mark of ['A_CARD_MARK','A_PUBLIC_REL','A_RULES_MARK','对方'])assert(request.system.includes(mark),'Guest system prompt has '+mark);
-    for(const mark of ['A_USERNAME','A_OWNER_REL',NEUTRAL_PERSONA])assert(!request.body.includes(mark),'Guest request has no '+mark);
+    for(const mark of ['A_USERNAME','A_OWNER_REL'])assert(!request.body.includes(mark),'Guest request has no '+mark);
+    assert(!request.system.includes(NEUTRAL_PERSONA),'neutral Persona is no longer active');
+    assert(request.notices.some(text=>text.includes('先前同一部分的设定停止使用')),'the native update retires the neutral Persona');
     assert(request.body.includes('A_REMINDER_MARK'),'the approved reminder reaches the Guest');noTools('mock-friend',request);
     scenario('public','Public version: Guest gets the neutral persona while A has only a pending public version, then A\'s approved public version without the Owner relationship or userName');
 
@@ -111,7 +131,8 @@ export function apply(ctx,config){
     assert(request.system.includes(HOT.prefix),'the new prefix verbatim in the system prompt');assert(request.system.includes(HOT.suffix),'the new suffix in the system prompt');
     // Earlier turns keep the reminder they were sent with in the Session history; the latest one is the new text.
     assert(request.body.lastIndexOf(HOT.reminder)>request.body.lastIndexOf('A_REMINDER_MARK'),'the new reminder is the current one');
-    assert(!request.system.includes('A_OWNER_REL'),'the old Owner text is gone from the system prompt');
+    assert(!request.system.includes('A_OWNER_REL'),'the old Owner text is no longer active');
+    assert(request.notices.some(text=>text.includes('先前同一部分的设定停止使用')),'the native update supersedes the old Owner Persona');
     assert.equal(record('mock-owner').sessionId,ownerSession,'the same Session, no restart');
     scenario('hotReload','Hot reload: rewriting compiled.json owner prefix/suffix/reminder changes the next request in the same Session; the text passes the Host prompt assembly verbatim');
 

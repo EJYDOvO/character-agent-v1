@@ -240,16 +240,20 @@ test('the hang-on draft uses the live reminder and wait text',async()=>{
  const f=styleFile({reminder:'用「嗯，」开头',hangOnText:'稍等哦。'});
  try{
   const listeners=new Map(),streams=[];let service;
-  const sections=new Map([['deployment:persona-prefix',{text:'你是小A。'}]]);
+  const sections=new Map([
+   ['deployment:persona-prefix',[{definition:{text:'过期角色。'}},{definition:{text:'你是小A。'}}]],
+   ['deployment:persona-suffix',[{definition:{text:({agent})=>agent.fixturePersonaSuffix}}]],
+   ['memory:context',[{definition:{text(){throw Error('must not access memory for a wait bubble');}}}]],
+  ]);
   const ctx={provide:(_n,v)=>service=v,on:(n,fn)=>listeners.set(n,fn),effect(){},logger:{warn(){}},get:()=>undefined,
-   systemPrompt:{context(){},layers:{merge:()=>sections}},
+   systemPrompt:{context(){},layers:{merge:(_agent,select)=>new Map(select({sections}))}},
    llm:{stream(o){streams.push(o);return (async function*(){yield {type:'text-delta',index:0,text:'嗯，稍等我一下。'};yield {type:'finish',reason:{kind:'stop'}};})();}}};
   apply(ctx,{compiledFile:f.file});
-  const agent={session:{requestHeader:()=>({config:{provider:'main',model:'m'}})},status:'running'};
+  const agent={session:{requestHeader:()=>({config:{provider:'main',model:'m'}})},status:'running',fixturePersonaSuffix:'称呼保持一致。'};
   listeners.get('agent/created')({agent});
   const policy=service.get(agent),draft=()=>policy.drafter({agent,state:'agent',signal:new AbortController().signal});
   assert.equal(policy.config.hangOnText,'稍等哦。');
-  await draft();assert(streams[0].system.includes('你是小A。\n\n用「嗯，」开头\n\n【等待提示】'),streams[0].system);
+  await draft();assert(streams[0].system.includes('你是小A。\n\n称呼保持一致。\n\n用「嗯，」开头\n\n【等待提示】'),streams[0].system);
   f.write({reminder:'用「唔，」开头',hangOnText:'马上哦。'},1);
   await draft();assert(streams[1].system.includes('用「唔，」开头'));assert(!streams[1].system.includes('用「嗯，」开头'));
   assert.equal(policy.config.hangOnText,'马上哦。');

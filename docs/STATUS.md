@@ -8,7 +8,7 @@
 |---|---|
 | Character | 0.1.0-test.41（角色卡 V3 第一期、默认开启的语义检索、默认关闭的运行时角色管理，含可选角色模式），Semantic Recall 0.1.0-test.1，Character Manager 0.1.0-test.3，Long Tasks 0.1.0-test.7，Interaction 0.1.0-test.11 |
 | 配套 QQTK | I/O test.9、Manager test.6、Remote Ops 1.1.1-test.3、QQ0.5.2 / SDK1.0.5 |
-| 官方宿主目标 | DSH 0.2.2-rc.1 / Node 24 / Windows；源码不再支持 0.2.1 Schedule API |
+| 官方宿主目标 | 候选 DSH 0.2.3-alpha.2 / Node 24.22.3 / Windows；下方 rc.1 结果为历史记录 |
 
 源码已实现：四核心插件、Creator 构建派生、通用 Memory L1–L3/FTS5/CAS/遗忘屏障、可信 Identity、原生独立 Worker、可选 Interaction、原生内嵌 Inspector、Long Tasks 与默认关闭的运行时角色管理。QQTK 独立维护唯一 I/O/Manager/QQ Gateway，通知为 at-most-once handoff。
 

@@ -211,7 +211,7 @@ function applyPlugin(root, {characterId = 'yuha', host = '127.0.0.1'} = {}) {
 
 test('runtime health', () => {
   assert.equal(plugin.name, 'character-manager');
-  assert.deepEqual(plugin.inject, ['webServer', 'connection', 'characterIdentity']);
+  assert.deepEqual(plugin.inject, ['webServer', 'connection', 'connection.authentication', 'characterIdentity']);
   const f = fixture();
   f.importCard('yuha');
   symlinkSync(characterDir(f.root, 'yuha'), join(f.root, 'character-current'), 'junction');

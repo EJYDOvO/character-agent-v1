@@ -11,7 +11,7 @@ node scripts/portable.cjs install --qqtk <ABSOLUTE_QQTK_CLONE> --home <NEW_HOME>
 node scripts/portable.cjs verify --qqtk <ABSOLUTE_QQTK_CLONE> --home <NEW_HOME>
 ```
 
-私有配置基于 examples/portable.config.example.json。DSH 0.2.2-rc.1、Node 24；构建只读官方 Creator，不复制发行文件进入 Git。Persona 路径、Preset、Home、数据目录、模型、唯一 Owner 与凭据变量显式配置。input:[text,image] 只在实际模型支持图片时声明。
+私有配置基于 examples/portable.config.example.json。DSH 0.2.3-alpha.2、Node 24.22.3；构建只读官方 Creator，不复制发行文件进入 Git。Persona 路径、Preset、Home、数据目录、模型、唯一 Owner 与凭据变量显式配置。input:[text,image] 只在实际模型支持图片时声明。
 
 开启 roles 时 prepare 另外装配 QQTK `dsh-identity-access`、写入私有 `identity-owner.json`，并生成 `character`/`character-contact`/`character-guest`（可选 `qq-character` Owner 别名）。已有单 Owner 实例迁移前先停机一致备份；旧 Session、提醒绑定与 Memory 命名空间按 [Identity & Access](IDENTITY-ACCESS.md) 的兼容规则保留，不改 Memory Schema。
 
@@ -23,7 +23,11 @@ Core 必需四运行包及 QQTK I/O/Manager；Remote Ops 声明可关闭，不�
 
 更改官方 Creator、SDK 或包版本后重新构建、固定哈希、隔离测试。回滚先验证旧代码能读取当前数据，不恢复旧 Memory/通知快照覆盖新增数据。版本及实际验证状态见 [STATUS](STATUS.md)。
 
-## 从 DSH 0.2.1 升级到 0.2.2-rc.1
+## Alpha.2 会话数据与回滚
+
+此候选沿用默认 JSONL 和现有 D1 数据路径。验证升级时使用独立 Home，保留切换前的数据快照。旧 Host 会拒绝读取含有 Alpha.2 新增的 `workspace-root/change` 事件的会话，因此宿主版本回退前须按候选数据做可读性验证。恢复切换前快照会回到快照时点。详见 [上游持久化变更](https://github.com/deepseek-ai/deepseek-harness/blob/dsh-v0.2.3-alpha.2/docs/persistence-changes/2026-11-13-workspace-root-change.zh.md)。
+
+## 从 DSH 0.2.1 升级到 0.2.2-rc.1（历史）
 
 Character 0.1.0-test.30 与 QQTK Conversation Manager 0.1.0-test.5 只使用 0.2.2 的 Schedule API（`create/edit/view/catalog`），不能运行在 0.2.1 Host 上；旧版 Character 也不能运行在 0.2.2 上。宿主、Character 与 QQTK 必须作为一组切换。
 
@@ -88,7 +92,7 @@ SQLite WAL 允许保留前一轮 checkpoint 的物理尾部。门禁按官方 WA
 QQTK 的只读能力探测（只输出 policy/diff，不写 Profile；当前支持环境凭据的 OpenAI-compatible /models）：
 
 ```sh
-node <QQTK>/maintenance/model-budget-probe.mjs --profile <PROFILE> --home <HOME> --provider <PROVIDER> --runtime-version 0.2.2-rc.1
+node <QQTK>/maintenance/model-budget-probe.mjs --profile <PROFILE> --home <HOME> --provider <PROVIDER> --runtime-version 0.2.3-alpha.2
 ```
 
 它拒绝缺少容量、非法容量、重复路由、超大响应和重定向。可先使用 DSH Models 页原生发现；其他协议或凭据方式使用原生发现并人工审核。探测结果须经管理员审核再应用，仅将差异字段添加到现有模型对象，不覆盖提供商、凭据或输入模态。无法发现容量时填写经复核的手动声明，source=reviewed-manual，不能随意补默认值。
@@ -96,7 +100,7 @@ node <QQTK>/maintenance/model-budget-probe.mjs --profile <PROFILE> --home <HOME>
 将配套 model-policy.json 放在目标 Profile，包含 schemaVersion=1、profile、testedRuntime、maxAgeDays（默认30，最多90）以及模型记录（provider/id/contextWindow/maxTokens/endpointSha256/source/observedAt）。策略不含密钥或明文服务地址。端点、模型集合、数值、目标运行时或 Profile 名称改变，均须重新复核；证据过期须重新探测或人工核实，不应只修改日期。
 
 ```sh
-node <QQTK>/maintenance/model-budget-check.mjs --profile <PROFILE> --runtime-version 0.2.2-rc.1
+node <QQTK>/maintenance/model-budget-check.mjs --profile <PROFILE> --runtime-version 0.2.3-alpha.2
 ```
 
 pin-check 的 pre-switch/post-switch 已调用此门禁；模型定义存在但缺少策略或预算时失败。候选与实际 Profile 的策略 profile 字段应各自匹配目录名。检查全程只读，不发网络请求、不安装插件、不修改配置。没有声明自定义模型的官方内置目录无需此实例策略。
